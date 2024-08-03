@@ -14,7 +14,7 @@ use crate::{FindMatches, Match, ScannerImpl};
 /// To create a scanner, you can use the `ScannerBuilder` to add scanner mode data.
 /// At least one scanner mode must be added to the scanner. This is usually the mode named `INITIAL`.
 pub struct Scanner {
-    _inner: ScannerImpl,
+    pub(crate) inner: ScannerImpl,
 }
 
 impl Scanner {

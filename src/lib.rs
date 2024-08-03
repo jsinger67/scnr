@@ -25,6 +25,7 @@ pub mod scanner_builder;
 
 /// The module with the scanner mode.
 pub mod scanner_mode;
+pub use scanner_mode::ScannerMode;
 
 /// The module with the scanner.
 pub mod scanner;
