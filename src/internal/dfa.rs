@@ -7,10 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Result;
 
-use super::{
-    character_class_registry, ids::StateIDBase, CharacterClass, CharacterClassRegistry, Nfa,
-    PatternID, StateID,
-};
+use super::{ids::StateIDBase, CharClassID, CharacterClass, CharacterClassRegistry, Nfa, StateID};
 
 // The type definitions for the subset construction algorithm.
 pub(crate) type StateGroup = BTreeSet<StateID>;
@@ -19,14 +16,14 @@ pub(crate) type Partition = Vec<StateGroup>;
 // A data type that is calcuated from the transitions of a DFA state so that for each character
 // class the target state is mapped to the partition group it belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct TransitionsToPartitionGroups(pub(crate) Vec<(CharacterClass, usize)>);
+pub(crate) struct TransitionsToPartitionGroups(pub(crate) Vec<(CharClassID, usize)>);
 
 impl TransitionsToPartitionGroups {
     pub(crate) fn new() -> Self {
         TransitionsToPartitionGroups(Vec::new())
     }
 
-    pub(crate) fn insert(&mut self, char_class: CharacterClass, partition_group: usize) {
+    pub(crate) fn insert(&mut self, char_class: CharClassID, partition_group: usize) {
         self.0.push((char_class, partition_group));
     }
 }
@@ -43,7 +40,7 @@ pub(crate) struct Dfa {
     // The accepting states of the DFA as well as the corresponding pattern id.
     accepting_states: Vec<StateID>,
     // The transitions of the DFA.
-    transitions: BTreeMap<StateID, BTreeMap<CharacterClass, StateID>>,
+    transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
 }
 
 impl Dfa {
@@ -69,7 +66,7 @@ impl Dfa {
     }
 
     /// Get the transitions of the DFA.
-    pub(crate) fn transitions(&self) -> &BTreeMap<StateID, BTreeMap<CharacterClass, StateID>> {
+    pub(crate) fn transitions(&self) -> &BTreeMap<StateID, BTreeMap<CharClassID, StateID>> {
         &self.transitions
     }
 
@@ -111,7 +108,7 @@ impl Dfa {
                     dfa.transitions
                         .entry(state_id)
                         .or_default()
-                        .insert(char_class.clone(), target_state);
+                        .insert(char_class.id(), target_state);
                     if !dfa.states[target_state].marked {
                         dfa.states[target_state].marked = true;
                         work_list.push(target_state);
@@ -366,7 +363,7 @@ impl Dfa {
 
     fn merge_transitions(
         partition: &[BTreeSet<StateID>],
-        transitions: &mut Vec<(StateID, BTreeMap<CharacterClass, StateID>)>,
+        transitions: &mut Vec<(StateID, BTreeMap<CharClassID, StateID>)>,
     ) {
         // Remove all transitions that do not belong to the representive states of a group.
         // The representive states are the first states in the groups.
@@ -385,7 +382,7 @@ impl Dfa {
     fn merge_transitions_of_state(
         state_id: StateID,
         representive_state_id: StateID,
-        transitions: &mut Vec<(StateID, BTreeMap<CharacterClass, StateID>)>,
+        transitions: &mut Vec<(StateID, BTreeMap<CharClassID, StateID>)>,
     ) {
         if let Some(rep_pos) = transitions
             .iter()
@@ -395,7 +392,7 @@ impl Dfa {
             if let Some(pos) = transitions.iter().position(|(s, _)| *s == state_id) {
                 let (_, transitions_of_state) = transitions.get_mut(pos).unwrap();
                 for (char_class, target_state) in transitions_of_state.iter() {
-                    rep_trans.insert(char_class.clone(), *target_state);
+                    rep_trans.insert(*char_class, *target_state);
                 }
                 // Remove the transitions of the state that is merged into the representative state.
                 transitions.remove(pos);
@@ -406,7 +403,7 @@ impl Dfa {
 
     fn renumber_states_in_transitions(
         partition: &[StateGroup],
-        transitions: &mut [(StateID, BTreeMap<CharacterClass, StateID>)],
+        transitions: &mut [(StateID, BTreeMap<CharClassID, StateID>)],
     ) {
         let find_group_of_state = |state_id: StateID| -> StateID {
             for (group_id, group) in partition.iter().enumerate() {
@@ -443,7 +440,7 @@ impl std::fmt::Display for Dfa {
         for (source_id, targets) in &self.transitions {
             write!(f, "{} -> ", source_id.as_usize())?;
             for (char_class, target_id) in targets {
-                write!(f, "{}:{}", char_class.ast.0, target_id.as_usize())?;
+                write!(f, "{}:{}", char_class.id(), target_id.as_usize())?;
             }
             writeln!(f)?
         }
@@ -513,7 +510,7 @@ mod tests {
         states: Vec<StateID>,
         accepting_states: Vec<StateID>,
         char_classes: Vec<CharacterClass>,
-        transitions: BTreeMap<StateID, BTreeMap<CharacterClass, StateID>>,
+        transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
     }
 
     // Helper macro to create a literal AST.
@@ -566,10 +563,7 @@ mod tests {
                 char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
-                    BTreeMap::from([(
-                        CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                        StateID::new(1),
-                    )]),
+                    BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
                 )]),
             },
             TestData {
@@ -584,14 +578,8 @@ mod tests {
                 transitions: BTreeMap::from([(
                     StateID::new(0),
                     BTreeMap::from([
-                        (
-                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                            StateID::new(1),
-                        ),
-                        (
-                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                            StateID::new(1),
-                        ),
+                        (CharClassID::new(0), StateID::new(1)),
+                        (CharClassID::new(1), StateID::new(1)),
                     ]),
                 )]),
             },
@@ -607,17 +595,11 @@ mod tests {
                 transitions: BTreeMap::from([
                     (
                         StateID::new(0),
-                        BTreeMap::from([(
-                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                            StateID::new(1),
-                        )]),
+                        BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
                     ),
                     (
                         StateID::new(1),
-                        BTreeMap::from([(
-                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                            StateID::new(2),
-                        )]),
+                        BTreeMap::from([(CharClassID::new(1), StateID::new(2))]),
                     ),
                 ]),
             },
@@ -629,10 +611,7 @@ mod tests {
                 char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
-                    BTreeMap::from([(
-                        CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                        StateID::new(0),
-                    )]),
+                    BTreeMap::from([(CharClassID::new(0), StateID::new(0))]),
                 )]),
             },
             TestData {
@@ -647,14 +626,8 @@ mod tests {
                 transitions: BTreeMap::from([(
                     StateID::new(0),
                     BTreeMap::from([
-                        (
-                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                            StateID::new(0),
-                        ),
-                        (
-                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                            StateID::new(0),
-                        ),
+                        (CharClassID::new(0), StateID::new(0)),
+                        (CharClassID::new(1), StateID::new(0)),
                     ]),
                 )]),
             },
@@ -670,24 +643,15 @@ mod tests {
                 transitions: BTreeMap::from([
                     (
                         StateID::new(0),
-                        BTreeMap::from([(
-                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                            StateID::new(1),
-                        )]),
+                        BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
                     ),
                     (
                         StateID::new(1),
-                        BTreeMap::from([(
-                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                            StateID::new(2),
-                        )]),
+                        BTreeMap::from([(CharClassID::new(1), StateID::new(2))]),
                     ),
                     (
                         StateID::new(2),
-                        BTreeMap::from([(
-                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                            StateID::new(1),
-                        )]),
+                        BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
                     ),
                 ]),
             },
@@ -704,18 +668,9 @@ mod tests {
                 transitions: BTreeMap::from([(
                     StateID::new(0),
                     BTreeMap::from([
-                        (
-                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                            StateID::new(0),
-                        ),
-                        (
-                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                            StateID::new(0),
-                        ),
-                        (
-                            CharacterClass::new(CharClassID::new(2), Literal!('c')),
-                            StateID::new(1),
-                        ),
+                        (CharClassID::new(0), StateID::new(0)),
+                        (CharClassID::new(1), StateID::new(0)),
+                        (CharClassID::new(2), StateID::new(1)),
                     ]),
                 )]),
             },
@@ -737,53 +692,29 @@ mod tests {
                     (
                         StateID::new(0),
                         BTreeMap::from([
-                            (
-                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                                StateID::new(1),
-                            ),
-                            (
-                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                                StateID::new(0),
-                            ),
+                            (CharClassID::new(0), StateID::new(1)),
+                            (CharClassID::new(1), StateID::new(0)),
                         ]),
                     ),
                     (
                         StateID::new(1),
                         BTreeMap::from([
-                            (
-                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                                StateID::new(1),
-                            ),
-                            (
-                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                                StateID::new(2),
-                            ),
+                            (CharClassID::new(0), StateID::new(1)),
+                            (CharClassID::new(1), StateID::new(2)),
                         ]),
                     ),
                     (
                         StateID::new(2),
                         BTreeMap::from([
-                            (
-                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                                StateID::new(1),
-                            ),
-                            (
-                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                                StateID::new(3),
-                            ),
+                            (CharClassID::new(0), StateID::new(1)),
+                            (CharClassID::new(1), StateID::new(3)),
                         ]),
                     ),
                     (
                         StateID::new(3),
                         BTreeMap::from([
-                            (
-                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                                StateID::new(1),
-                            ),
-                            (
-                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                                StateID::new(0),
-                            ),
+                            (CharClassID::new(0), StateID::new(1)),
+                            (CharClassID::new(1), StateID::new(0)),
                         ]),
                     ),
                 ]),

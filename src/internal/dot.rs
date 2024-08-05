@@ -105,7 +105,7 @@ pub(crate) fn dfa_render<W: Write>(
                 .set_label(&format!(
                     "{}:{}",
                     character_class_registry
-                        .get_character_class(char_id.id())
+                        .get_character_class(*char_id)
                         .map_or("-".to_string(), |cc| cc
                             .ast()
                             .to_string()
