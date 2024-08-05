@@ -2,7 +2,7 @@ use regex_syntax::ast::{Ast, Position, Span};
 
 /// A comparable AST in regard of a character class.
 /// It only compares AST types that are relevant for handling of character classes.
-#[derive(Debug, Clone, Eq)]
+#[derive(Clone, Eq)]
 pub(crate) struct ComparableAst(pub(crate) Ast);
 
 impl PartialEq for ComparableAst {
@@ -51,5 +51,17 @@ impl Default for ComparableAst {
                 column: 0,
             },
         })))
+    }
+}
+
+impl std::fmt::Display for ComparableAst {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Debug for ComparableAst {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }

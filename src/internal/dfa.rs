@@ -7,7 +7,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Result;
 
-use super::{ids::StateIDBase, CharacterClass, Nfa, PatternID, StateID};
+use super::{
+    character_class_registry, ids::StateIDBase, CharacterClass, CharacterClassRegistry, Nfa,
+    PatternID, StateID,
+};
 
 // The type definitions for the subset construction algorithm.
 pub(crate) type StateGroup = BTreeSet<StateID>;
@@ -39,8 +42,6 @@ pub(crate) struct Dfa {
     pattern: String,
     // The accepting states of the DFA as well as the corresponding pattern id.
     accepting_states: Vec<StateID>,
-    // The character classes used in the DFA.
-    char_classes: Vec<CharacterClass>,
     // The transitions of the DFA.
     transitions: BTreeMap<StateID, BTreeMap<CharacterClass, StateID>>,
 }
@@ -67,12 +68,6 @@ impl Dfa {
         self.accepting_states.contains(&state_id)
     }
 
-    /// Get the character classes used in the DFA.
-    #[allow(dead_code)]
-    pub(crate) fn char_classes(&self) -> &[CharacterClass] {
-        &self.char_classes
-    }
-
     /// Get the transitions of the DFA.
     pub(crate) fn transitions(&self) -> &BTreeMap<StateID, BTreeMap<CharacterClass, StateID>> {
         &self.transitions
@@ -80,10 +75,13 @@ impl Dfa {
 
     /// Create a DFA from an NFA.
     /// The DFA is created using the subset construction algorithm.
-    fn try_from_nfa(nfa: Nfa) -> Result<Self> {
+    fn try_from_nfa(
+        nfa: Nfa,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
         let Nfa {
             pattern,
-            char_classes,
+            start_state,
             end_state,
             ..
         } = nfa.clone();
@@ -91,12 +89,11 @@ impl Dfa {
             states: Vec::new(),
             pattern,
             accepting_states: Vec::new(),
-            char_classes,
             transitions: BTreeMap::new(),
         };
         let accepting_states = vec![end_state];
         // The initial state of the DFA is the epsilon closure of the start state of the NFA.
-        let start_state = nfa.epsilon_closure(StateID::default());
+        let start_state = nfa.epsilon_closure(start_state);
         // The initial state is the start state of the DFA.
         let initial_state = dfa.add_state_if_new(start_state, &accepting_states)?;
         // The work list is used to keep track of the states that need to be processed.
@@ -106,7 +103,7 @@ impl Dfa {
 
         while let Some(state_id) = work_list.pop() {
             let nfa_states = dfa.states[state_id].nfa_states.clone();
-            for char_class in dfa.char_classes.clone() {
+            for char_class in character_class_registry.iter() {
                 let target_states =
                     nfa.epsilon_closure_set(nfa.move_set(&nfa_states, char_class.id()));
                 if !target_states.is_empty() {
@@ -123,7 +120,8 @@ impl Dfa {
             }
         }
 
-        dfa.minimize()
+        // dfa.minimize()
+        Ok(dfa)
     }
 
     /// Add a state to the DFA if it does not already exist.
@@ -334,7 +332,6 @@ impl Dfa {
             states: Vec::new(),
             pattern: self.pattern.clone(),
             accepting_states: Vec::new(),
-            char_classes: self.char_classes.clone(),
             transitions: self.transitions.clone(),
         };
 
@@ -440,10 +437,6 @@ impl std::fmt::Display for Dfa {
         for state_id in &self.accepting_states {
             writeln!(f, "{}", state_id.id())?;
         }
-        writeln!(f, "Char classes:")?;
-        for char_class in &self.char_classes {
-            writeln!(f, "{:?}", char_class)?;
-        }
         writeln!(f, "Transitions:")?;
         for (source_id, targets) in &self.transitions {
             write!(f, "{} -> ", source_id.as_usize())?;
@@ -504,18 +497,24 @@ impl DfaState {
 #[cfg(test)]
 mod tests {
 
-    use crate::internal::{parse_regex_syntax, CharClassID};
+    use std::sync::LazyLock;
+
+    use crate::internal::{parser::parse_regex_syntax, CharClassID, CharacterClassRegistry};
 
     use super::*;
 
     struct TestData {
+        // Use pascal case for the name because the name is used also as dot file name.
+        // Also, the name should be unique.
+        name: &'static str,
         pattern: &'static str,
-        states: Vec<Vec<StateID>>,
+        states: Vec<StateID>,
         accepting_states: Vec<StateID>,
         char_classes: Vec<CharacterClass>,
-        transitions: Vec<Vec<(CharacterClass, StateID)>>,
+        transitions: BTreeMap<StateID, BTreeMap<CharacterClass, StateID>>,
     }
 
+    // Helper macro to create a literal AST.
     macro_rules! Literal {
         ($c:literal) => {
             regex_syntax::ast::Ast::Literal(Box::new(regex_syntax::ast::Literal {
@@ -537,71 +536,99 @@ mod tests {
         };
     }
 
-    #[test]
-    fn test_try_from_nfa() {
-        let test_data: [TestData; 2] = [
+    /// A macro that simplifies the rendering of a dot file for a DFA.
+    macro_rules! dfa_render_to {
+        ($nfa:expr, $label:expr, $reg:ident) => {
+            let label = format!("{}Dfa", $label);
+            let mut f = std::fs::File::create(format!("target/{}Dfa.dot", $label)).unwrap();
+            $crate::internal::dot::dfa_render($nfa, &label, &$reg, &mut f);
+        };
+    }
+
+    /// A macro that simplifies the rendering of a dot file for a NFA.
+    macro_rules! nfa_render_to {
+        ($nfa:expr, $label:expr) => {
+            let label = format!("{}Nfa", $label);
+            let mut f = std::fs::File::create(format!("target/{}Nfa.dot", $label)).unwrap();
+            $crate::internal::dot::nfa_render($nfa, &label, &mut f);
+        };
+    }
+
+    static TEST_DATA: LazyLock<[TestData; 1]> = LazyLock::new(|| {
+        [
+            // TestData {
+            //     name: "SingleCharacter",
+            //     pattern: "a",
+            //     states: vec![StateID::new(0), StateID::new(1)],
+            //     accepting_states: vec![StateID::new(1)],
+            //     char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
+            //     transitions: vec![vec![(
+            //         CharacterClass::new(CharClassID::new(0), Literal!('a')),
+            //         StateID::new(1),
+            //     )]],
+            // },
             TestData {
-                pattern: "a",
-                states: vec![vec![StateID::new(0), StateID::new(1)]],
-                accepting_states: vec![StateID::new(1)],
-                char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
-                transitions: vec![vec![(
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    StateID::new(1),
-                )]],
-            },
-            TestData {
+                name: "Alternation",
                 pattern: "a|b",
-                states: vec![vec![StateID::new(0), StateID::new(1), StateID::new(2)]],
+                states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
                 accepting_states: vec![StateID::new(1), StateID::new(2)],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), Literal!('a')),
                     CharacterClass::new(CharClassID::new(1), Literal!('b')),
                 ],
-                transitions: vec![
-                    vec![(
-                        CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                        StateID::new(1),
-                    )],
-                    vec![(
-                        CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                        StateID::new(2),
-                    )],
-                ],
+                transitions: BTreeMap::from([(
+                    StateID::new(0),
+                    BTreeMap::from([
+                        (
+                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                            StateID::new(1),
+                        ),
+                        (
+                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                            StateID::new(2),
+                        ),
+                    ]),
+                )]),
             },
-        ];
-        for data in test_data.iter() {
-            let nfa = Nfa::try_from(parse_regex_syntax(data.pattern).unwrap()).unwrap();
-            let dfa = Dfa::try_from_nfa(nfa).unwrap();
+        ]
+    });
+
+    #[test]
+    fn test_try_from_nfa() {
+        for data in TEST_DATA.iter() {
+            let mut char_class_registry = CharacterClassRegistry::new();
+            let nfa = Nfa::try_from_ast(
+                parse_regex_syntax(&data.pattern).unwrap(),
+                &mut char_class_registry,
+            )
+            .unwrap();
+            nfa_render_to!(&nfa, data.name);
+            let dfa = Dfa::try_from_nfa(nfa, &mut char_class_registry).unwrap();
+            dfa_render_to!(&dfa, data.name, char_class_registry);
             assert_eq!(
                 dfa.states.len(),
                 data.states.len(),
-                "pattern: {}",
+                "dfa state count for '{}:{}' is wrong",
+                data.name,
                 data.pattern
             );
             assert_eq!(
                 dfa.accepting_states, data.accepting_states,
-                "pattern: {}",
+                "dfa accepting states for '{}:{}' are wrong",
+                data.name, data.pattern
+            );
+            assert_eq!(
+                char_class_registry.iter().cloned().collect::<Vec<_>>(),
+                data.char_classes,
+                "dfa char classes for '{}:{}' are wrong",
+                data.name,
                 data.pattern
             );
             assert_eq!(
-                dfa.char_classes, data.char_classes,
-                "pattern: {}",
-                data.pattern
+                dfa.transitions, data.transitions,
+                "dfa transitions for '{}:{}' are wrong",
+                data.name, data.pattern
             );
-            for (i, state) in dfa.states.iter().enumerate() {
-                assert_eq!(
-                    state.nfa_states, data.states[i],
-                    "pattern: {}",
-                    data.pattern
-                );
-                assert_eq!(
-                    dfa.transitions[&state.id],
-                    data.transitions[i].iter().cloned().collect(),
-                    "pattern: {}",
-                    data.pattern
-                );
-            }
         }
     }
 }

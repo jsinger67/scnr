@@ -2,14 +2,20 @@
 mod character_class;
 pub(crate) use character_class::CharacterClass;
 
+/// Module that provides the type CharacterClassRegistry.
+mod character_class_registry;
+pub(crate) use character_class_registry::CharacterClassRegistry;
+
 /// Module that provides functions and types related to comparable ASTs.
 pub(crate) mod comparable_ast;
 pub(crate) use comparable_ast::ComparableAst;
 
 /// Module that provides functions and types related to DFAs.
 pub(crate) mod dfa;
-pub(crate) use dfa::Dfa;
 
+/// Module with conversion to graphviz dot format
+#[cfg(test)]
+mod dot;
 /// Module that provides functions and types related to the `find_matches` function.
 pub(crate) mod find_matches_impl;
 
@@ -29,7 +35,6 @@ pub(crate) use nfa::Nfa;
 
 /// The parser module contains the regex syntax parser.
 mod parser;
-pub(crate) use parser::parse_regex_syntax;
 
 /// Module that provides functions and types related to scanner implementations.
 pub(crate) mod scanner_impl;
