@@ -21,6 +21,11 @@ impl CharacterClassRegistry {
         self.character_classes.iter()
     }
 
+    /// Returns a slice of the character classes in the registry.
+    pub(crate) fn character_classes(&self) -> &[CharacterClass] {
+        &self.character_classes
+    }
+
     /// Adds a character class to the registry if it is not already present and returns its ID.
     pub(crate) fn add_character_class(&mut self, ast: &Ast) -> CharClassID {
         let character_class = ComparableAst(ast.clone());

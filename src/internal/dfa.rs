@@ -120,8 +120,7 @@ impl Dfa {
             }
         }
 
-        // dfa.minimize()
-        Ok(dfa)
+        dfa.minimize()
     }
 
     /// Add a state to the DFA if it does not already exist.
@@ -163,7 +162,8 @@ impl Dfa {
 
         // Check if the state contains an accepting state.
         for nfa_state_id in &state.nfa_states {
-            if accepting_states.contains(nfa_state_id) {
+            if accepting_states.contains(nfa_state_id) && !self.accepting_states.contains(&state_id)
+            {
                 // The state is an accepting state.
                 self.accepting_states.push(state_id);
                 break;
@@ -192,7 +192,9 @@ impl Dfa {
         // Insert the representative state into the accepting states if any state in its group is
         // an accepting state.
         for state_in_group in group.iter() {
-            if accepting_states.contains(state_in_group) {
+            if accepting_states.contains(state_in_group)
+                && !self.accepting_states.contains(&state_id)
+            {
                 self.accepting_states.push(state_id);
             }
         }
@@ -554,24 +556,27 @@ mod tests {
         };
     }
 
-    static TEST_DATA: LazyLock<[TestData; 1]> = LazyLock::new(|| {
+    static TEST_DATA: LazyLock<[TestData; 8]> = LazyLock::new(|| {
         [
-            // TestData {
-            //     name: "SingleCharacter",
-            //     pattern: "a",
-            //     states: vec![StateID::new(0), StateID::new(1)],
-            //     accepting_states: vec![StateID::new(1)],
-            //     char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
-            //     transitions: vec![vec![(
-            //         CharacterClass::new(CharClassID::new(0), Literal!('a')),
-            //         StateID::new(1),
-            //     )]],
-            // },
+            TestData {
+                name: "SingleCharacter",
+                pattern: "a",
+                states: vec![StateID::new(0), StateID::new(1)],
+                accepting_states: vec![StateID::new(1)],
+                char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
+                transitions: BTreeMap::from([(
+                    StateID::new(0),
+                    BTreeMap::from([(
+                        CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                        StateID::new(1),
+                    )]),
+                )]),
+            },
             TestData {
                 name: "Alternation",
                 pattern: "a|b",
-                states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
-                accepting_states: vec![StateID::new(1), StateID::new(2)],
+                states: vec![StateID::new(0), StateID::new(1)],
+                accepting_states: vec![StateID::new(1)],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), Literal!('a')),
                     CharacterClass::new(CharClassID::new(1), Literal!('b')),
@@ -585,10 +590,203 @@ mod tests {
                         ),
                         (
                             CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                            StateID::new(2),
+                            StateID::new(1),
                         ),
                     ]),
                 )]),
+            },
+            TestData {
+                name: "Concatenation",
+                pattern: "ab",
+                states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
+                accepting_states: vec![StateID::new(2)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                ],
+                transitions: BTreeMap::from([
+                    (
+                        StateID::new(0),
+                        BTreeMap::from([(
+                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                            StateID::new(1),
+                        )]),
+                    ),
+                    (
+                        StateID::new(1),
+                        BTreeMap::from([(
+                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                            StateID::new(2),
+                        )]),
+                    ),
+                ]),
+            },
+            TestData {
+                name: "KleeneStar",
+                pattern: "a*",
+                states: vec![StateID::new(0)],
+                accepting_states: vec![StateID::new(0)],
+                char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
+                transitions: BTreeMap::from([(
+                    StateID::new(0),
+                    BTreeMap::from([(
+                        CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                        StateID::new(0),
+                    )]),
+                )]),
+            },
+            TestData {
+                name: "KleeneStarAlternation",
+                pattern: "(a|b)*",
+                states: vec![StateID::new(0)],
+                accepting_states: vec![StateID::new(0)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                ],
+                transitions: BTreeMap::from([(
+                    StateID::new(0),
+                    BTreeMap::from([
+                        (
+                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                            StateID::new(0),
+                        ),
+                        (
+                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                            StateID::new(0),
+                        ),
+                    ]),
+                )]),
+            },
+            TestData {
+                name: "KleeneStarConcatenation",
+                pattern: "(ab)*",
+                states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
+                accepting_states: vec![StateID::new(0), StateID::new(2)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                ],
+                transitions: BTreeMap::from([
+                    (
+                        StateID::new(0),
+                        BTreeMap::from([(
+                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                            StateID::new(1),
+                        )]),
+                    ),
+                    (
+                        StateID::new(1),
+                        BTreeMap::from([(
+                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                            StateID::new(2),
+                        )]),
+                    ),
+                    (
+                        StateID::new(2),
+                        BTreeMap::from([(
+                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                            StateID::new(1),
+                        )]),
+                    ),
+                ]),
+            },
+            TestData {
+                name: "KleeneStarConcatenationAlternation",
+                pattern: "(a|b)*c",
+                states: vec![StateID::new(0), StateID::new(1)],
+                accepting_states: vec![StateID::new(1)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                    CharacterClass::new(CharClassID::new(2), Literal!('c')),
+                ],
+                transitions: BTreeMap::from([(
+                    StateID::new(0),
+                    BTreeMap::from([
+                        (
+                            CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                            StateID::new(0),
+                        ),
+                        (
+                            CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                            StateID::new(0),
+                        ),
+                        (
+                            CharacterClass::new(CharClassID::new(2), Literal!('c')),
+                            StateID::new(1),
+                        ),
+                    ]),
+                )]),
+            },
+            TestData {
+                name: "Complex",
+                pattern: "(a|b)*abb",
+                states: vec![
+                    StateID::new(0),
+                    StateID::new(1),
+                    StateID::new(2),
+                    StateID::new(3),
+                ],
+                accepting_states: vec![StateID::new(3)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                ],
+                transitions: BTreeMap::from([
+                    (
+                        StateID::new(0),
+                        BTreeMap::from([
+                            (
+                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                                StateID::new(1),
+                            ),
+                            (
+                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                                StateID::new(0),
+                            ),
+                        ]),
+                    ),
+                    (
+                        StateID::new(1),
+                        BTreeMap::from([
+                            (
+                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                                StateID::new(1),
+                            ),
+                            (
+                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                                StateID::new(2),
+                            ),
+                        ]),
+                    ),
+                    (
+                        StateID::new(2),
+                        BTreeMap::from([
+                            (
+                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                                StateID::new(1),
+                            ),
+                            (
+                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                                StateID::new(3),
+                            ),
+                        ]),
+                    ),
+                    (
+                        StateID::new(3),
+                        BTreeMap::from([
+                            (
+                                CharacterClass::new(CharClassID::new(0), Literal!('a')),
+                                StateID::new(1),
+                            ),
+                            (
+                                CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                                StateID::new(0),
+                            ),
+                        ]),
+                    ),
+                ]),
             },
         ]
     });
@@ -598,7 +796,7 @@ mod tests {
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
             let nfa = Nfa::try_from_ast(
-                parse_regex_syntax(&data.pattern).unwrap(),
+                parse_regex_syntax(data.pattern).unwrap(),
                 &mut char_class_registry,
             )
             .unwrap();
@@ -618,7 +816,7 @@ mod tests {
                 data.name, data.pattern
             );
             assert_eq!(
-                char_class_registry.iter().cloned().collect::<Vec<_>>(),
+                char_class_registry.character_classes().to_vec(),
                 data.char_classes,
                 "dfa char classes for '{}:{}' are wrong",
                 data.name,

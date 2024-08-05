@@ -779,7 +779,7 @@ mod tests_try_from {
             expected_char_classes: 1,
         },
         TestData {
-            name: "Complex",
+            name: "Complex1",
             input: "(a|b)*abb",
             expected_states: 14,
             expected_start_state: 6,
