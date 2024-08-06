@@ -153,9 +153,10 @@ pub(crate) enum InnerMatchingState {
     /// Current state is not an accepting state.
     ///
     /// If a transition to a non-accepting state is found, record the start of the match and switch
-    /// to StartMatch.
-    /// If a transition to an accepting state is found, record the match and switch to AcceptingMatch.
-    /// If no transition is found stay in NoMatch.
+    /// to [InnerMatchingState::Start].
+    /// If a transition to an accepting state is found, record the match and switch to
+    /// [InnerMatchingState::Accepting].
+    /// If no transition is found stay in [InnerMatchingState::None].
     #[default]
     None,
 
@@ -164,17 +165,20 @@ pub(crate) enum InnerMatchingState {
     ///
     /// Current state is not an accepting state.
     ///
-    /// If a transition is found, record the match and switch to AcceptingMatch.
-    /// If no transition is found, reset the match and switch to NoMatch.
+    /// If a transition to a non-accepting state is found, stay in [InnerMatchingState::Start].
+    /// If a transition to an accepting state is found, record the match and switch to
+    /// [InnerMatchingState::Accepting].
+    /// If no transition is found, reset the match and switch to [InnerMatchingState::None].
     Start,
 
     /// Match has been recorded before, continue search for a longer match.
     ///
     /// State is an accepting state.
     ///
-    /// If no transition is found, switch to LongestMatch.
-    /// If a transition to a non-accepting state is found stay in AcceptingMatch.
-    /// If a transition to an accepting state is found, record the match and stay in AcceptingMatch.
+    /// If no transition is found, switch to [InnerMatchingState::Longest].
+    /// If a transition to a non-accepting state is found stay in [InnerMatchingState::Accepting].
+    /// If a transition to an accepting state is found, record the match and stay in
+    /// [InnerMatchingState::Accepting].
     Accepting,
 
     /// Match has been recorded before.
@@ -182,6 +186,6 @@ pub(crate) enum InnerMatchingState {
     ///
     /// State is an accepting state.
     ///
-    /// This state can't be left.
+    /// This state can't be left, i.e. we stay in [InnerMatchingState::Longest].
     Longest,
 }

@@ -1,0 +1,58 @@
+digraph {
+    label="MatchingState";
+    rankdir="LR";
+    node [shape="ellipse"];
+    // --------------------------------------------------------
+    // Nodes --------------------------------------------------
+    // --------------------------------------------------------
+    //
+    Init [style="invis"];
+    No [color="blue", penwidth=3];
+    Start;
+    Accepting [color="green", penwidth=3];
+    Longest [color="red", penwidth=3];
+    // --------------------------------------------------------
+    // Edges --------------------------------------------------
+    // --------------------------------------------------------
+    //
+    // -------------------------
+    // Init
+    // -------------------------
+    // Unconditionals switch to the No state.
+    Init -> No [label="start"];
+    // -------------------------
+    // No
+    // -------------------------
+    // No transitions found, the automaton stays in the No state.
+    No -> No [label="no trans.:\n-"];
+    // The automaton found a transition and moves to the Start state and records the start position.
+    No -> Start [label="trans. to non-acc. state:\nsave start position"];
+    // The automaton found a transition to an accepting, moves to the Accepting state and records
+    // the start and end positions.
+    No -> Accepting [label="trans. to acc. state:\nsave start and end position"];
+    // -------------------------
+    // Start
+    // -------------------------
+    // The automaton aborts the current match and starts a new one.
+    Start -> No [label="no trans.:\ninvalidate start position"];
+    // The automaton found a transition to a non-accepting state and stays in the Start state.
+    Start -> Start [label="trans. to non-acc. state:\n-"];
+    // The automaton found an accepting transition and moves to the Accepting state and records the
+    // end position.
+    Start -> Accepting [label="trans. to acc. state:\nsave end position"];
+    // -------------------------
+    // Accepting
+    // -------------------------
+    // The atomaton aborts the search for a longer match and retains the last recorded end position.
+    Accepting -> Longest [label="no trans.:\n-"];
+    // The automaton stays in the Accepting state and does not change the end position.
+    // It looks for a longer match as long as transitions exist.
+    Accepting -> Accepting [label="trans. to non-acc. state:\n-"];
+    // The automaton stays in the Accepting state and updates the end position.
+    Accepting -> Accepting [label="trans. to acc. state:\nupdate end position\n---"];
+    // -------------------------
+    // Longest
+    // -------------------------
+    // The automaton stays in the Longest state and does not change the end position.
+    Longest -> Longest [label="always:\n-"];
+}
