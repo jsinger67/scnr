@@ -1,10 +1,11 @@
 use crate::{Result, ScannerMode};
 
-use super::CharacterClassRegistry;
+use super::{CharacterClassRegistry, CompiledScannerMode};
 
 #[derive(Debug)]
 pub(crate) struct ScannerImpl {
     character_classes: CharacterClassRegistry,
+    scanner_modes: Vec<CompiledScannerMode>,
 }
 
 impl TryFrom<Vec<ScannerMode>> for ScannerImpl {

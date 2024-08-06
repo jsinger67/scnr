@@ -6,6 +6,14 @@ pub(crate) use character_class::CharacterClass;
 mod character_class_registry;
 pub(crate) use character_class_registry::CharacterClassRegistry;
 
+/// Module that provides functions and types related to compiled DFAs.
+pub(crate) mod compiled_dfa;
+pub(crate) use compiled_dfa::CompiledDfa;
+
+/// Module that provides functions and types related to compiled ScannerModes.
+pub(crate) mod compiled_scanner_mode;
+pub(crate) use compiled_scanner_mode::CompiledScannerMode;
+
 /// Module that provides functions and types related to comparable ASTs.
 pub(crate) mod comparable_ast;
 pub(crate) use comparable_ast::ComparableAst;
@@ -21,7 +29,10 @@ pub(crate) mod find_matches_impl;
 
 /// Module for sevearl ID types.
 mod ids;
-pub(crate) use ids::{CharClassID, PatternID, StateID};
+pub(crate) use ids::{
+    CharClassID, CharClassIDBase, PatternID, PatternIDBase, StateID, StateIDBase, TerminalID,
+    TerminalIDBase,
+};
 
 /// Module that provides functions and types related to match functions.
 pub(crate) mod match_function;

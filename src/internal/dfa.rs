@@ -34,13 +34,13 @@ impl TransitionsToPartitionGroups {
 #[derive(Debug, Default)]
 pub(crate) struct Dfa {
     // The states of the DFA. The start state is always the first state in the vector, i.e. state 0.
-    states: Vec<DfaState>,
+    pub(crate) states: Vec<DfaState>,
     // The pattern for the accepting states.
-    pattern: String,
+    pub(crate) pattern: String,
     // The accepting states of the DFA as well as the corresponding pattern id.
-    accepting_states: Vec<StateID>,
+    pub(crate) accepting_states: Vec<StateID>,
     // The transitions of the DFA.
-    transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
+    pub(crate) transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
 }
 
 impl Dfa {

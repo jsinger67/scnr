@@ -12,17 +12,26 @@ Scanner modes are known from Lex/Flex as
 ## Guard rails
 
 * The scanners should be built quickly.
-* They will probably never support `u8`, i.e. patterns are types convertible to `&[&str]` and the
-input is of type convertible to `&str`.
+* The scanners will probably never support `u8`, i.e. patterns are of type convertible to `&str` and
+the input is of type convertible to `&str`. We concentrate on programming languages rather than byte
+sequences.
 
 ## Not supported regex features
 
-It doesn't supports **anchored matches**, i.e. ^, $, \b, \B, \A, \z and so on, are not available.
-Mostly, this can be tolerated because of the overall properties of the scanner. Also the fact that
-the longest match will win mitigates the need for such anchors.
+We don't support **anchored matches**, i.e. ^, $, \b, \B, \A, \z and so on, are not available.
+Mostly, this can be tolerated because of the overall properties of the scanner, and especially the
+fact that the longest match will win mitigates the need for such anchors.
 
-Also it currently doesn't support **flags** (i, m, s, R, U, u, x), like in ```r"(?i)a+(?-i)b+"```.
-I need to evaluate if this is a problem, but a the moment I belief that this is tolerable.
+To elaborate this a bit more:
+
+Lets say you have a pattern for the keyword 'if' and a pattern for an identifier
+/[a-zA-Z_][a-zA-Z0-9_]*/. Both could match the 'if' but the keyword will win iff you have its
+pattern inserted before the pattern of the identifier. If the scanner encounters an input like,
+e.g. 'ifi' the identifier will match because of the longest match rule. With these guaranties it is
+simply unnecessary to declare the keyword 'if' with attached word boundaries (\b).
+
+Also we currently don't support **flags** (i, m, s, R, U, u, x), like in ```r"(?i)a+(?-i)b+"```.
+I need to evaluate if this is a problem, but at the moment I belief that this is tolerable.
 
 There is no need for **capture groups** in the context of token matching, so I see no necessity to
 implement this feature.

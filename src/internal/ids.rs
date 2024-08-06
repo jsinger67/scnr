@@ -88,11 +88,21 @@ macro_rules! impl_id {
     };
 }
 
+/// The ID type for automata states. Used in NFA and DFA.
 pub(crate) type StateIDBase = u32;
 impl_id!(StateID, StateIDBase);
 
+/// The ID type for character classes. This is the index of the character class in the character
+/// class registry which in turn is used for all DFAs in the scanner.
 pub(crate) type CharClassIDBase = u32;
 impl_id!(CharClassID, CharClassIDBase);
 
+/// The ID type for patterns. Actually the index of the pattern in the pattern vector of a scanner
+/// mode. It determines the priority of the pattern, i.e. lower indices have higher priority.
 pub(crate) type PatternIDBase = usize;
 impl_id!(PatternID, PatternIDBase);
+
+/// The ID type for terminals. This is the token type number associated with a pattern and used in
+/// the scanner over all scanner modes.
+pub(crate) type TerminalIDBase = u32;
+impl_id!(TerminalID, TerminalIDBase);
