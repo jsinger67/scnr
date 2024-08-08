@@ -1,14 +1,14 @@
-use crate::{scanner::Scanner, FindMatchesImpl, Match};
+use crate::{FindMatchesImpl, Match, Result, ScannerImpl};
 
 /// The result of a peek operation.
 #[derive(Debug, PartialEq)]
 pub enum PeekResult {
-    /// The peek operation found a n matches.
+    /// The peek operation found n matches.
     Matches(Vec<Match>),
     /// The peek operation found less than n matches because the end of the haystack was reached.
     MatchesReachedEnd(Vec<Match>),
     /// The peek operation found less than n matches because the last token type would have
-    /// triggered a mode switch. The matches are returned  along with the index of the new mode that
+    /// triggered a mode switch. The matches are returned along with the index of the new mode that
     /// would be switched to on the last match.
     MatchesReachedModeSwitch((Vec<Match>, usize)),
     /// The peek operation found no matches.
@@ -24,13 +24,15 @@ pub enum PeekResult {
 /// This iterator can be created with the [`Scanner::find_iter`] method.
 #[derive(Debug)]
 pub struct FindMatches<'h> {
-    _inner: FindMatchesImpl<'h>,
+    inner: FindMatchesImpl<'h>,
 }
 
 impl<'h> FindMatches<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub fn new(_scanner: Scanner, _input: &'h str) -> Self {
-        todo!()
+    pub(crate) fn new(scanner_impl: &ScannerImpl, input: &'h str) -> Result<Self> {
+        Ok(Self {
+            inner: FindMatchesImpl::try_new(scanner_impl, input)?,
+        })
     }
 
     /// Returns the next match in the haystack.
@@ -43,7 +45,7 @@ impl<'h> FindMatches<'h> {
     /// and tries again until a match is found or the iterator is exhausted.
     #[inline]
     pub fn next_match(&mut self) -> Option<Match> {
-        todo!()
+        self.inner.next_match()
     }
 
     /// Peeks n matches ahead without consuming the matches.
@@ -53,8 +55,8 @@ impl<'h> FindMatches<'h> {
     /// triggered by the last match. The mode switch is not conducted by the peek operation to not
     /// change the state of the scanner as well as to aviod a mix of tokens from different modes
     /// being returned.
-    pub fn peek_n(&mut self, _n: usize) -> PeekResult {
-        todo!()
+    pub fn peek_n(&mut self, n: usize) -> PeekResult {
+        self.inner.peek_n(n)
     }
 }
 

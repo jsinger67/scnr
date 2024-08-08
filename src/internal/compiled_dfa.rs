@@ -1,4 +1,4 @@
-use crate::ScnrError;
+use crate::{ScnrError, Span};
 
 use super::{dfa::Dfa, matching_state::MatchingState, CharClassID, StateID};
 
@@ -10,7 +10,7 @@ use super::{dfa::Dfa, matching_state::MatchingState, CharClassID, StateID};
 ///
 /// MatchFunctions are not Clone nor Copy, so we aggregate them into a new struct CompiledDfa
 /// which is Clone and Copy neither.
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub(crate) struct CompiledDfa {
     /// The pattern matched by the DFA.
     pattern: String,
@@ -49,8 +49,73 @@ impl CompiledDfa {
     }
 
     /// Returns the matching state of the DFA.
-    pub fn matching_state(&self) -> &MatchingState<StateID> {
+    pub(crate) fn matching_state(&self) -> &MatchingState<StateID> {
         &self.matching_state
+    }
+
+    /// Resets the matching state of the DFA.
+    pub(crate) fn reset(&mut self) {
+        self.matching_state = MatchingState::new();
+    }
+
+    /// Returns the current state of the DFA.
+    pub(crate) fn current_state(&self) -> StateID {
+        self.matching_state.current_state()
+    }
+
+    /// Returns the last match of the DFA.
+    pub(crate) fn current_match(&self) -> Option<Span> {
+        self.matching_state.last_match()
+    }
+
+    /// Advances the DFA by one character.
+    pub(crate) fn advance(
+        &mut self,
+        c_pos: usize,
+        c: char,
+        match_char_class: &Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+    ) {
+        // If we already have the longest match, we can stop
+        if self.matching_state.is_longest_match() {
+            return;
+        }
+        // Get the transitions for the current state
+        if let Some(next_state) = self.find_transition(c, match_char_class) {
+            if self.accepting_states.contains(&next_state) {
+                self.matching_state.transition_to_accepting(c_pos, c);
+            } else {
+                self.matching_state.transition_to_non_accepting(c_pos);
+            }
+            self.matching_state.set_current_state(next_state);
+        } else {
+            self.matching_state.no_transition();
+        }
+    }
+
+    /// Returns the target state of the transition for the given character.
+    fn find_transition(
+        &self,
+        c: char,
+        match_char_class: &Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+    ) -> Option<StateID> {
+        let (start, end) = self.state_ranges[self.matching_state.current_state().as_usize()];
+        let transitions = &self.transitions[start..end];
+        for (char_class, target_state) in transitions {
+            if match_char_class(*char_class, c) {
+                return Some(*target_state);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn search_on(&self) -> bool {
+        !self.matching_state.is_longest_match()
+    }
+
+    /// Returns true if the search should continue on the next character if the automaton has ever
+    /// been in the matching state Start.
+    pub(crate) fn search_for_longer_match(&self) -> bool {
+        !self.matching_state.is_longest_match() && !self.matching_state.is_no_match()
     }
 }
 

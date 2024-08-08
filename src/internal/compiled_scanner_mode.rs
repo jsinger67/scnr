@@ -5,16 +5,16 @@ use super::{
 };
 
 /// A compiled scanner mode that can be used to scan a string.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct CompiledScannerMode {
     /// The name of the scanner mode.
-    name: String,
+    pub(crate) name: String,
     /// The regular expressions that are valid token types in this mode, bundled with their token
     /// type numbers.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
-    patterns: Vec<(CompiledDfa, TerminalID)>,
-    transitions: Vec<(TerminalID, ScannerModeID)>,
+    pub(crate) patterns: Vec<(CompiledDfa, TerminalID)>,
+    pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
 }
 
 impl CompiledScannerMode {
@@ -46,13 +46,15 @@ impl CompiledScannerMode {
         })
     }
 
-    /// Get the name of the scanner mode.
-    pub(crate) fn name(&self) -> &str {
-        &self.name
-    }
-
-    /// Get the patterns of the scanner mode.
-    pub(crate) fn patterns(&self) -> &[(CompiledDfa, TerminalID)] {
-        &self.patterns
+    /// Check if the scanner configuration has a transition on the given terminal index
+    pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
+        for (tok_type, scanner) in &self.transitions {
+            match token_type.cmp(&tok_type.as_usize()) {
+                std::cmp::Ordering::Less => return None,
+                std::cmp::Ordering::Equal => return Some(scanner.as_usize()),
+                std::cmp::Ordering::Greater => continue,
+            }
+        }
+        None
     }
 }
