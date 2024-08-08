@@ -26,7 +26,7 @@ impl ScannerImpl {
             self.character_classes
                 .iter()
                 .try_fold(Vec::new(), |mut acc, cc| {
-                    let match_function: MatchFunction = cc.ast().clone().try_into()?;
+                    let match_function: MatchFunction = cc.ast().try_into()?;
                     acc.push(match_function);
                     Ok::<Vec<MatchFunction>, ScnrError>(acc)
                 })?;

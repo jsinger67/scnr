@@ -34,18 +34,16 @@ impl MatchFn {
 
 /// A function that takes a character and returns a boolean.
 pub(crate) struct MatchFunction {
-    pub(crate) ast: Ast,
     pub(crate) match_fn: MatchFn,
 }
 
 impl MatchFunction {
     /// Create a new match function from a closure.
-    pub(crate) fn new<F>(ast: Ast, f: F) -> Self
+    pub(crate) fn new<F>(f: F) -> Self
     where
         F: Fn(char) -> bool + 'static,
     {
         MatchFunction {
-            ast,
             match_fn: MatchFn::new(f),
         }
     }
@@ -213,34 +211,31 @@ impl std::fmt::Debug for MatchFunction {
     }
 }
 
-impl TryFrom<Ast> for MatchFunction {
+impl TryFrom<&Ast> for MatchFunction {
     type Error = ScnrError;
 
-    fn try_from(ast: Ast) -> Result<Self> {
+    fn try_from(ast: &Ast) -> Result<Self> {
         let match_function = match ast {
             Ast::Empty(_) => {
                 // An empty AST matches everything.
-                MatchFunction::new(ast, |_| true)
+                MatchFunction::new(|_| true)
             }
             Ast::Dot(_) => {
                 // A dot AST matches any character except newline.
-                MatchFunction::new(ast, |ch| ch != '\n' && ch != '\r')
+                MatchFunction::new(|ch| ch != '\n' && ch != '\r')
             }
             Ast::Literal(ref l) => {
                 // A literal AST matches a single character.
                 let Literal { c, .. } = **l;
-                MatchFunction::new(ast, move |ch| ch == c)
+                MatchFunction::new(move |ch| ch == c)
             }
             Ast::ClassUnicode(ref c) => Self {
-                ast: ast.clone(),
                 match_fn: Self::try_from_class_unicode(*c.clone())?,
             },
             Ast::ClassPerl(ref c) => Self {
-                ast: ast.clone(),
                 match_fn: Self::try_from_class_perl(*c.clone())?,
             },
             Ast::ClassBracketed(ref c) => Self {
-                ast: ast.clone(),
                 match_fn: Self::try_from_class_bracketed(*c.clone())?,
             },
             _ => return Err(unsupported!(format!("{:#?}", ast))),
@@ -257,7 +252,7 @@ mod tests {
     #[test]
     fn test_match_function_unicode_class() {
         let ast = Parser::new().parse(r"\pL").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('A'));
         assert!(!match_function.call('1'));
@@ -267,7 +262,7 @@ mod tests {
     #[test]
     fn test_match_function_perl_class() {
         let ast = Parser::new().parse(r"\d").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('1'));
         assert!(!match_function.call('a'));
     }
@@ -275,7 +270,7 @@ mod tests {
     #[test]
     fn test_match_function_bracketed_class() {
         let ast = Parser::new().parse(r"[a-z]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('z'));
         assert!(!match_function.call('A'));
@@ -286,7 +281,7 @@ mod tests {
     fn test_match_function_binary_op_class_intersection() {
         // Intersection (matching x or y)
         let ast = Parser::new().parse(r"[a-y&&xyz]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('x'));
         assert!(match_function.call('y'));
         assert!(!match_function.call('a'));
@@ -296,7 +291,7 @@ mod tests {
     #[test]
     fn test_match_function_union_class() {
         let ast = Parser::new().parse(r"[0-9a-z]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('z'));
         assert!(match_function.call('0'));
@@ -307,7 +302,7 @@ mod tests {
     #[test]
     fn test_match_function_negated_bracketed_class() {
         let ast = Parser::new().parse(r"[^a-z]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(!match_function.call('a'));
         assert!(!match_function.call('z'));
         assert!(match_function.call('A'));
@@ -317,7 +312,7 @@ mod tests {
     #[test]
     fn test_match_function_negated_binary_op_class() {
         let ast = Parser::new().parse(r"[a-z&&[^aeiou]]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(!match_function.call('a'));
         assert!(!match_function.call('e'));
         assert!(match_function.call('z'));
@@ -328,7 +323,7 @@ mod tests {
     #[test]
     fn test_match_function_ascci_class() {
         let ast = Parser::new().parse(r"[[:alpha:]]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('A'));
         assert!(match_function.call('ä'));
@@ -340,7 +335,7 @@ mod tests {
     #[test]
     fn test_match_function_negated_ascii_class() {
         let ast = Parser::new().parse(r"[^[:alpha:]]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(!match_function.call('a'));
         assert!(!match_function.call('A'));
         assert!(!match_function.call('ä'));
@@ -351,7 +346,7 @@ mod tests {
     #[test]
     fn test_match_function_empty() {
         let ast = Parser::new().parse(r"").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('A'));
         assert!(match_function.call('1'));
@@ -362,7 +357,7 @@ mod tests {
     #[test]
     fn test_nested_classes() {
         let ast = Parser::new().parse(r"[x[^xyz]]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('x'));
         assert!(match_function.call('1'));
@@ -375,7 +370,7 @@ mod tests {
     #[test]
     fn test_subtraction() {
         let ast = Parser::new().parse(r"[0-9&&[^4]]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('0'));
         assert!(match_function.call('9'));
         assert!(!match_function.call('4'));
@@ -386,7 +381,7 @@ mod tests {
     #[test]
     fn test_direct_subtraction() {
         let ast = Parser::new().parse(r"[0-9--4]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('0'));
         assert!(match_function.call('9'));
         assert!(!match_function.call('4'));
@@ -397,7 +392,7 @@ mod tests {
     #[test]
     fn test_symmetric_difference() {
         let ast = Parser::new().parse(r"[a-g~~b-h]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('a'));
         assert!(match_function.call('h'));
         assert!(!match_function.call('b'));
@@ -408,7 +403,7 @@ mod tests {
     #[test]
     fn test_escaping() {
         let ast = Parser::new().parse(r"[\[\]]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(match_function.call('['));
         assert!(match_function.call(']'));
         assert!(!match_function.call('a'));
@@ -419,7 +414,7 @@ mod tests {
     #[test]
     fn test_empty_intersection() {
         let ast = Parser::new().parse(r"[a&&b]").unwrap();
-        let match_function = MatchFunction::try_from(ast).unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(!match_function.call('a'));
         assert!(!match_function.call('b'));
         assert!(!match_function.call('1'));
