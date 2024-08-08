@@ -7,7 +7,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Result;
 
-use super::{ids::StateIDBase, CharClassID, CharacterClass, CharacterClassRegistry, Nfa, StateID};
+use super::{CharClassID, CharacterClassRegistry, Nfa, StateID, StateIDBase};
 
 // The type definitions for the subset construction algorithm.
 pub(crate) type StateGroup = BTreeSet<StateID>;
@@ -72,7 +72,7 @@ impl Dfa {
 
     /// Create a DFA from an NFA.
     /// The DFA is created using the subset construction algorithm.
-    fn try_from_nfa(
+    pub(crate) fn try_from_nfa(
         nfa: Nfa,
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
@@ -309,7 +309,7 @@ impl Dfa {
             let mut transitions_to_partition_groups = TransitionsToPartitionGroups::new();
             for transition in transitions_of_state {
                 let partition_group = self.find_group(*transition.1, partition).unwrap();
-                transitions_to_partition_groups.insert(transition.0.clone(), partition_group);
+                transitions_to_partition_groups.insert(*transition.0, partition_group);
             }
             transitions_to_partition_groups
         } else {
@@ -498,7 +498,9 @@ mod tests {
 
     use std::sync::LazyLock;
 
-    use crate::internal::{parser::parse_regex_syntax, CharClassID, CharacterClassRegistry};
+    use crate::internal::{
+        parser::parse_regex_syntax, CharClassID, CharacterClass, CharacterClassRegistry,
+    };
 
     use super::*;
 

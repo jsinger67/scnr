@@ -20,6 +20,7 @@ pub(crate) use comparable_ast::ComparableAst;
 
 /// Module that provides functions and types related to DFAs.
 pub(crate) mod dfa;
+pub(crate) use dfa::Dfa;
 
 /// Module with conversion to graphviz dot format
 #[cfg(test)]
@@ -30,12 +31,13 @@ pub(crate) mod find_matches_impl;
 /// Module for sevearl ID types.
 mod ids;
 pub(crate) use ids::{
-    CharClassID, CharClassIDBase, PatternID, PatternIDBase, StateID, StateIDBase, TerminalID,
-    TerminalIDBase,
+    CharClassID, CharClassIDBase, PatternID, PatternIDBase, ScannerModeID, ScannerModeIDBase,
+    StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
 /// Module that provides functions and types related to match functions.
 pub(crate) mod match_function;
+pub(crate) use match_function::MatchFunction;
 
 /// Module that provides functions and types related to matching states.
 pub(crate) mod matching_state;
@@ -46,6 +48,7 @@ pub(crate) use nfa::Nfa;
 
 /// The parser module contains the regex syntax parser.
 mod parser;
+pub(crate) use parser::parse_regex_syntax;
 
 /// Module that provides functions and types related to scanner implementations.
 pub(crate) mod scanner_impl;

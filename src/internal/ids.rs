@@ -106,3 +106,8 @@ impl_id!(PatternID, PatternIDBase);
 /// the scanner over all scanner modes.
 pub(crate) type TerminalIDBase = u32;
 impl_id!(TerminalID, TerminalIDBase);
+
+/// The ID type for scanner modes. This is the index of the scanner mode in the scanner mode vector
+/// of the scanner.
+pub(crate) type ScannerModeIDBase = usize;
+impl_id!(ScannerModeID, ScannerModeIDBase);
