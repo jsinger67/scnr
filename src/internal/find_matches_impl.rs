@@ -1,10 +1,10 @@
-use super::{CharClassID, CompiledScannerMode, ScannerImpl};
+use super::{CharClassID, ScannerImpl};
 use crate::{Match, PeekResult, Result};
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
     // The scanner used to find matches.
-    scanner_modes: Vec<CompiledScannerMode>,
+    scanner: ScannerImpl,
     // The function used to match characters to character classes.
     match_char_class: Box<dyn Fn(CharClassID, char) -> bool + 'static>,
     // The input haystack.
@@ -15,7 +15,7 @@ impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
     pub(crate) fn try_new(scanner_impl: &ScannerImpl, input: &'h str) -> Result<Self> {
         Ok(Self {
-            scanner_modes: scanner_impl.scanner_modes.clone(),
+            scanner: scanner_impl.clone(),
             match_char_class: scanner_impl.create_match_char_class().unwrap(),
             char_indices: input.char_indices(),
         })
@@ -31,7 +31,19 @@ impl<'h> FindMatchesImpl<'h> {
     /// and tries again until a match is found or the iterator is exhausted.
     #[inline]
     pub(crate) fn next_match(&mut self) -> Option<Match> {
-        todo!()
+        let mut result;
+        loop {
+            result = self
+                .scanner
+                .find_from(&self.match_char_class, self.char_indices.clone());
+            if let Some(matched) = result {
+                self.advance_beyond_match(matched);
+                break;
+            } else if self.char_indices.next().is_none() {
+                break;
+            }
+        }
+        result
     }
 
     /// Peeks n matches ahead without consuming the matches.
@@ -44,10 +56,146 @@ impl<'h> FindMatchesImpl<'h> {
     pub(crate) fn peek_n(&mut self, _n: usize) -> PeekResult {
         todo!()
     }
+
+    // Advance the char_indices iterator to the end of the match.
+    #[inline]
+    fn advance_beyond_match(&mut self, matched: Match) {
+        if matched.is_empty() {
+            return;
+        }
+        let end = matched.span().end;
+        for (i, c) in self.char_indices.by_ref() {
+            if i + c.len_utf8() >= end {
+                // Stop at the end of the match.
+                break;
+            }
+        }
+    }
+
+    /// Advances the given char_indices iterator to the end of the given match.
+    fn advance_char_indices_beyond_match(char_indices: &mut std::str::CharIndices, matched: Match) {
+        if matched.is_empty() {
+            return;
+        }
+        let end = matched.span().end;
+        for (i, c) in char_indices {
+            if i + c.len_utf8() >= end {
+                // Stop at the end of the match.
+                break;
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for FindMatchesImpl<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FindMatchesImpl").finish()
+    }
+}
+
+impl Iterator for FindMatchesImpl<'_> {
+    type Item = Match;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next_match()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::LazyLock;
+
+    use super::*;
+    use crate::{ScannerBuilder, ScannerMode};
+
+    static MODES: LazyLock<[ScannerMode; 2]> = LazyLock::new(|| {
+        [
+            ScannerMode::new(
+                "INITIAL",
+                vec![
+                    (r"\r\n|\r|\n", 0),             // Newline
+                    (r"[\s--\r\n]+", 1),            // Whitespace
+                    (r"(//.*(\\r\\n|\\r|\\n))", 2), // Line comment
+                    (r"(/\*[.\r\n]*?\*/)", 3),      // Block comment
+                    (r"[a-zA-Z_]\w*", 4),           // Identifier
+                    (r"\u{22}", 8),                 // String delimiter
+                    (r".", 9),                      // Error
+                ],
+                vec![
+                    (8, 1), // Token "String delimiter" -> Mode "STRING"
+                ],
+            ),
+            ScannerMode::new(
+                "STRING",
+                vec![
+                    (r"\r\n|\r|\n", 0),               // Newline
+                    (r"[\s--\r\n]+", 1),              // Whitespace
+                    (r"(//.*(\\r\\n|\\r|\\n))", 2),   // Line comment
+                    (r"(/\*[.\r\n]*?\*/)", 3),        // Block comment
+                    (r"\u{5c}[\u{22}\u{5c}bfnt]", 5), // Escape sequence
+                    (r"\u{5c}[\s^\n\r]*\r?\n", 6),    // Line continuation
+                    (r"[^\u{22}\u{5c}]+", 7),         // String content
+                    (r"\u{22}", 8),                   // String delimiter
+                    (r".", 9),                        // Error
+                ],
+                vec![
+                    (8, 0), // Token "String delimiter" -> Mode "INITIAL"
+                ],
+            ),
+        ]
+    });
+
+    // The input string contains a string which triggers a mode switch from "INITIAL" to "STRING"
+    // and back to "INITIAL".
+    const INPUT: &str = r#"
+Id1
+"1. String"
+Id2
+"#;
+
+    #[test]
+    fn test_find_matches_impl() {
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
+
+        let find_matches = FindMatchesImpl::try_new(&scanner.inner, INPUT).unwrap();
+        let matches: Vec<Match> = find_matches.collect();
+        assert_eq!(matches.len(), 9);
+        assert_eq!(
+            matches,
+            vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into()),
+                Match::new(0, (4usize..5).into()),
+                Match::new(8, (5usize..6).into()),
+                Match::new(7, (6usize..15).into()),
+                Match::new(8, (15usize..16).into()),
+                Match::new(0, (16usize..17).into()),
+                Match::new(4, (17usize..20).into()),
+                Match::new(0, (20usize..21).into()),
+            ]
+        );
+        assert_eq!(
+            matches
+                .iter()
+                .map(|m| {
+                    let rng = m.span().start..m.span().end;
+                    INPUT.get(rng).unwrap()
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                "\n",
+                "Id1",
+                "\n",
+                "\"",
+                "1. String",
+                "\"",
+                "\n",
+                "Id2",
+                "\n"
+            ]
+        );
     }
 }

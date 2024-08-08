@@ -22,6 +22,7 @@ pub use errors::{Result, ScnrError, ScnrErrorKind};
 
 /// The module with the scanner builder.
 pub mod scanner_builder;
+pub use scanner_builder::ScannerBuilder;
 
 /// The module with the scanner mode.
 pub mod scanner_mode;

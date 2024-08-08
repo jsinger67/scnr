@@ -2,6 +2,7 @@ use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
 use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction};
 
+#[derive(Clone)]
 pub(crate) struct ScannerImpl {
     character_classes: CharacterClassRegistry,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
@@ -23,11 +24,30 @@ impl ScannerImpl {
         FindMatches::new(self, input)
     }
 
+    pub(crate) fn create_match_char_class(
+        &self,
+    ) -> Result<Box<dyn Fn(CharClassID, char) -> bool + 'static>> {
+        let match_functions =
+            self.character_classes
+                .iter()
+                .try_fold(Vec::new(), |mut acc, cc| {
+                    let match_function: MatchFunction = cc.ast().try_into()?;
+                    acc.push(match_function);
+                    Ok::<Vec<MatchFunction>, ScnrError>(acc)
+                })?;
+        Ok(Box::new(move |char_class, c| {
+            match_functions[char_class.as_usize()].call(c)
+        }))
+    }
+
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all DFAs are advanced in parallel by one character at a time.
-    pub(crate) fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let match_char_class = self.create_match_char_class().ok()?;
+    pub(crate) fn find_from(
+        &mut self,
+        match_char_class: &Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+        char_indices: std::str::CharIndices,
+    ) -> Option<Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].patterns;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
@@ -53,22 +73,6 @@ impl ScannerImpl {
         let current_match = self.find_first_longest_match();
         self.execute_possible_mode_switch(current_match);
         current_match
-    }
-
-    pub(crate) fn create_match_char_class(
-        &self,
-    ) -> Result<Box<dyn Fn(CharClassID, char) -> bool + 'static>> {
-        let match_functions =
-            self.character_classes
-                .iter()
-                .try_fold(Vec::new(), |mut acc, cc| {
-                    let match_function: MatchFunction = cc.ast().try_into()?;
-                    acc.push(match_function);
-                    Ok::<Vec<MatchFunction>, ScnrError>(acc)
-                })?;
-        Ok(Box::new(move |char_class, c| {
-            match_functions[char_class.as_usize()].call(c)
-        }))
     }
 
     /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the

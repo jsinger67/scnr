@@ -15,13 +15,15 @@ impl ScannerBuilder {
     }
 
     /// Adds a scanner mode to the scanner builder.
-    pub fn add_scanner_mode(&mut self, scanner_mode: ScannerMode) {
+    pub fn add_scanner_mode(mut self, scanner_mode: ScannerMode) -> Self {
         self.scanner_modes.push(scanner_mode);
+        self
     }
 
     /// Adds multiple scanner modes to the scanner builder.
-    pub fn add_scanner_modes(&mut self, scanner_modes: &[ScannerMode]) {
+    pub fn add_scanner_modes(mut self, scanner_modes: &[ScannerMode]) -> Self {
         self.scanner_modes.extend_from_slice(scanner_modes);
+        self
     }
 
     /// Builds the scanner from the scanner builder.

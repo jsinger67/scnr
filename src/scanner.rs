@@ -1,4 +1,4 @@
-use crate::{FindMatches, Match, Result, ScannerImpl};
+use crate::{FindMatches, Result, ScannerImpl};
 
 /// A Scanner.
 /// It consists of multiple DFAs that are used to search for matches.
@@ -22,12 +22,5 @@ impl Scanner {
     /// The iterator yields a [`Match`] value until no more matches could be found.
     pub fn find_iter<'h>(&self, input: &'h str) -> Result<FindMatches<'h>> {
         self.inner.find_iter(input)
-    }
-
-    /// Executes a leftmost search and returns the first match that is found, if one exists.
-    /// It starts the search at the position of the given CharIndices iterator.
-    /// During the search, all DFAs are advanced in parallel by one character at a time.
-    pub fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        self.inner.find_from(char_indices)
     }
 }
