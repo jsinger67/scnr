@@ -46,6 +46,9 @@ impl Nfa {
             && self.states[0].is_empty()
     }
 
+    /// Returns the start state of the NFA.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
     pub(crate) fn start_state(&self) -> StateID {
         self.start_state
     }
@@ -444,7 +447,8 @@ impl NfaState {
 pub(crate) struct NfaTransition {
     /// This can be a Literal or a CharacterClass
     /// We will later generate a predicate from this that determines if a character matches this
-    /// transition
+    /// transition. It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
     ast: ComparableAst,
     /// The next state to transition to
     target_state: StateID,
@@ -458,6 +462,7 @@ impl NfaTransition {
         self.target_state
     }
 
+    #[allow(unused)]
     pub(crate) fn ast(&self) -> &ComparableAst {
         &self.ast
     }
@@ -704,7 +709,6 @@ mod tests {
 
 #[cfg(test)]
 mod tests_try_from {
-    use std::convert::TryFrom;
 
     use crate::internal::parser::parse_regex_syntax;
 

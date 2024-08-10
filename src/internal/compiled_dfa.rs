@@ -13,7 +13,7 @@ use super::{dfa::Dfa, matching_state::MatchingState, CharClassID, StateID};
 #[derive(Default, Debug, Clone)]
 pub(crate) struct CompiledDfa {
     /// The pattern matched by the DFA.
-    pattern: String,
+    // pattern: String,
     /// The accepting states of the DFA as well as the corresponding pattern id.
     accepting_states: Vec<StateID>,
     /// Each entry in the vector represents a state in the DFA. The entry is a tuple of first and
@@ -27,41 +27,41 @@ pub(crate) struct CompiledDfa {
 }
 
 impl CompiledDfa {
-    /// Creates a new compiled DFA with the given pattern and accepting states.
-    /// Returns the pattern matched by the DFA.
-    pub fn pattern(&self) -> &str {
-        &self.pattern
-    }
+    // Creates a new compiled DFA with the given pattern and accepting states.
+    // Returns the pattern matched by the DFA.
+    // pub fn pattern(&self) -> &str {
+    //     &self.pattern
+    // }
 
-    /// Returns the accepting states of the DFA.
-    pub fn accepting_states(&self) -> &[StateID] {
-        &self.accepting_states
-    }
+    // Returns the accepting states of the DFA.
+    // pub fn accepting_states(&self) -> &[StateID] {
+    //     &self.accepting_states
+    // }
 
-    /// Returns the state ranges of the DFA.
-    pub fn state_ranges(&self) -> &[(usize, usize)] {
-        &self.state_ranges
-    }
+    // Returns the state ranges of the DFA.
+    // pub fn state_ranges(&self) -> &[(usize, usize)] {
+    //     &self.state_ranges
+    // }
 
-    /// Returns the transitions of the DFA.
-    pub fn transitions(&self) -> &[(CharClassID, StateID)] {
-        &self.transitions
-    }
+    // Returns the transitions of the DFA.
+    // pub fn transitions(&self) -> &[(CharClassID, StateID)] {
+    //     &self.transitions
+    // }
 
-    /// Returns the matching state of the DFA.
-    pub(crate) fn matching_state(&self) -> &MatchingState<StateID> {
-        &self.matching_state
-    }
+    // Returns the matching state of the DFA.
+    // pub(crate) fn matching_state(&self) -> &MatchingState<StateID> {
+    //     &self.matching_state
+    // }
 
     /// Resets the matching state of the DFA.
     pub(crate) fn reset(&mut self) {
         self.matching_state = MatchingState::new();
     }
 
-    /// Returns the current state of the DFA.
-    pub(crate) fn current_state(&self) -> StateID {
-        self.matching_state.current_state()
-    }
+    // Returns the current state of the DFA.
+    // pub(crate) fn current_state(&self) -> StateID {
+    //     self.matching_state.current_state()
+    // }
 
     /// Returns the last match of the DFA.
     pub(crate) fn current_match(&self) -> Option<Span> {
@@ -73,7 +73,7 @@ impl CompiledDfa {
         &mut self,
         c_pos: usize,
         c: char,
-        match_char_class: &Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) {
         // If we already have the longest match, we can stop
         if self.matching_state.is_longest_match() {
@@ -96,7 +96,7 @@ impl CompiledDfa {
     fn find_transition(
         &self,
         c: char,
-        match_char_class: &Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<StateID> {
         let (start, end) = self.state_ranges[self.matching_state.current_state().as_usize()];
         let transitions = &self.transitions[start..end];
@@ -108,9 +108,9 @@ impl CompiledDfa {
         None
     }
 
-    pub(crate) fn search_on(&self) -> bool {
-        !self.matching_state.is_longest_match()
-    }
+    // pub(crate) fn search_on(&self) -> bool {
+    //     !self.matching_state.is_longest_match()
+    // }
 
     /// Returns true if the search should continue on the next character if the automaton has ever
     /// been in the matching state Start.
@@ -124,10 +124,11 @@ impl TryFrom<Dfa> for CompiledDfa {
 
     fn try_from(dfa: Dfa) -> Result<Self, Self::Error> {
         let Dfa {
-            pattern,
+            // pattern,
             states,
             accepting_states,
             transitions,
+            ..
         } = dfa;
 
         let mut state_ranges = Vec::new();
@@ -155,7 +156,7 @@ impl TryFrom<Dfa> for CompiledDfa {
         }
 
         Ok(Self {
-            pattern,
+            // pattern,
             accepting_states,
             state_ranges,
             transitions: compiled_transitions,

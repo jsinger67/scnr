@@ -22,6 +22,8 @@ impl CharacterClassRegistry {
     }
 
     /// Returns a slice of the character classes in the registry.
+    /// It is used for debugging purposes.
+    #[allow(unused)]
     pub(crate) fn character_classes(&self) -> &[CharacterClass] {
         &self.character_classes
     }
@@ -44,16 +46,22 @@ impl CharacterClassRegistry {
     }
 
     /// Returns the character class with the given ID.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
     pub(crate) fn get_character_class(&self, id: CharClassID) -> Option<&CharacterClass> {
         self.character_classes.get(id.as_usize())
     }
 
     /// Returns the number of character classes in the registry.
+    /// It is used for debugging purposes.
+    #[allow(unused)]
     pub(crate) fn len(&self) -> usize {
         self.character_classes.len()
     }
 
     /// Returns true if the registry is empty.
+    /// It is used for debugging purposes.
+    #[allow(unused)]
     pub(crate) fn is_empty(&self) -> bool {
         self.character_classes.is_empty()
     }

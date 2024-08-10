@@ -5,7 +5,7 @@ use std::io::Write;
 
 use dot_writer::{Attributes, DotWriter, RankDirection};
 
-use super::{character_class_registry, dfa::Dfa, nfa::Nfa, CharacterClassRegistry};
+use super::{dfa::Dfa, nfa::Nfa, CharacterClassRegistry};
 
 /// Render the NFA to a graphviz dot format.
 #[allow(dead_code)]

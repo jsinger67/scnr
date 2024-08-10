@@ -45,19 +45,23 @@ pub(crate) struct Dfa {
 
 impl Dfa {
     /// Get the states of the DFA.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
     pub(crate) fn states(&self) -> &[DfaState] {
         &self.states
     }
 
     /// Get the pattern for the accepting states.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
     pub(crate) fn pattern(&self) -> &str {
         &self.pattern
     }
 
-    /// Get the accepting states of the DFA.
-    pub(crate) fn accepting_states(&self) -> &[StateID] {
-        &self.accepting_states
-    }
+    // Get the accepting states of the DFA.
+    // pub(crate) fn accepting_states(&self) -> &[StateID] {
+    //     &self.accepting_states
+    // }
 
     /// Get the pattern id if the given state is an accepting state.
     #[inline]
@@ -66,6 +70,8 @@ impl Dfa {
     }
 
     /// Get the transitions of the DFA.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
     pub(crate) fn transitions(&self) -> &BTreeMap<StateID, BTreeMap<CharClassID, StateID>> {
         &self.transitions
     }

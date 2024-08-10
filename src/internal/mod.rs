@@ -31,8 +31,7 @@ pub(crate) mod find_matches_impl;
 /// Module for sevearl ID types.
 mod ids;
 pub(crate) use ids::{
-    CharClassID, CharClassIDBase, PatternID, PatternIDBase, ScannerModeID, ScannerModeIDBase,
-    StateID, StateIDBase, TerminalID, TerminalIDBase,
+    CharClassID, ScannerModeID, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
 /// Module that provides functions and types related to match functions.

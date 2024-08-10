@@ -23,4 +23,24 @@ impl Scanner {
     pub fn find_iter<'h>(&self, input: &'h str) -> Result<FindMatches<'h>> {
         self.inner.find_iter(input)
     }
+
+    /// Returns the current scanner mode.
+    pub fn current_mode(&self) -> usize {
+        self.inner.current_mode()
+    }
+
+    /// Sets the current scanner mode.
+    ///
+    /// A parser can explicitly set the scanner mode to switch to a different set of DFAs.
+    /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
+    /// in the active scanner mode.
+    pub fn set_mode(&mut self, mode: usize) {
+        self.inner.set_mode(mode);
+    }
+
+    /// Returns the name of the scanner mode with the given index.
+    /// If the index is out of bounds, None is returned.
+    pub fn mode_name(&self, index: usize) -> Option<&str> {
+        self.inner.mode_name(index)
+    }
 }

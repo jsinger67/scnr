@@ -53,8 +53,36 @@ impl<'h> FindMatchesImpl<'h> {
     /// triggered by the last match. The mode switch is not conducted by the peek operation to not
     /// change the state of the scanner as well as to aviod a mix of tokens from different modes
     /// being returned.
-    pub(crate) fn peek_n(&mut self, _n: usize) -> PeekResult {
-        todo!()
+    pub(crate) fn peek_n(&mut self, n: usize) -> PeekResult {
+        let mut char_indices = self.char_indices.clone();
+        let mut matches = Vec::with_capacity(n);
+        let mut mode_switch = false;
+        let mut new_mode = 0;
+        for _ in 0..n {
+            let result = self
+                .scanner
+                .peek_from(&self.match_char_class, char_indices.clone());
+            if let Some(matched) = result {
+                matches.push(matched);
+                Self::advance_char_indices_beyond_match(&mut char_indices, matched);
+                if let Some(mode) = self.scanner.has_transition(matched.token_type()) {
+                    mode_switch = true;
+                    new_mode = mode;
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        if mode_switch {
+            PeekResult::MatchesReachedModeSwitch((matches, new_mode))
+        } else if matches.len() == n {
+            PeekResult::Matches(matches)
+        } else if matches.is_empty() {
+            PeekResult::NotFound
+        } else {
+            PeekResult::MatchesReachedEnd(matches)
+        }
     }
 
     // Advance the char_indices iterator to the end of the match.
@@ -196,6 +224,58 @@ Id2
                 "Id2",
                 "\n"
             ]
+        );
+    }
+
+    #[test]
+    fn test_peek_n() {
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
+        let mut find_iter = scanner.find_iter(INPUT).unwrap();
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into()),
+            ])
+        );
+        let peeked = find_iter.peek_n(4);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedModeSwitch((
+                vec![
+                    Match::new(0, (0usize..1).into()),
+                    Match::new(4, (1usize..4).into()),
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into()),
+                ],
+                1
+            ))
+        );
+        let peeked = find_iter.peek_n(5);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedModeSwitch((
+                vec![
+                    Match::new(0, (0usize..1).into()),
+                    Match::new(4, (1usize..4).into()),
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into()),
+                ],
+                1
+            ))
+        );
+        let _ = find_iter.by_ref().take(7).collect::<Vec<_>>();
+        let peeked = find_iter.peek_n(4);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedEnd(vec![
+                Match::new(4, (17usize..20).into()),
+                Match::new(0, (20usize..21).into()),
+            ])
         );
     }
 }

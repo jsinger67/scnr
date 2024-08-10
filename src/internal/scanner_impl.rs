@@ -10,13 +10,13 @@ pub(crate) struct ScannerImpl {
 }
 
 impl ScannerImpl {
-    pub(crate) fn character_classes(&self) -> &CharacterClassRegistry {
-        &self.character_classes
-    }
+    // pub(crate) fn character_classes(&self) -> &CharacterClassRegistry {
+    //     &self.character_classes
+    // }
 
-    pub(crate) fn scanner_modes(&self) -> &[CompiledScannerMode] {
-        &self.scanner_modes
-    }
+    // pub(crate) fn scanner_modes(&self) -> &[CompiledScannerMode] {
+    //     &self.scanner_modes
+    // }
 
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
@@ -45,7 +45,7 @@ impl ScannerImpl {
     /// During the search, all DFAs are advanced in parallel by one character at a time.
     pub(crate) fn find_from(
         &mut self,
-        match_char_class: &Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
         char_indices: std::str::CharIndices,
     ) -> Option<Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].patterns;
@@ -58,7 +58,7 @@ impl ScannerImpl {
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
-                patterns[*dfa_index].0.advance(i, c, &match_char_class);
+                patterns[*dfa_index].0.advance(i, c, match_char_class);
             }
 
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
@@ -73,6 +73,46 @@ impl ScannerImpl {
         let current_match = self.find_first_longest_match();
         self.execute_possible_mode_switch(current_match);
         current_match
+    }
+
+    /// This function is used by [super::find_matches::FindMatches::peek_n].
+    ///
+    /// Executes a leftmost search and returns the first match that is found, if one exists.
+    /// It starts the search at the position of the given CharIndices iterator.
+    /// In contrast to `find_from`, this method does not execute a mode switch if a transition is
+    /// defined for the token type found.
+    ///
+    /// The name `peek_from` is used to indicate that this method is used for peeking ahead.
+    /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
+    /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
+    pub(crate) fn peek_from(
+        &mut self,
+        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
+        char_indices: std::str::CharIndices,
+    ) -> Option<Match> {
+        let patterns = &mut self.scanner_modes[self.current_mode].patterns;
+        for (dfa, _) in patterns.iter_mut() {
+            dfa.reset();
+        }
+
+        // All indices of the DFAs that are still active.
+        let mut active_dfas = (0..patterns.len()).collect::<Vec<_>>();
+
+        for (i, c) in char_indices {
+            for dfa_index in &active_dfas {
+                patterns[*dfa_index].0.advance(i, c, match_char_class);
+            }
+
+            // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
+            active_dfas.retain(|&dfa_index| patterns[dfa_index].0.search_for_longer_match());
+
+            // If all DFAs have finished, we can stop the search.
+            if active_dfas.is_empty() {
+                break;
+            }
+        }
+
+        self.find_first_longest_match()
     }
 
     /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the
@@ -132,6 +172,7 @@ impl ScannerImpl {
     }
 
     /// Returns the current scanner mode.
+    #[inline]
     pub(crate) fn current_mode(&self) -> usize {
         self.current_mode
     }
