@@ -1,10 +1,12 @@
+use log::trace;
+
 use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
 use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction};
 
 #[derive(Clone)]
 pub(crate) struct ScannerImpl {
-    character_classes: CharacterClassRegistry,
+    pub(crate) character_classes: CharacterClassRegistry,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     current_mode: usize,
 }
@@ -31,12 +33,17 @@ impl ScannerImpl {
             self.character_classes
                 .iter()
                 .try_fold(Vec::new(), |mut acc, cc| {
+                    trace!("Create match function for char class {:?}", cc);
                     let match_function: MatchFunction = cc.ast().try_into()?;
                     acc.push(match_function);
                     Ok::<Vec<MatchFunction>, ScnrError>(acc)
                 })?;
         Ok(Box::new(move |char_class, c| {
-            match_functions[char_class.as_usize()].call(c)
+            let res = match_functions[char_class.as_usize()].call(c);
+            if res {
+                trace!("Match char class: {:?} {:?} -> {:?}", char_class, c, res);
+            }
+            res
         }))
     }
 
@@ -58,11 +65,25 @@ impl ScannerImpl {
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
+                trace!(
+                    "Advance DFA #{} with char {:?} and token type {}",
+                    dfa_index,
+                    c,
+                    patterns[*dfa_index].1
+                );
                 patterns[*dfa_index].0.advance(i, c, match_char_class);
             }
 
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
             active_dfas.retain(|&dfa_index| patterns[dfa_index].0.search_for_longer_match());
+
+            for dfa_index in &active_dfas {
+                trace!(
+                    "Matching state: #{} {:?}",
+                    dfa_index,
+                    patterns[*dfa_index].0.matching_state()
+                );
+            }
 
             // If all DFAs have finished, we can stop the search.
             if active_dfas.is_empty() {

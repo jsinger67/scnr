@@ -8,17 +8,18 @@ pub(crate) struct ComparableAst(pub(crate) Ast);
 impl PartialEq for ComparableAst {
     fn eq(&self, other: &Self) -> bool {
         match (&self.0, &other.0) {
-            (Ast::Empty(_), Ast::Empty(_))
-            | (Ast::Dot(_), Ast::Dot(_))
-            | (Ast::Literal(_), Ast::Literal(_))
-            | (Ast::ClassUnicode(_), Ast::ClassUnicode(_))
+            (Ast::ClassUnicode(_), Ast::ClassUnicode(_))
             | (Ast::ClassPerl(_), Ast::ClassPerl(_))
             | (Ast::ClassBracketed(_), Ast::ClassBracketed(_)) => {
                 // Compare the string representation of the ASTs.
                 // This is a workaround because the AST's implementation of PartialEq also
                 // compares the span, which is not relevant for the character class handling here.
-                self.0.to_string() == other.0.to_string()
+                self.0.to_string().escape_default().to_string()
+                    == other.0.to_string().escape_default().to_string()
             }
+            (Ast::Empty(_), Ast::Empty(_)) => true,
+            (Ast::Literal(l), Ast::Literal(r)) => l.c == r.c && l.kind == r.kind,
+            (Ast::Dot(_), Ast::Dot(_)) => true,
             _ => false,
         }
     }
@@ -56,12 +57,12 @@ impl Default for ComparableAst {
 
 impl std::fmt::Display for ComparableAst {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.0.to_string().escape_default())
     }
 }
 
 impl std::fmt::Debug for ComparableAst {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{}", self.0.to_string().escape_default())
     }
 }

@@ -1,6 +1,15 @@
-use crate::{ScnrError, Span};
+use std::io::{Cursor, Read};
 
-use super::{dfa::Dfa, matching_state::MatchingState, CharClassID, StateID};
+use log::trace;
+
+use crate::{
+    internal::{parse_regex_syntax, Nfa},
+    Result, ScnrError, Span,
+};
+
+use super::{
+    dfa::Dfa, matching_state::MatchingState, CharClassID, CharacterClassRegistry, StateID,
+};
 
 /// A compiled DFA that can be used to match a string.
 ///
@@ -10,7 +19,7 @@ use super::{dfa::Dfa, matching_state::MatchingState, CharClassID, StateID};
 ///
 /// MatchFunctions are not Clone nor Copy, so we aggregate them into a new struct CompiledDfa
 /// which is Clone and Copy neither.
-#[derive(Default, Debug, Clone)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompiledDfa {
     /// The pattern matched by the DFA.
     // pattern: String,
@@ -38,30 +47,45 @@ impl CompiledDfa {
     //     &self.accepting_states
     // }
 
-    // Returns the state ranges of the DFA.
-    // pub fn state_ranges(&self) -> &[(usize, usize)] {
-    //     &self.state_ranges
-    // }
+    /// Get the pattern id if the given state is an accepting state.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
+    pub(crate) fn is_accepting(&self, state_id: StateID) -> bool {
+        self.accepting_states.contains(&state_id)
+    }
 
-    // Returns the transitions of the DFA.
-    // pub fn transitions(&self) -> &[(CharClassID, StateID)] {
-    //     &self.transitions
-    // }
+    /// Returns the state ranges of the DFA.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
+    pub(crate) fn state_ranges(&self) -> &[(usize, usize)] {
+        &self.state_ranges
+    }
 
-    // Returns the matching state of the DFA.
-    // pub(crate) fn matching_state(&self) -> &MatchingState<StateID> {
-    //     &self.matching_state
-    // }
+    /// Returns the transitions of the DFA.
+    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    #[allow(unused)]
+    pub(crate) fn transitions(&self) -> &[(CharClassID, StateID)] {
+        &self.transitions
+    }
+
+    /// Returns the matching state of the DFA.
+    /// It is used for debugging purposes.
+    #[allow(unused)]
+    pub(crate) fn matching_state(&self) -> &MatchingState<StateID> {
+        &self.matching_state
+    }
 
     /// Resets the matching state of the DFA.
     pub(crate) fn reset(&mut self) {
         self.matching_state = MatchingState::new();
     }
 
-    // Returns the current state of the DFA.
-    // pub(crate) fn current_state(&self) -> StateID {
-    //     self.matching_state.current_state()
-    // }
+    /// Returns the current state of the DFA.
+    /// It is used for debugging purposes.
+    #[allow(unused)]
+    pub(crate) fn current_state(&self) -> StateID {
+        self.matching_state.current_state()
+    }
 
     /// Returns the last match of the DFA.
     pub(crate) fn current_match(&self) -> Option<Span> {
@@ -117,12 +141,73 @@ impl CompiledDfa {
     pub(crate) fn search_for_longer_match(&self) -> bool {
         !self.matching_state.is_longest_match() && !self.matching_state.is_no_match()
     }
+
+    pub(crate) fn try_from_pattern(
+        pattern: &str,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<CompiledDfa> {
+        let ast = parse_regex_syntax(pattern)?;
+        let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
+
+        trace!("NFA:\n{}", {
+            let mut cursor = Cursor::new(Vec::new());
+            let title = format!("NFA for pattern '{}'", pattern.escape_default());
+            super::dot::nfa_render(&nfa, &title, &mut cursor);
+            let mut dot_format = String::new();
+            cursor.set_position(0);
+            cursor.read_to_string(&mut dot_format)?;
+            dot_format
+        });
+
+        let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
+
+        trace!("DFA:\n{}", {
+            let mut cursor = Cursor::new(Vec::new());
+            let title = format!("DFA for pattern '{}'", pattern.escape_default());
+            super::dot::dfa_render(&dfa, &title, character_class_registry, &mut cursor);
+            let mut dot_format = String::new();
+            cursor.set_position(0);
+            cursor.read_to_string(&mut dot_format)?;
+            dot_format
+        });
+
+        let dfa = dfa.minimize()?;
+
+        trace!("Minimized DFA:\n{}", {
+            let mut cursor = Cursor::new(Vec::new());
+            let title = format!("Minimized DFA for pattern '{}'", pattern.escape_default());
+            super::dot::dfa_render(&dfa, &title, character_class_registry, &mut cursor);
+            let mut dot_format = String::new();
+            cursor.set_position(0);
+            cursor.read_to_string(&mut dot_format)?;
+            dot_format
+        });
+
+        let compiled_dfa = CompiledDfa::try_from(dfa)?;
+
+        trace!("Compiled DFA:\n{}", {
+            let mut cursor = Cursor::new(Vec::new());
+            let title = format!("Compiled DFA for pattern '{}'", pattern.escape_default());
+            super::dot::compiled_dfa_render(
+                &compiled_dfa,
+                &title,
+                character_class_registry,
+                &mut cursor,
+            );
+            let mut dot_format = String::new();
+            cursor.set_position(0);
+            cursor.read_to_string(&mut dot_format)?;
+            dot_format
+        });
+
+        Ok(compiled_dfa)
+    }
 }
 
 impl TryFrom<Dfa> for CompiledDfa {
     type Error = ScnrError;
 
-    fn try_from(dfa: Dfa) -> Result<Self, Self::Error> {
+    fn try_from(dfa: Dfa) -> std::result::Result<Self, Self::Error> {
         let Dfa {
             // pattern,
             states,
@@ -157,10 +242,34 @@ impl TryFrom<Dfa> for CompiledDfa {
 
         Ok(Self {
             // pattern,
-            accepting_states,
+            accepting_states: accepting_states.into_iter().collect(),
             state_ranges,
             transitions: compiled_transitions,
             matching_state,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::internal::CharacterClassRegistry;
+
+    /// A macro that simplifies the rendering of a dot file for a DFA.
+    macro_rules! compiled_dfa_render_to {
+        ($nfa:expr, $label:expr, $reg:ident) => {
+            let label = format!("{}Dfa", $label);
+            let mut f = std::fs::File::create(format!("target/{}CompiledDfa.dot", $label)).unwrap();
+            $crate::internal::dot::compiled_dfa_render($nfa, &label, &$reg, &mut f);
+        };
+    }
+
+    #[test]
+    fn test_compiled_dfa() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let pattern = "(//.*(\\r\\n|\\r|\\n))";
+        let compiled_dfa =
+            CompiledDfa::try_from_pattern(pattern, &mut character_class_registry).unwrap();
+        compiled_dfa_render_to!(&compiled_dfa, "LineComment", character_class_registry);
     }
 }

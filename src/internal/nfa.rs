@@ -392,6 +392,8 @@ impl Nfa {
                 }
             }
         }
+        move_set.sort_unstable();
+        move_set.dedup();
         move_set
     }
 }

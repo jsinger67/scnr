@@ -2,7 +2,7 @@
 //! The DFA is used to match a string against a regex pattern.
 //! The DFA is generated from the NFA using the subset construction algorithm.
 
-use itertools::Itertools;
+use log::trace;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Result;
@@ -38,7 +38,7 @@ pub(crate) struct Dfa {
     // The pattern for the accepting states.
     pub(crate) pattern: String,
     // The accepting states of the DFA as well as the corresponding pattern id.
-    pub(crate) accepting_states: Vec<StateID>,
+    pub(crate) accepting_states: BTreeSet<StateID>,
     // The transitions of the DFA.
     pub(crate) transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
 }
@@ -82,6 +82,7 @@ impl Dfa {
         nfa: Nfa,
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
+        trace!("Character classes: {:?}", character_class_registry);
         let Nfa {
             pattern,
             start_state,
@@ -91,14 +92,13 @@ impl Dfa {
         let mut dfa = Dfa {
             states: Vec::new(),
             pattern,
-            accepting_states: Vec::new(),
+            accepting_states: BTreeSet::new(),
             transitions: BTreeMap::new(),
         };
-        let accepting_states = vec![end_state];
         // The initial state of the DFA is the epsilon closure of the start state of the NFA.
         let start_state = nfa.epsilon_closure(start_state);
         // The initial state is the start state of the DFA.
-        let initial_state = dfa.add_state_if_new(start_state, &accepting_states)?;
+        let initial_state = dfa.add_state_if_new(start_state, end_state)?;
         // The work list is used to keep track of the states that need to be processed.
         let mut work_list = vec![initial_state];
         // The marked flag is used to mark a state as visited during the subset construction algorithm.
@@ -110,7 +110,7 @@ impl Dfa {
                 let target_states =
                     nfa.epsilon_closure_set(nfa.move_set(&nfa_states, char_class.id()));
                 if !target_states.is_empty() {
-                    let target_state = dfa.add_state_if_new(target_states, &accepting_states)?;
+                    let target_state = dfa.add_state_if_new(target_states, end_state)?;
                     dfa.transitions
                         .entry(state_id)
                         .or_default()
@@ -123,17 +123,15 @@ impl Dfa {
             }
         }
 
-        dfa.minimize()
+        // dfa.minimize()
+        Ok(dfa)
     }
 
     /// Add a state to the DFA if it does not already exist.
     /// The state is identified by the NFA states that constitute the DFA state.
-    /// The accepting states are used to determine if the DFA state is an accepting state.
-    fn add_state_if_new<I>(
-        &mut self,
-        nfa_states: I,
-        accepting_states: &[StateID],
-    ) -> Result<StateID>
+    /// The accepting state is used to determine if the DFA state is an accepting state.
+    /// The NFA only has one accepting state, it is the end state of the NFA.
+    fn add_state_if_new<I>(&mut self, nfa_states: I, accepting_state: StateID) -> Result<StateID>
     where
         I: IntoIterator<Item = StateID>,
     {
@@ -153,25 +151,27 @@ impl Dfa {
 
         // Check if the constraint holds that only one pattern can match, i.e. the DFA
         // state only contains one accpting NFA state. This should always be the case since
-        // the NFA is a multi-pattern NFA.
+        // the NFA is a single-pattern NFA.
         debug_assert!(
             state
                 .nfa_states
                 .iter()
-                .filter(|nfa_state_id| accepting_states.contains(nfa_state_id))
+                .filter(|nfa_state_id| accepting_state == **nfa_state_id)
                 .count()
                 <= 1
         );
 
-        // Check if the state contains an accepting state.
+        // Check if the state contains an accepting state and if so add it to the accepting states.
         for nfa_state_id in &state.nfa_states {
-            if accepting_states.contains(nfa_state_id) && !self.accepting_states.contains(&state_id)
-            {
+            if *nfa_state_id == accepting_state {
                 // The state is an accepting state.
-                self.accepting_states.push(state_id);
+                trace!("* State {} is accepting state.", state_id.as_usize());
+                self.accepting_states.insert(state_id);
                 break;
             }
         }
+
+        trace!("Add state: {}: {:?}", state.id.as_usize(), state.nfa_states);
 
         self.states.push(state);
         Ok(state_id)
@@ -184,21 +184,30 @@ impl Dfa {
     fn add_representive_state(
         &mut self,
         group: &BTreeSet<StateID>,
-        accepting_states: &[StateID],
+        accepting_states: &BTreeSet<StateID>,
     ) -> Result<StateID> {
         let state_id = StateID::new(self.states.len() as StateIDBase);
         let state = DfaState::new(state_id, Vec::new());
 
         // First state in group is the representative state.
-        // let representative_state_id = group.first().unwrap();
+        let representative_state_id = group.first().unwrap();
+
+        trace!(
+            "Add representive state {} with id {}",
+            representative_state_id.as_usize(),
+            state_id.as_usize()
+        );
 
         // Insert the representative state into the accepting states if any state in its group is
         // an accepting state.
         for state_in_group in group.iter() {
-            if accepting_states.contains(state_in_group)
-                && !self.accepting_states.contains(&state_id)
-            {
-                self.accepting_states.push(state_id);
+            if accepting_states.contains(state_in_group) {
+                trace!(
+                    "* State {} is accepting state (from state {}).",
+                    state_id.as_usize(),
+                    state_in_group.as_usize()
+                );
+                self.accepting_states.insert(state_id);
             }
         }
 
@@ -206,16 +215,47 @@ impl Dfa {
         Ok(state_id)
     }
 
+    /// Trace out a partition of the DFA.
+    #[allow(dead_code)]
+    fn trace_partition(context: &str, partition: &[StateGroup]) {
+        trace!("Partition {}:", context);
+        for (i, group) in partition.iter().enumerate() {
+            trace!("Group {}: {:?}", i, group);
+        }
+    }
+
+    #[allow(dead_code)]
+    fn trace_transitions_to_groups(
+        state_id: StateID,
+        transitions_to_groups: &TransitionsToPartitionGroups,
+    ) {
+        trace!("Transitions of state {} to groups:", state_id.as_usize());
+        for (char_class, group) in &transitions_to_groups.0 {
+            trace!("{} -> {}", char_class, group);
+        }
+    }
+
     /// Minimize the DFA.
     /// The Nfa states are removed from the DFA states during minimization. They are not needed
     /// anymore after the DFA is created.
-    fn minimize(&self) -> Result<Self> {
+    pub(crate) fn minimize(&self) -> Result<Self> {
+        // Check in DEBUG mode if the DFA states have increasing ids.
+        debug_assert!(self
+            .states
+            .iter()
+            .enumerate()
+            .all(|(i, state)| state.id.as_usize() == i));
+
+        trace!("Minimize DFA ----------------------------");
+        trace!("Initial DFA:\n{}", self);
         let mut partition_old = self.calculate_initial_partition();
+        Self::trace_partition("initial", &partition_old);
         let mut partition_new = Partition::new();
         let mut changed = true;
 
         while changed {
             partition_new = self.calculate_new_partition(&partition_old);
+            Self::trace_partition("new", &partition_new);
             changed = partition_new != partition_old;
             partition_old.clone_from(&partition_new);
         }
@@ -226,8 +266,7 @@ impl Dfa {
     /// The start partition is created as follows:
     /// 1. The accepting states are put each in a partition with group id 0.
     ///    This follows from the constraint of the DFA that only one pattern can match.
-    /// 2. The non-accepting states are put together in one partition that has the id of the
-    ///    first unsued pattern id.
+    /// 2. The non-accepting states are put together in one partition that has the id 1.
     ///
     /// The partitions are stored in a vector of vectors.
     ///
@@ -235,27 +274,17 @@ impl Dfa {
     /// partitions. For accepting states the key is the state id, for non-accepting states
     /// the key is the state id of the first non-accepting state.
     fn calculate_initial_partition(&self) -> Partition {
-        let group_id_non_accepting_states: StateID =
-            StateID::new(self.accepting_states.len() as StateIDBase);
-        self.states
-            .clone()
-            .into_iter()
-            .chunk_by(|state| {
-                if self.is_accepting(state.id) {
-                    StateID::new(0)
-                } else {
-                    group_id_non_accepting_states
-                }
-            })
-            .into_iter()
-            .fold(Partition::new(), |mut partitions, (_key, group)| {
-                let state_group = group.into_iter().fold(StateGroup::new(), |mut acc, state| {
-                    acc.insert(state.id);
-                    acc
-                });
-                partitions.push(state_group);
-                partitions
-            })
+        let mut group_accepting_states = StateGroup::new();
+        let mut group_non_accepting_states = StateGroup::new();
+
+        self.states.clone().into_iter().for_each(|state| {
+            if self.is_accepting(state.id) {
+                group_accepting_states.insert(state.id);
+            } else {
+                group_non_accepting_states.insert(state.id);
+            }
+        });
+        vec![group_non_accepting_states, group_accepting_states]
     }
 
     /// Calculate the new partition based on the old partition.
@@ -268,10 +297,10 @@ impl Dfa {
     /// The new partition is returned.
     fn calculate_new_partition(&self, partition: &[StateGroup]) -> Partition {
         let mut new_partition = Partition::new();
-        for group in partition {
+        for (index, group) in partition.iter().enumerate() {
             // The new group receives the states from the old group which are distiguishable from
             // the other states in group.
-            self.split_group(group, partition)
+            self.split_group(index, group, partition)
                 .into_iter()
                 .for_each(|new_group| {
                     new_partition.push(new_group);
@@ -280,11 +309,17 @@ impl Dfa {
         new_partition
     }
 
-    fn split_group(&self, group: &StateGroup, partition: &[StateGroup]) -> Partition {
+    fn split_group(
+        &self,
+        group_index: usize,
+        group: &StateGroup,
+        partition: &[StateGroup],
+    ) -> Partition {
         // If the group contains only one state, the group can't be split further.
         if group.len() == 1 {
             return vec![group.clone()];
         }
+        trace!("Split group {}: {:?}", group_index, group);
         let mut transition_map_to_states: BTreeMap<TransitionsToPartitionGroups, StateGroup> =
             BTreeMap::new();
         for state_id in group {
@@ -317,8 +352,10 @@ impl Dfa {
                 let partition_group = self.find_group(*transition.1, partition).unwrap();
                 transitions_to_partition_groups.insert(*transition.0, partition_group);
             }
+            Self::trace_transitions_to_groups(state_id, &transitions_to_partition_groups);
             transitions_to_partition_groups
         } else {
+            trace!("** State {} has no transitions.", state_id.as_usize());
             TransitionsToPartitionGroups::new()
         }
     }
@@ -333,14 +370,31 @@ impl Dfa {
     /// The accepting states are updated accordingly.
     /// The new DFA is returned.
     fn create_from_partition(&self, partition: &[StateGroup]) -> Result<Dfa> {
+        trace!("Create DFA ------------------------------");
+        trace!("from partition {:?}", partition);
         let mut dfa = Dfa {
             states: Vec::new(),
             pattern: self.pattern.clone(),
-            accepting_states: Vec::new(),
+            accepting_states: BTreeSet::new(),
             transitions: self.transitions.clone(),
         };
 
-        for group in partition {
+        // Reorder the groups so that the start state is in the first group (0).
+        // The representative state of the first group must be the start state of the minimized DFA,
+        // even after minimization.
+        let mut partition = partition.to_vec();
+        partition.sort_by(|a, b| {
+            if a.contains(&StateID::new(0)) {
+                return std::cmp::Ordering::Less;
+            }
+            if b.contains(&StateID::new(0)) {
+                return std::cmp::Ordering::Greater;
+            }
+            std::cmp::Ordering::Equal
+        });
+
+        // Then add the representative states to the DFA from the other groups.
+        for group in &partition {
             // For each group we add a representative state to the DFA.
             // It's id is the index of the group in the partition.
             // This function also updates the accepting states of the DFA.
@@ -348,7 +402,9 @@ impl Dfa {
         }
 
         // Then renumber the states in the transitions.
-        dfa.update_transitions(partition);
+        dfa.update_transitions(&partition);
+
+        trace!("Minimized DFA:\n{}", dfa);
 
         Ok(dfa)
     }
@@ -368,7 +424,7 @@ impl Dfa {
     }
 
     fn merge_transitions(
-        partition: &[BTreeSet<StateID>],
+        partition: &[StateGroup],
         transitions: &mut Vec<(StateID, BTreeMap<CharClassID, StateID>)>,
     ) {
         // Remove all transitions that do not belong to the representive states of a group.
@@ -521,34 +577,19 @@ mod tests {
         transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
     }
 
-    // Helper macro to create a literal AST.
-    macro_rules! Literal {
-        ($c:literal) => {
-            regex_syntax::ast::Ast::Literal(Box::new(regex_syntax::ast::Literal {
-                span: regex_syntax::ast::Span {
-                    start: regex_syntax::ast::Position {
-                        offset: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                    end: regex_syntax::ast::Position {
-                        offset: 0,
-                        line: 0,
-                        column: 0,
-                    },
-                },
-                kind: regex_syntax::ast::LiteralKind::Verbatim,
-                c: $c,
-            }))
+    /// A macro that parses a regex pattern and creates a Ast from it.
+    macro_rules! parse {
+        ($pattern:expr) => {
+            $crate::internal::parse_regex_syntax($pattern).unwrap()
         };
     }
 
     /// A macro that simplifies the rendering of a dot file for a DFA.
     macro_rules! dfa_render_to {
-        ($nfa:expr, $label:expr, $reg:ident) => {
+        ($dfa:expr, $label:expr, $reg:ident) => {
             let label = format!("{}Dfa", $label);
             let mut f = std::fs::File::create(format!("target/{}Dfa.dot", $label)).unwrap();
-            $crate::internal::dot::dfa_render($nfa, &label, &$reg, &mut f);
+            $crate::internal::dot::dfa_render($dfa, &label, &$reg, &mut f);
         };
     }
 
@@ -561,14 +602,14 @@ mod tests {
         };
     }
 
-    static TEST_DATA: LazyLock<[TestData; 8]> = LazyLock::new(|| {
+    static TEST_DATA: LazyLock<[TestData; 10]> = LazyLock::new(|| {
         [
             TestData {
                 name: "SingleCharacter",
                 pattern: "a",
                 states: vec![StateID::new(0), StateID::new(1)],
                 accepting_states: vec![StateID::new(1)],
-                char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
+                char_classes: vec![CharacterClass::new(CharClassID::new(0), parse!("a"))],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
                     BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
@@ -580,8 +621,8 @@ mod tests {
                 states: vec![StateID::new(0), StateID::new(1)],
                 accepting_states: vec![StateID::new(1)],
                 char_classes: vec![
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                    CharacterClass::new(CharClassID::new(0), parse!("a")),
+                    CharacterClass::new(CharClassID::new(1), parse!("b")),
                 ],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
@@ -597,8 +638,8 @@ mod tests {
                 states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
                 accepting_states: vec![StateID::new(2)],
                 char_classes: vec![
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                    CharacterClass::new(CharClassID::new(0), parse!("a")),
+                    CharacterClass::new(CharClassID::new(1), parse!("b")),
                 ],
                 transitions: BTreeMap::from([
                     (
@@ -616,7 +657,7 @@ mod tests {
                 pattern: "a*",
                 states: vec![StateID::new(0)],
                 accepting_states: vec![StateID::new(0)],
-                char_classes: vec![CharacterClass::new(CharClassID::new(0), Literal!('a'))],
+                char_classes: vec![CharacterClass::new(CharClassID::new(0), parse!("a"))],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
                     BTreeMap::from([(CharClassID::new(0), StateID::new(0))]),
@@ -628,8 +669,8 @@ mod tests {
                 states: vec![StateID::new(0)],
                 accepting_states: vec![StateID::new(0)],
                 char_classes: vec![
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                    CharacterClass::new(CharClassID::new(0), parse!("a")),
+                    CharacterClass::new(CharClassID::new(1), parse!("b")),
                 ],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
@@ -642,11 +683,11 @@ mod tests {
             TestData {
                 name: "KleeneStarConcatenation",
                 pattern: "(ab)*",
-                states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
-                accepting_states: vec![StateID::new(0), StateID::new(2)],
+                states: vec![StateID::new(0), StateID::new(1)],
+                accepting_states: vec![StateID::new(0)],
                 char_classes: vec![
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                    CharacterClass::new(CharClassID::new(0), parse!("a")),
+                    CharacterClass::new(CharClassID::new(1), parse!("b")),
                 ],
                 transitions: BTreeMap::from([
                     (
@@ -655,11 +696,7 @@ mod tests {
                     ),
                     (
                         StateID::new(1),
-                        BTreeMap::from([(CharClassID::new(1), StateID::new(2))]),
-                    ),
-                    (
-                        StateID::new(2),
-                        BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
+                        BTreeMap::from([(CharClassID::new(1), StateID::new(0))]),
                     ),
                 ]),
             },
@@ -669,9 +706,9 @@ mod tests {
                 states: vec![StateID::new(0), StateID::new(1)],
                 accepting_states: vec![StateID::new(1)],
                 char_classes: vec![
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
-                    CharacterClass::new(CharClassID::new(2), Literal!('c')),
+                    CharacterClass::new(CharClassID::new(0), parse!("a")),
+                    CharacterClass::new(CharClassID::new(1), parse!("b")),
+                    CharacterClass::new(CharClassID::new(2), parse!("c")),
                 ],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
@@ -693,8 +730,8 @@ mod tests {
                 ],
                 accepting_states: vec![StateID::new(3)],
                 char_classes: vec![
-                    CharacterClass::new(CharClassID::new(0), Literal!('a')),
-                    CharacterClass::new(CharClassID::new(1), Literal!('b')),
+                    CharacterClass::new(CharClassID::new(0), parse!("a")),
+                    CharacterClass::new(CharClassID::new(1), parse!("b")),
                 ],
                 transitions: BTreeMap::from([
                     (
@@ -727,11 +764,98 @@ mod tests {
                     ),
                 ]),
             },
+            TestData {
+                name: "LineComment",
+                pattern: "(//.*(\r\n|\r|\n))",
+                states: vec![
+                    StateID::new(0),
+                    StateID::new(1),
+                    StateID::new(2),
+                    StateID::new(3),
+                    StateID::new(5),
+                ],
+                accepting_states: vec![StateID::new(3), StateID::new(4)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), parse!("/")),
+                    CharacterClass::new(CharClassID::new(1), parse!(".")),
+                    CharacterClass::new(CharClassID::new(2), parse!("\r")),
+                    CharacterClass::new(CharClassID::new(3), parse!("\n")),
+                ],
+                transitions: BTreeMap::from([
+                    (
+                        StateID::new(0),
+                        BTreeMap::from([(CharClassID::new(0), StateID::new(1))]),
+                    ),
+                    (
+                        StateID::new(1),
+                        BTreeMap::from([(CharClassID::new(0), StateID::new(2))]),
+                    ),
+                    (
+                        StateID::new(2),
+                        BTreeMap::from([
+                            (CharClassID::new(1), StateID::new(2)),
+                            (CharClassID::new(3), StateID::new(3)),
+                            (CharClassID::new(2), StateID::new(4)),
+                        ]),
+                    ),
+                    (
+                        StateID::new(4),
+                        BTreeMap::from([(CharClassID::new(3), StateID::new(3))]),
+                    ),
+                ]),
+            },
+            TestData {
+                name: "BlockComment",
+                pattern: r"/\*([.\r\n--*]|\*[^/])*\*/",
+                states: vec![
+                    StateID::new(0),
+                    StateID::new(1),
+                    StateID::new(2),
+                    StateID::new(3),
+                    StateID::new(4),
+                ],
+                accepting_states: vec![StateID::new(4)],
+                char_classes: vec![
+                    CharacterClass::new(CharClassID::new(0), parse!("/")),
+                    CharacterClass::new(CharClassID::new(1), parse!(r"\*")),
+                    CharacterClass::new(CharClassID::new(2), parse!(r"[.\r\n--*]")),
+                    CharacterClass::new(CharClassID::new(3), parse!("[^/]")),
+                ],
+                transitions: BTreeMap::from([
+                    (
+                        StateID::new(0),
+                        BTreeMap::from([(CharClassID::new(0), StateID::new(2))]),
+                    ),
+                    (
+                        StateID::new(1),
+                        BTreeMap::from([
+                            (CharClassID::new(0), StateID::new(4)),
+                            (CharClassID::new(3), StateID::new(3)),
+                        ]),
+                    ),
+                    (
+                        StateID::new(2),
+                        BTreeMap::from([(CharClassID::new(1), StateID::new(3))]),
+                    ),
+                    (
+                        StateID::new(3),
+                        BTreeMap::from([
+                            (CharClassID::new(1), StateID::new(1)),
+                            (CharClassID::new(2), StateID::new(3)),
+                        ]),
+                    ),
+                ]),
+            },
         ]
     });
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[test]
     fn test_try_from_nfa() {
+        init();
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
             let nfa = Nfa::try_from_ast(
@@ -742,29 +866,36 @@ mod tests {
             nfa_render_to!(&nfa, data.name);
             let dfa = Dfa::try_from_nfa(nfa, &mut char_class_registry).unwrap();
             dfa_render_to!(&dfa, data.name, char_class_registry);
+            let dfa = Dfa::minimize(&dfa).unwrap();
+            dfa_render_to!(&dfa, format!("{}Min", data.name), char_class_registry);
             assert_eq!(
                 dfa.states.len(),
                 data.states.len(),
                 "dfa state count for '{}:{}' is wrong",
                 data.name,
-                data.pattern
+                data.pattern.escape_default()
             );
             assert_eq!(
-                dfa.accepting_states, data.accepting_states,
+                dfa.accepting_states.iter().cloned().collect::<Vec<_>>(),
+                data.accepting_states,
                 "dfa accepting states for '{}:{}' are wrong",
-                data.name, data.pattern
+                data.name,
+                data.pattern.escape_default()
             );
+
             assert_eq!(
                 char_class_registry.character_classes().to_vec(),
                 data.char_classes,
                 "dfa char classes for '{}:{}' are wrong",
                 data.name,
-                data.pattern
+                data.pattern.escape_default()
             );
             assert_eq!(
-                dfa.transitions, data.transitions,
+                dfa.transitions,
+                data.transitions,
                 "dfa transitions for '{}:{}' are wrong",
-                data.name, data.pattern
+                data.name,
+                data.pattern.escape_default()
             );
         }
     }

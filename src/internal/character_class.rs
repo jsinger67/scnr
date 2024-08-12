@@ -66,3 +66,67 @@ impl Ord for CharacterClass {
         self.id.cmp(&other.id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::internal::parse_regex_syntax;
+
+    use super::*;
+
+    // Helper macro to create a literal AST.
+    macro_rules! Literal {
+        ($c:literal) => {
+            regex_syntax::ast::Ast::Literal(Box::new(regex_syntax::ast::Literal {
+                span: regex_syntax::ast::Span {
+                    start: regex_syntax::ast::Position {
+                        offset: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                    end: regex_syntax::ast::Position {
+                        offset: 0,
+                        line: 0,
+                        column: 0,
+                    },
+                },
+                kind: regex_syntax::ast::LiteralKind::Verbatim,
+                c: $c,
+            }))
+        };
+    }
+
+    #[test]
+    fn test_character_class_equality() {
+        let ast1 = Literal!('a');
+        let ast2 = Literal!('a');
+        let ast3 = Literal!('b');
+        let class1 = CharacterClass::new(0.into(), ast1);
+        let class2 = CharacterClass::new(0.into(), ast2);
+        let class3 = CharacterClass::new(1.into(), ast3);
+        assert_eq!(class1, class2);
+        assert_ne!(class1, class3);
+    }
+
+    #[test]
+    fn test_character_class_equality_specail() {
+        let ast1 = parse_regex_syntax("\r").unwrap();
+        if let Ast::Literal(_) = &ast1 {
+            let class1 = CharacterClass::new(0.into(), ast1.clone());
+            let class2 = CharacterClass::new(0.into(), Literal!('\r'));
+            eprintln!("{:?} <=> {:?}", class1.ast(), class2.ast());
+            assert_eq!(class1, class2);
+        } else {
+            panic!("Expected a literal AST.");
+        }
+    }
+
+    #[test]
+    fn test_character_class_ordering() {
+        let ast1 = Literal!('a');
+        let ast2 = Literal!('b');
+        let class1 = CharacterClass::new(0.into(), ast1);
+        let class2 = CharacterClass::new(1.into(), ast2);
+        assert!(class1 < class2);
+        assert!(class2 > class1);
+    }
+}

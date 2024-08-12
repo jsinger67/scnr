@@ -33,3 +33,44 @@ impl ScannerBuilder {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A macro that simplifies the rendering of a dot file for a DFA.
+    macro_rules! compiled_dfa_render_to {
+        ($dfa:expr, $label:expr, $reg:expr) => {
+            let label = format!("{} Compiled DFA", $label);
+            let mut f =
+                std::fs::File::create(format!("target/{}CompiledDfaFromScannerMode.dot", $label))
+                    .unwrap();
+            $crate::internal::dot::compiled_dfa_render($dfa, &label, &$reg, &mut f);
+        };
+    }
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn test_scanner_builder() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![],
+        );
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&[scanner_mode])
+            .build()
+            .unwrap();
+        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
+        let compiled_dfa = &scanner.inner.scanner_modes[0].patterns[1].0;
+
+        compiled_dfa_render_to!(
+            &compiled_dfa,
+            "LineComment",
+            scanner.inner.character_classes
+        );
+    }
+}

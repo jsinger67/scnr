@@ -1,8 +1,14 @@
-use crate::{Result, ScannerMode, ScnrError};
+use crate::{Result, ScannerMode, ScnrError, ScnrErrorKind};
 
-use super::{
-    parse_regex_syntax, CharacterClassRegistry, CompiledDfa, Dfa, Nfa, ScannerModeID, TerminalID,
-};
+use super::{CharacterClassRegistry, CompiledDfa, ScannerModeID, TerminalID};
+
+macro_rules! unsupported {
+    ($feature:expr) => {
+        ScnrError::new($crate::ScnrErrorKind::UnsupportedFeature(
+            $feature.to_string(),
+        ))
+    };
+}
 
 /// A compiled scanner mode that can be used to scan a string.
 #[derive(Debug, Clone)]
@@ -28,17 +34,31 @@ impl CompiledScannerMode {
             patterns,
             transitions,
         } = scanner_mode;
-        let patterns =
-            patterns
-                .iter()
-                .try_fold(Vec::new(), |mut acc, (pattern, terminal_id)| {
-                    let ast = parse_regex_syntax(pattern)?;
-                    let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
-                    let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
-                    let compiled_dfa = CompiledDfa::try_from(dfa)?;
-                    acc.push((compiled_dfa, *terminal_id));
-                    Ok::<Vec<(CompiledDfa, TerminalID)>, ScnrError>(acc)
-                })?;
+        let patterns = patterns.iter().enumerate().try_fold(
+            Vec::new(),
+            |mut acc, (index, (pattern, terminal_id))| {
+                let result = CompiledDfa::try_from_pattern(pattern, character_class_registry);
+                match &result {
+                    Err(ScnrError { source }) => match &**source {
+                        ScnrErrorKind::RegexSyntaxError(r, _) => {
+                            Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
+                                r.clone(),
+                                format!("Error in pattern #{} '{}'", index, pattern),
+                            )))?
+                        }
+                        ScnrErrorKind::UnsupportedFeature(s) => Err(unsupported!(format!(
+                            "Error in pattern #{} '{}': {}",
+                            index, pattern, s
+                        )))?,
+                        _ => Err(result.unwrap_err())?,
+                    },
+                    _ => {
+                        acc.push((result.unwrap(), *terminal_id));
+                        Ok::<Vec<(CompiledDfa, TerminalID)>, ScnrError>(acc)
+                    }
+                }
+            },
+        )?;
         Ok(Self {
             name,
             patterns,
@@ -56,5 +76,76 @@ impl CompiledScannerMode {
             }
         }
         None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ScannerMode;
+
+    /// A macro that simplifies the rendering of a dot file for a DFA.
+    macro_rules! compiled_dfa_render_to {
+        ($nfa:expr, $label:expr, $reg:ident) => {
+            let label = format!("{}Dfa", $label);
+            let mut f = std::fs::File::create(format!("target/{}CompiledDfa.dot", $label)).unwrap();
+            $crate::internal::dot::compiled_dfa_render($nfa, &label, &$reg, &mut f);
+        };
+    }
+
+    #[test]
+    fn test_compile_to_dfa() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let pattern = "(//.*(\r\n|\r|\n))";
+        let compiled_dfa =
+            CompiledDfa::try_from_pattern(pattern, &mut character_class_registry).unwrap();
+        compiled_dfa_render_to!(&compiled_dfa, "LineComment_", character_class_registry);
+        // assert_eq!(compiled_dfa.accepting_states.len(), 1);
+    }
+
+    #[test]
+    fn test_compiled_scanner_mode() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let scanner_mode = ScannerMode {
+            name: "test".to_string(),
+            patterns: vec![("a".to_string(), 0.into())],
+            transitions: vec![(0.into(), 1.into())],
+        };
+        let compiled_scanner_mode =
+            CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)
+                .unwrap();
+        assert_eq!(compiled_scanner_mode.name, "test");
+        assert_eq!(compiled_scanner_mode.patterns.len(), 1);
+        assert_eq!(compiled_scanner_mode.transitions.len(), 1);
+    }
+
+    #[test]
+    fn test_compiled_scanner_mode_error() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let scanner_mode = ScannerMode {
+            name: "test".to_string(),
+            patterns: vec![("[".to_string(), 0.into())],
+            transitions: vec![(0.into(), 1.into())],
+        };
+        let compiled_scanner_mode =
+            CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry);
+        assert!(compiled_scanner_mode.is_err());
+    }
+
+    #[test]
+    fn test_compiled_scanner_mode_transition() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let scanner_mode = ScannerMode {
+            name: "test".to_string(),
+            patterns: vec![("a".to_string(), 0.into())],
+            transitions: vec![(0.into(), 1.into()), (1.into(), 2.into())],
+        };
+        let compiled_scanner_mode =
+            CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)
+                .unwrap();
+        assert_eq!(compiled_scanner_mode.has_transition(0), Some(1));
+        assert_eq!(compiled_scanner_mode.has_transition(1), Some(2));
+        assert_eq!(compiled_scanner_mode.has_transition(2), None);
+        assert_eq!(compiled_scanner_mode.has_transition(3), None);
     }
 }

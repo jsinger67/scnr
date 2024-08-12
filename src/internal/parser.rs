@@ -55,11 +55,11 @@ mod tests {
         // Add assertions here to validate the error message or behavior
         assert!(matches!(
             result,
-            Err(ref e) if matches!(e, ScnrError{ source } if matches!(**source, ScnrErrorKind::RegexSyntaxError(_)))
+            Err(ref e) if matches!(e, ScnrError{ source } if matches!(**source, ScnrErrorKind::RegexSyntaxError(_, _)))
         ));
         assert_eq!(
             result.unwrap_err().source().unwrap().to_string(),
-            r#"regex parse error:
+            r#"'!' regex parse error:
     ^\d{4}-\d{2}-\d{2}$[
                        ^
 error: unclosed character class"#

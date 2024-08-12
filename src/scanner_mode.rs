@@ -1,5 +1,3 @@
-use itertools::Itertools;
-
 use crate::internal::{ScannerModeID, TerminalID, TerminalIDBase};
 
 /// A scanner mode that can be used to scan specific parts of the input.
@@ -43,11 +41,11 @@ impl ScannerMode {
         let patterns = patterns
             .into_iter()
             .map(|(p, t)| (p.as_ref().to_string(), TerminalID::new(t as TerminalIDBase)))
-            .collect_vec();
+            .collect();
         let transitions = mode_transitions
             .into_iter()
             .map(|(t, m)| (TerminalID::new(t as TerminalIDBase), ScannerModeID::new(m)))
-            .collect_vec();
+            .collect::<Vec<_>>();
         debug_assert!(
             transitions.windows(2).all(|w| w[0].0 < w[1].0),
             "Transitions are not sorted by token type number."

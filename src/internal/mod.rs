@@ -20,11 +20,10 @@ pub(crate) use comparable_ast::ComparableAst;
 
 /// Module that provides functions and types related to DFAs.
 pub(crate) mod dfa;
-pub(crate) use dfa::Dfa;
 
 /// Module with conversion to graphviz dot format
-#[cfg(test)]
-mod dot;
+pub(crate) mod dot;
+
 /// Module that provides functions and types related to the `find_matches` function.
 pub(crate) mod find_matches_impl;
 

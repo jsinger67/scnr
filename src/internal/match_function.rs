@@ -154,10 +154,7 @@ impl MatchFunction {
     fn try_from_set_item(item: ClassSetItem, negated: bool) -> Result<MatchFn> {
         let match_function = match item {
             ClassSetItem::Empty(_) => MatchFn::new(|_| false),
-            ClassSetItem::Literal(ref l) => {
-                let Literal { c, .. } = *l;
-                MatchFn::new(move |ch| ch == c)
-            }
+            ClassSetItem::Literal(ref l) => Self::try_from_literal(l)?,
             ClassSetItem::Range(ref r) => {
                 let ClassSetRange {
                     ref start, ref end, ..
@@ -203,6 +200,17 @@ impl MatchFunction {
             match_function
         })
     }
+    fn try_from_literal(l: &Literal) -> Result<MatchFn> {
+        let Literal {
+            ref c, ref kind, ..
+        } = *l;
+        let c = *c;
+        if c == '.' && *kind == regex_syntax::ast::LiteralKind::Verbatim {
+            Ok(MatchFn::new(|ch| ch != '\n' && ch != '\r'))
+        } else {
+            Ok(MatchFn::new(move |ch| ch == c))
+        }
+    }
 }
 
 impl std::fmt::Debug for MatchFunction {
@@ -226,8 +234,9 @@ impl TryFrom<&Ast> for MatchFunction {
             }
             Ast::Literal(ref l) => {
                 // A literal AST matches a single character.
-                let Literal { c, .. } = **l;
-                MatchFunction::new(move |ch| ch == c)
+                MatchFunction {
+                    match_fn: MatchFunction::try_from_literal(l)?,
+                }
             }
             Ast::ClassUnicode(ref c) => Self {
                 match_fn: Self::try_from_class_unicode(*c.clone())?,

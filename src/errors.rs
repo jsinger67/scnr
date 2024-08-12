@@ -29,8 +29,8 @@ impl std::fmt::Display for ScnrError {
 #[derive(Error, Debug)]
 pub enum ScnrErrorKind {
     /// An error occurred during the parsing of the regex syntax.
-    #[error(transparent)]
-    RegexSyntaxError(#[from] regex_syntax::ast::Error),
+    #[error("'{1}' {0}")]
+    RegexSyntaxError(regex_syntax::ast::Error, String),
 
     /// A std::io error occurred.
     #[error(transparent)]
@@ -47,7 +47,7 @@ pub enum ScnrErrorKind {
 
 impl From<regex_syntax::ast::Error> for ScnrError {
     fn from(error: regex_syntax::ast::Error) -> Self {
-        ScnrError::new(ScnrErrorKind::RegexSyntaxError(error))
+        ScnrError::new(ScnrErrorKind::RegexSyntaxError(error, "!".to_string()))
     }
 }
 
