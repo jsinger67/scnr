@@ -141,13 +141,13 @@ mod tests {
             ScannerMode::new(
                 "INITIAL",
                 vec![
-                    (r"\r\n|\r|\n", 0),             // Newline
-                    (r"[\s--\r\n]+", 1),            // Whitespace
-                    (r"(//.*(\\r\\n|\\r|\\n))", 2), // Line comment
-                    (r"(/\*[.\r\n]*?\*/)", 3),      // Block comment
-                    (r"[a-zA-Z_]\w*", 4),           // Identifier
-                    (r"\u{22}", 8),                 // String delimiter
-                    (r".", 9),                      // Error
+                    (r"\r\n|\r|\n", 0),                 // Newline
+                    (r"[\s--\r\n]+", 1),                // Whitespace
+                    (r"//.*(\r\n|\r|\n)", 2),           // Line comment
+                    (r"/\*([.\r\n--*]|\*[^/])*\*/", 3), // Block comment
+                    (r"[a-zA-Z_]\w*", 4),               // Identifier
+                    (r"\u{22}", 8),                     // String delimiter
+                    (r".", 9),                          // Error
                 ],
                 vec![
                     (8, 1), // Token "String delimiter" -> Mode "STRING"
@@ -156,10 +156,6 @@ mod tests {
             ScannerMode::new(
                 "STRING",
                 vec![
-                    (r"\r\n|\r|\n", 0),               // Newline
-                    (r"[\s--\r\n]+", 1),              // Whitespace
-                    (r"(//.*(\\r\\n|\\r|\\n))", 2),   // Line comment
-                    (r"(/\*[.\r\n]*?\*/)", 3),        // Block comment
                     (r"\u{5c}[\u{22}\u{5c}bfnt]", 5), // Escape sequence
                     (r"\u{5c}[\s^\n\r]*\r?\n", 6),    // Line continuation
                     (r"[^\u{22}\u{5c}]+", 7),         // String content
