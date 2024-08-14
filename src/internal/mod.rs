@@ -22,6 +22,7 @@ pub(crate) use comparable_ast::ComparableAst;
 pub(crate) mod dfa;
 
 /// Module with conversion to graphviz dot format
+#[cfg(test)]
 pub(crate) mod dot;
 
 /// Module that provides functions and types related to the `find_matches` function.

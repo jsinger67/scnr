@@ -799,7 +799,7 @@ mod tests_try_from {
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
             let nfa: Nfa = Nfa::try_from_ast(
-                parse_regex_syntax(&data.input).unwrap(),
+                parse_regex_syntax(data.input).unwrap(),
                 &mut char_class_registry,
             )
             .unwrap();

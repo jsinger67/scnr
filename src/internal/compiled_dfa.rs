@@ -1,7 +1,3 @@
-use std::io::{Cursor, Read};
-
-use log::trace;
-
 use crate::{
     internal::{parse_regex_syntax, Nfa},
     Result, ScnrError, Span,
@@ -138,6 +134,7 @@ impl CompiledDfa {
 
     /// Returns true if the search should continue on the next character if the automaton has ever
     /// been in the matching state Start.
+    #[inline]
     pub(crate) fn search_for_longer_match(&self) -> bool {
         !self.matching_state.is_longest_match() && !self.matching_state.is_no_match()
     }
@@ -148,58 +145,9 @@ impl CompiledDfa {
     ) -> Result<CompiledDfa> {
         let ast = parse_regex_syntax(pattern)?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
-
-        trace!("NFA:\n{}", {
-            let mut cursor = Cursor::new(Vec::new());
-            let title = format!("NFA for pattern '{}'", pattern.escape_default());
-            super::dot::nfa_render(&nfa, &title, &mut cursor);
-            let mut dot_format = String::new();
-            cursor.set_position(0);
-            cursor.read_to_string(&mut dot_format)?;
-            dot_format
-        });
-
         let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
-
-        trace!("DFA:\n{}", {
-            let mut cursor = Cursor::new(Vec::new());
-            let title = format!("DFA for pattern '{}'", pattern.escape_default());
-            super::dot::dfa_render(&dfa, &title, character_class_registry, &mut cursor);
-            let mut dot_format = String::new();
-            cursor.set_position(0);
-            cursor.read_to_string(&mut dot_format)?;
-            dot_format
-        });
-
         let dfa = dfa.minimize()?;
-
-        trace!("Minimized DFA:\n{}", {
-            let mut cursor = Cursor::new(Vec::new());
-            let title = format!("Minimized DFA for pattern '{}'", pattern.escape_default());
-            super::dot::dfa_render(&dfa, &title, character_class_registry, &mut cursor);
-            let mut dot_format = String::new();
-            cursor.set_position(0);
-            cursor.read_to_string(&mut dot_format)?;
-            dot_format
-        });
-
         let compiled_dfa = CompiledDfa::try_from(dfa)?;
-
-        trace!("Compiled DFA:\n{}", {
-            let mut cursor = Cursor::new(Vec::new());
-            let title = format!("Compiled DFA for pattern '{}'", pattern.escape_default());
-            super::dot::compiled_dfa_render(
-                &compiled_dfa,
-                &title,
-                character_class_registry,
-                &mut cursor,
-            );
-            let mut dot_format = String::new();
-            cursor.set_position(0);
-            cursor.read_to_string(&mut dot_format)?;
-            dot_format
-        });
-
         Ok(compiled_dfa)
     }
 }

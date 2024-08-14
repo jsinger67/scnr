@@ -74,6 +74,7 @@ impl ScannerImpl {
                 patterns[*dfa_index].0.advance(i, c, match_char_class);
             }
 
+            trace!("Clear active DFAs");
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
             active_dfas.retain(|&dfa_index| patterns[dfa_index].0.search_for_longer_match());
 
@@ -92,11 +93,13 @@ impl ScannerImpl {
         }
 
         let current_match = self.find_first_longest_match();
-        self.execute_possible_mode_switch(current_match);
+        if let Some(m) = current_match.as_ref() {
+            self.execute_possible_mode_switch(m)
+        }
         current_match
     }
 
-    /// This function is used by [super::find_matches::FindMatches::peek_n].
+    /// This function is used by [super::find_matches_impl::FindMatchesImpl::peek_n].
     ///
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
@@ -161,13 +164,11 @@ impl ScannerImpl {
 
     /// Executes a possible mode switch if a transition is defined for the token type found.
     #[inline]
-    fn execute_possible_mode_switch(&mut self, current_match: Option<Match>) {
+    fn execute_possible_mode_switch(&mut self, current_match: &Match) {
         let current_mode = &self.scanner_modes[self.current_mode];
-        if let Some(current_match) = current_match.as_ref() {
-            // We perform a scanner mode switch if a transition is defined for the token type found.
-            if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
-                self.current_mode = next_mode;
-            }
+        // We perform a scanner mode switch if a transition is defined for the token type found.
+        if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
+            self.current_mode = next_mode;
         }
     }
 

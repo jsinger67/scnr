@@ -123,7 +123,6 @@ impl Dfa {
             }
         }
 
-        // dfa.minimize()
         Ok(dfa)
     }
 

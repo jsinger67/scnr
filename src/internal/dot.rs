@@ -83,7 +83,7 @@ pub(crate) fn dfa_render<W: Write>(
                 .set_color(dot_writer::Color::Blue)
                 .set_pen_width(3.0);
         }
-        if dfa.is_accepting((state_id as u32).into()) {
+        if dfa.is_accepting((state_id as StateIDBase).into()) {
             source_node
                 .set_color(dot_writer::Color::Red)
                 .set_pen_width(3.0)
