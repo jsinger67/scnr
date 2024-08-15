@@ -1,7 +1,19 @@
 macro_rules! impl_id {
     ($name:ident, $tp:ty) => {
         /// The ID type $name.
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+        #[derive(
+            Debug,
+            Clone,
+            Copy,
+            PartialEq,
+            Eq,
+            PartialOrd,
+            Ord,
+            Hash,
+            Default,
+            serde::Serialize,
+            serde::Deserialize,
+        )]
         pub(crate) struct $name($tp);
 
         impl $name {

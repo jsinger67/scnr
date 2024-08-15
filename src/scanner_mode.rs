@@ -1,8 +1,9 @@
 use crate::internal::{ScannerModeID, TerminalID, TerminalIDBase};
+use serde::{Deserialize, Serialize};
 
 /// A scanner mode that can be used to scan specific parts of the input.
 /// The contained data is used to create a scanner mode that can be used to scan the input.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScannerMode {
     /// The name of the scanner mode.
     pub(crate) name: String,

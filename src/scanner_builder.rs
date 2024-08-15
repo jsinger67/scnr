@@ -73,4 +73,19 @@ mod tests {
             scanner.inner.character_classes
         );
     }
+
+    #[test]
+    fn test_scanner_mode_serialization() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![],
+        );
+
+        let serialized = serde_json::to_string(&scanner_mode).unwrap();
+        eprintln!("{}", serialized);
+        let deserialized: ScannerMode = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(scanner_mode, deserialized);
+    }
 }
