@@ -17,7 +17,7 @@ fn scanner_benchmark(c: &mut Criterion) {
 
     c.bench_function("scanner_benchmark", |b| {
         b.iter(|| {
-            // Find all matches in the input file
+            // Create a matches iterator
             let find_iter = scanner.find_iter(SCANNER_INPUT).unwrap();
             // Collect all matches
             let _matches: Vec<Match> = find_iter.collect();
@@ -25,5 +25,10 @@ fn scanner_benchmark(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, scanner_benchmark);
+criterion_group! {
+    name = benches;
+    config = Criterion::default().sample_size(50);
+    targets = scanner_benchmark
+}
+
 criterion_main!(benches);
