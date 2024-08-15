@@ -1,7 +1,9 @@
+use serde::{Deserialize, Serialize};
+
 use super::Span;
 
 /// A match in the haystack.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Match {
     /// The token type number associated with the match.
     token_type: usize,

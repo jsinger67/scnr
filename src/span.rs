@@ -1,5 +1,7 @@
+use serde::{Deserialize, Serialize};
+
 /// A span in a source file.
-#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Debug, Clone, Copy, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct Span {
     /// The start offset of the span, inclusive.
     pub start: usize,

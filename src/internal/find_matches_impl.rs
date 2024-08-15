@@ -179,6 +179,7 @@ Id2
 
     #[test]
     fn test_find_matches_impl() {
+        println!("{}", serde_json::to_string(&*MODES).unwrap());
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
             .build()
