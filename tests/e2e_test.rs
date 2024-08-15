@@ -3,12 +3,16 @@
 
 use std::fs;
 
+use regex::Regex;
 use scnr::{Match, ScannerBuilder, ScannerMode};
 
 #[test]
 fn e2e_test() {
     // Initialize the logger
     let _ = env_logger::builder().is_test(true).try_init();
+
+    // Initialize the regex for newlines. It is used to make the tests platform independent.
+    let rx_newline: Regex = Regex::new(r"\r?\n|\r").unwrap();
 
     // Iterate over all modes files in the data directory
     for entry in fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data")).unwrap() {
@@ -36,6 +40,7 @@ fn e2e_test() {
         // extension.
         let input_path = path.with_extension("input");
         let input = fs::read_to_string(&input_path).unwrap();
+        let input = rx_newline.replace_all(&input, "\n");
 
         // Find all matches in the input file
         let find_iter = scanner.find_iter(&input).unwrap();
@@ -43,7 +48,7 @@ fn e2e_test() {
         // Collect all matches
         let matches: Vec<Match> = find_iter.collect();
 
-        // println!("Matches: {}", serde_json::to_string(&matches).unwrap());
+        println!("Matches:\n{}\n", serde_json::to_string(&matches).unwrap());
         for ma in &matches {
             // println!("Match: {:?}", ma);
             println!("{}, Ty: {} ", &input[ma.range()], ma.token_type());
