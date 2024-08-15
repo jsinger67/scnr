@@ -1,4 +1,4 @@
-use crate::{FindMatches, Result, ScannerImpl};
+use crate::{FindMatches, Result, ScannerImpl, ScannerMode};
 
 /// A Scanner.
 /// It consists of multiple DFAs that are used to search for matches.
@@ -42,5 +42,10 @@ impl Scanner {
     /// If the index is out of bounds, None is returned.
     pub fn mode_name(&self, index: usize) -> Option<&str> {
         self.inner.mode_name(index)
+    }
+
+    /// Returns the number of scanner modes.
+    pub fn trace_compiled_dfa_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
+        self.inner.trace_compiled_dfa_as_dot(modes)
     }
 }

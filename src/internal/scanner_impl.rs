@@ -198,6 +198,33 @@ impl ScannerImpl {
     pub(crate) fn current_mode(&self) -> usize {
         self.current_mode
     }
+
+    /// Traces the compiled DFAs as dot format.
+    /// The output is written to the log.
+    /// This function is used for debugging purposes. It only works in test mode.
+    pub(crate) fn trace_compiled_dfa_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
+        use std::io::Read;
+        for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
+            for (j, (dfa, t)) in scanner_mode.patterns.iter().enumerate() {
+                trace!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
+                    let mut cursor = std::io::Cursor::new(Vec::new());
+                    let title =
+                        format!("Compiled DFA {}::{}", modes[i].name, modes[i].patterns[j].0);
+                    super::dot::compiled_dfa_render(
+                        dfa,
+                        &title,
+                        &self.character_classes,
+                        &mut cursor,
+                    );
+                    let mut dot_format = String::new();
+                    cursor.set_position(0);
+                    cursor.read_to_string(&mut dot_format)?;
+                    dot_format
+                });
+            }
+        }
+        Ok(())
+    }
 }
 
 impl TryFrom<Vec<ScannerMode>> for ScannerImpl {
