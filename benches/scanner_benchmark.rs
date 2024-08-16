@@ -1,34 +1,57 @@
-use std::fs;
+use std::{fs, sync::LazyLock};
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use scnr::{Match, ScannerBuilder, ScannerMode};
+use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use scnr::{scanner::Scanner, ScannerBuilder, ScannerMode};
 
 const SCANNER_INPUT: &str = include_str!("./input_1.txt");
 
-fn scanner_benchmark(c: &mut Criterion) {
+static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.modes");
     let file = fs::File::open(path).unwrap();
-    let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
-    // Create a scanner from the scanner builder
-    let scanner = ScannerBuilder::new()
-        .add_scanner_modes(&scanner_modes)
-        .build()
-        .unwrap();
+    serde_json::from_reader(file).unwrap()
+});
 
+static SCANNER: LazyLock<Scanner> = LazyLock::new(|| {
+    ScannerBuilder::new()
+        .add_scanner_modes(&SCANNER_MODES)
+        .build()
+        .unwrap()
+});
+
+fn builder_benchmark(c: &mut Criterion) {
+    c.bench_function("builder_benchmark", |b| {
+        b.iter(|| {
+            ScannerBuilder::new()
+                .add_scanner_modes(&SCANNER_MODES)
+                .build()
+                .unwrap();
+        });
+    });
+}
+
+fn scanner_benchmark(c: &mut Criterion) {
     c.bench_function("scanner_benchmark", |b| {
         b.iter(|| {
             // Create a matches iterator
-            let find_iter = scanner.find_iter(SCANNER_INPUT).unwrap();
+            let find_iter = SCANNER.find_iter(SCANNER_INPUT).unwrap();
             // Collect all matches
-            let _matches: Vec<Match> = find_iter.collect();
+            for t in find_iter {
+                black_box(t);
+            }
         });
     });
 }
 
 criterion_group! {
-    name = benches;
+    name = benchesscanner;
     config = Criterion::default().sample_size(50);
     targets = scanner_benchmark
 }
 
-criterion_main!(benches);
+criterion_group! {
+    name = benchesbuilder;
+    config = Criterion::default();
+    targets = builder_benchmark
+}
+
+criterion_main!(benchesscanner, benchesbuilder);

@@ -19,3 +19,6 @@ regex = "1.10.5"
 [[bench]]
 name = "scanner_benchmark"
 harness = false
+
+[profile.release]
+debug = true
