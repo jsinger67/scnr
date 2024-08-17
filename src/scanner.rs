@@ -44,7 +44,7 @@ impl Scanner {
         self.inner.mode_name(index)
     }
 
-    /// Returns the number of scanner modes.
+    /// Traces the compiled DFAs as a Graphviz DOT file.
     pub fn trace_compiled_dfa_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         self.inner.trace_compiled_dfa_as_dot(modes)
     }

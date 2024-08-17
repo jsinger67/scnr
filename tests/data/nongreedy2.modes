@@ -1,0 +1,17 @@
+[
+  {
+    "name": "INITIAL",
+    "patterns": [
+      ["/\\*", 1]
+    ],
+    "transitions": [[1, 1]]
+  },
+  {
+    "name": "COMMENT",
+    "patterns": [
+      ["\\*/", 2],
+      ["[.\r\n]", 3]
+    ],
+    "transitions": [[2, 0]]
+  }
+]

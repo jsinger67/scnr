@@ -28,7 +28,8 @@ fn e2e_test() {
 
         // Read the json file
         let file = fs::File::open(&path).unwrap();
-        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)
+            .unwrap_or_else(|e| panic!("**** Failed to read json file {}: {}", path.display(), e));
 
         // Create a scanner from the scanner builder
         let scanner = ScannerBuilder::new()

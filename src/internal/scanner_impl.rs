@@ -208,8 +208,11 @@ impl ScannerImpl {
             for (j, (dfa, t)) in scanner_mode.patterns.iter().enumerate() {
                 trace!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
                     let mut cursor = std::io::Cursor::new(Vec::new());
-                    let title =
-                        format!("Compiled DFA {}::{}", modes[i].name, modes[i].patterns[j].0);
+                    let title = format!(
+                        "Compiled DFA {}::{}",
+                        modes[i].name,
+                        modes[i].patterns[j].0.escape_default()
+                    );
                     super::dot::compiled_dfa_render(
                         dfa,
                         &title,
