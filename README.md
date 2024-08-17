@@ -12,6 +12,7 @@ Scanner modes are known from Lex/Flex as
 ## Guard rails
 
 * The scanners should be built quickly.
+* The scanners base solely on DFAs, no backtracking is implemented
 * The scanners will probably never support `u8`, i.e. patterns are of type convertible to `&str` and
 the input is of type convertible to `&str`. We concentrate on programming languages rather than byte
 sequences.
@@ -35,3 +36,79 @@ I need to evaluate if this is a problem, but at the moment I belief that this is
 
 There is no need for **capture groups** in the context of token matching, so I see no necessity to
 implement this feature.
+
+## Not supported Flex features
+
+Additional to the anchors ^ and $, *trailing contexts*, like in ```ab/cd```, is currently not
+supported because of the need to provide lookahead outside of the normal advance loop of the
+character iterator. Although preparations are already made, we will postpone this as long as strong
+needs arise.
+
+## Greediness
+
+Some words about greediness.
+
+The normal Lex/Flex POSIX matching is greedy. It some sort adheres to the longest match rule but
+poses some overhead during backtracking on the scanner's runtime.
+
+Since `scnr` works with minimized DFAs only (current situation, may change) it always matches
+repetitions like * and + non-greedily.
+
+### Exit conditions on repetitions
+
+But you have to be very specific about the content of the repeated expression in that sense that
+the transition from a repeated expression to the following part of the regular expression should be
+unambiguous.
+
+Lets have a look at this regex with a repeated expression of `.` in the middle.
+
+```regex
+/\*.*\*/
+```
+
+The DFA for this looks like this:
+
+![CppComments1](./doc/CppComments1.svg)
+
+The point is the state 3 where it depends on the input whether to continue the repetition or to
+proceed with the following part, here state 1.
+But the `.` matches `*` too which introduces an ambiguity that contradicts the common notion of
+deterministic finite automata. How this is resolved depends on the implementation of the scanner
+runtime. This should clearly be avoided.
+
+So, the first thing we can do is to be more precise about the content of the repeated expression.
+We can remove the `*` from the `.`:
+
+```regex
+/\*[.--*]*\*/
+```
+
+![CppComments2](./doc/CppComments2.svg)
+
+This looks more deterministic, but now we reveal another problem, which was actually inherent
+already in the first variant.
+
+Scanning such an input will mess up the match:
+
+```
+/* a* */
+```
+
+The scanner enters state 1 when reading the `*` after the `a` and then fails on matching the space
+when accepting a `/`. The reason is that the repeated expression doesn't care about the part that
+follows it.
+
+So, we need to become more specific about this aspect, too:
+
+```regex
+/\\*([.--*]|\\*[^/])*\\*/
+```
+
+This says that the repeated expression is any character except `*`, or a `*` followed by a character
+other than `/`.
+
+
+![CppComments3](./doc/CppComments3.svg)
+
+This solution will do the job perfectly, because its automaton is able the return to the repetition
+if the exit condition fails.
