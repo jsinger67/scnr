@@ -44,7 +44,7 @@ supported because of the need to provide lookahead outside of the normal advance
 character iterator. Although preparations are already made, we will postpone this as long as strong
 needs arise.
 
-## Greediness
+## Greediness of repetitions
 
 Some words about greediness.
 
@@ -112,3 +112,40 @@ other than `/`.
 
 This solution will do the job perfectly, because its automaton is able the return to the repetition
 if the exit condition fails.
+
+
+### Scanner mode
+
+A more flexible but also a little more complex approach to the above mentions obstacles like
+ambiguity on exit conditions and handling of following expressions in the repeated expressions is
+to introduce a second scanner mode that is entered on the comment start `/\\*`, then handles all
+tokens inside a comment and enters INITIAL mode on the comment end `\\*/`.
+
+The scanner modes can be defined for instance in json:
+
+```json
+[
+  {
+    "name": "INITIAL",
+    "patterns": [["/\\*", 1]],
+    "transitions": [[1, 1]]
+  },
+  {
+    "name": "COMMENT",
+    "patterns": [
+      ["\\*/", 2],
+      ["[.\\r\\n]", 3]
+    ],
+    "transitions": [[2, 0]]
+  }
+]
+```
+
+Here you see two modes. The scanner alway starts in mode 0, usually INITIAL. When encountering a
+token type 1, *comment start* it switches to mode 1, COMMENT. Here the *comment end* token type 2
+has higher precedence than the `[.\\r\\n]` token 2, simply by having a lower index in the patterns
+slice. On token 2 it switches to mode INITIAL again. All other tokens are covered by token type 3,
+*comment content*.
+
+In this scenario you can imagine that the parser knows that token type 3 is *comment content* and
+can handle it accordingly.
