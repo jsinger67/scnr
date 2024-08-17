@@ -1,9 +1,9 @@
 [package]
 name = "scnr"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Jörg Singer <singer.joerg@gmx.de>"]
-description = "LL(k) and LALR(1) parser generator for Rust"
+description = "Scanner/Lexer with regex patterns and multiple modes"
 documentation = "https://docs.rs/scnr"
 repository = "https://github.com/jsinger67/scnr"
 readme = "README.md"
