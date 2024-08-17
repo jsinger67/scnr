@@ -2,6 +2,14 @@
 name = "scnr"
 version = "0.1.0"
 edition = "2021"
+authors = ["Jörg Singer <singer.joerg@gmx.de>"]
+description = "LL(k) and LALR(1) parser generator for Rust"
+documentation = "https://docs.rs/scnr"
+repository = "https://github.com/jsinger67/scnr"
+readme = "README.md"
+keywords = ["scanner", "lexer", "parsing", "lexing"]
+categories = ["algorithms", "parsing", "Parsing tools"]
+license = "MIT/Apache-2.0"
 
 [dependencies]
 dot-writer = "0.1.3"

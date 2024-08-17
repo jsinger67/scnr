@@ -1,13 +1,64 @@
+<!-- markdownlint-disable first-line-h1 -->
+
+[![Rust](https://github.com/jsinger67/scnr/actions/workflows/rust.yml/badge.svg)](https://github.com/jsinger67/scnr/actions/workflows/rust.yml)
+[![Docs.rs](https://docs.rs/scnr/badge.svg)](https://docs.rs/scnr)
+[![Crates.io](https://img.shields.io/crates/v/scnr.svg)](https://crates.io/crates/scnr)
+
+<!-- markdownlint-enable first-line-h1 -->
+
 # About `scnr`
 
-## WIP
-
-This crate is a work in progress and not ready for use yet.
-
-I strive for a scanner/lexer with sufficient regex support and minimal compile time.
-The scanner should support multiple scanner modes out of the box.
+This crate provides a scanner/lexer with sufficient regex support and minimal compile time.
+The scanners support multiple scanner modes out of the box.
 Scanner modes are known from Lex/Flex as
 [Start conditions](https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html#SEC11).
+
+It is still in an early phase and not ready for production yet. Early adopters can quite safely use
+it. In case you find a bug, please report it.
+
+## How to use it
+
+```rust
+use std::sync::LazyLock;
+
+use scnr::{ScannerBuilder, ScannerMode};
+
+static MODES: LazyLock<[ScannerMode; 1]> = LazyLock::new(|| {
+    [ScannerMode::new(
+        "INITIAL",
+        vec![
+            (r";", 1),                          // Semicolon
+            (r"0|[1-9][0-9]*", 2),              // Number
+            (r"//.*(\r\n|\r|\n)", 2),           // Line comment
+            (r"/\*([.\r\n--*]|\*[^/])*\*/", 3), // Block comment
+            (r"[a-zA-Z_]\w*", 4),               // Identifier
+            (r"=", 8),                          // Assignment
+        ],
+        vec![],
+    )]
+});
+
+const INPUT: &str = r#"
+// This is a comment
+a = 10;
+b = 20;
+/* This is a block comment
+   that spans multiple lines */
+c = a;
+"#;
+
+fn main() {
+    let scanner = ScannerBuilder::new()
+        .add_scanner_modes(&*MODES)
+        .build()
+        .expect("ScannerBuilder error");
+    let find_iter = scanner.find_iter(INPUT).expect("Scanner error");
+    for ma in find_iter {
+        println!("Match: {:?}: '{}'", ma, &INPUT[ma.start()..ma.end()]);
+    }
+}
+
+```
 
 ## Guard rails
 
@@ -114,7 +165,7 @@ This solution will do the job perfectly, because its automaton is able the retur
 if the exit condition fails.
 
 
-### Scanner mode
+### Scanner modes
 
 A more flexible but also a little more complex approach to the above mentions obstacles like
 ambiguity on exit conditions and handling of following expressions in the repeated expressions is
