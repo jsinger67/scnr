@@ -8,7 +8,7 @@ documentation = "https://docs.rs/scnr"
 repository = "https://github.com/jsinger67/scnr"
 readme = "README.md"
 keywords = ["scanner", "lexer", "parsing", "lexing"]
-categories = ["algorithms", "parsing", "Parsing tools"]
+categories = ["algorithms", "parsing"]
 license = "MIT/Apache-2.0"
 
 [dependencies]
