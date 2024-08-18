@@ -1,4 +1,4 @@
-use crate::{FindMatchesImpl, Match, Result, ScannerImpl};
+use crate::{FindMatchesImpl, Match, ScannerImpl};
 
 /// The result of a peek operation.
 #[derive(Debug, PartialEq)]
@@ -29,10 +29,10 @@ pub struct FindMatches<'h> {
 
 impl<'h> FindMatches<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: &ScannerImpl, input: &'h str) -> Result<Self> {
-        Ok(Self {
-            inner: FindMatchesImpl::try_new(scanner_impl, input)?,
-        })
+    pub(crate) fn new(scanner_impl: &ScannerImpl, input: &'h str) -> Self {
+        Self {
+            inner: FindMatchesImpl::new(scanner_impl, input),
+        }
     }
 
     /// Returns the next match in the haystack.

@@ -1,13 +1,13 @@
 [package]
 name = "scnr"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["Jörg Singer <singer.joerg@gmx.de>"]
 description = "Scanner/Lexer with regex patterns and multiple modes"
 documentation = "https://docs.rs/scnr"
 repository = "https://github.com/jsinger67/scnr"
 readme = "README.md"
-keywords = ["scanner", "lexer", "parsing", "lexing"]
+keywords = ["scanner", "lexer", "tokenizer"]
 categories = ["algorithms", "parsing"]
 license = "MIT/Apache-2.0"
 

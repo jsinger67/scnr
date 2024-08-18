@@ -13,6 +13,7 @@ use crate::{FindMatches, Result, ScannerImpl, ScannerMode};
 ///
 /// To create a scanner, you can use the `ScannerBuilder` to add scanner mode data.
 /// At least one scanner mode must be added to the scanner. This is usually the mode named `INITIAL`.
+#[derive(Debug)]
 pub struct Scanner {
     pub(crate) inner: ScannerImpl,
 }
@@ -20,7 +21,7 @@ pub struct Scanner {
 impl Scanner {
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
-    pub fn find_iter<'h>(&self, input: &'h str) -> Result<FindMatches<'h>> {
+    pub fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
         self.inner.find_iter(input)
     }
 

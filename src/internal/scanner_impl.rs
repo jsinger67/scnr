@@ -22,7 +22,7 @@ impl ScannerImpl {
 
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
-    pub(crate) fn find_iter<'h>(&self, input: &'h str) -> Result<FindMatches<'h>> {
+    pub(crate) fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
         FindMatches::new(self, input)
     }
 

@@ -44,7 +44,7 @@ fn e2e_test() {
         let input = rx_newline.replace_all(&input, "\n");
 
         // Find all matches in the input file
-        let find_iter = scanner.find_iter(&input).unwrap();
+        let find_iter = scanner.find_iter(&input);
 
         // Collect all matches
         let matches: Vec<Match> = find_iter.collect();

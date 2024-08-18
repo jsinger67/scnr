@@ -1,5 +1,5 @@
 use super::{CharClassID, ScannerImpl};
-use crate::{Match, PeekResult, Result};
+use crate::{Match, PeekResult};
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
@@ -13,12 +13,12 @@ pub(crate) struct FindMatchesImpl<'h> {
 
 impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn try_new(scanner_impl: &ScannerImpl, input: &'h str) -> Result<Self> {
-        Ok(Self {
+    pub(crate) fn new(scanner_impl: &ScannerImpl, input: &'h str) -> Self {
+        Self {
             scanner: scanner_impl.clone(),
             match_char_class: scanner_impl.create_match_char_class().unwrap(),
             char_indices: input.char_indices(),
-        })
+        }
     }
 
     /// Returns the next match in the haystack.
@@ -185,7 +185,7 @@ Id2
             .build()
             .unwrap();
 
-        let find_matches = FindMatchesImpl::try_new(&scanner.inner, INPUT).unwrap();
+        let find_matches = FindMatchesImpl::new(&scanner.inner, INPUT);
         let matches: Vec<Match> = find_matches.collect();
         assert_eq!(matches.len(), 9);
         assert_eq!(
@@ -230,7 +230,7 @@ Id2
             .add_scanner_modes(&*MODES)
             .build()
             .unwrap();
-        let mut find_iter = scanner.find_iter(INPUT).unwrap();
+        let mut find_iter = scanner.find_iter(INPUT);
         let peeked = find_iter.peek_n(2);
         assert_eq!(
             peeked,
