@@ -185,7 +185,7 @@ The scanner modes can be defined for instance in json:
 
 Here you see two modes. The scanner always starts in mode 0, usually INITIAL. When encountering a
 token type 1, **comment start**, it switches to mode 1, COMMENT. Here the **comment end** token type
-2 has higher precedence than the `[.\\r\\n]` token 2, simply by having a lower index in the patterns
+2 has higher precedence than the `[.\\r\\n]` token 3, simply by having a lower index in the patterns
 slice. On token 2 it switches to mode INITIAL again. All other tokens are covered by token type 3,
 **comment content**.
 
