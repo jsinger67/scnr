@@ -22,6 +22,8 @@ new minor version numbers. Please note that this is no version handling covered 
 - `Scanner::find_iter` now returns a `FindMatches` directly instead of `Result<FindMatches>` because
 the construction is basically infallible.
 >     This makes this version incompatible to the previous one.
+- Add a new API `add_patterns` to `ScannerBuilder` to support simple use cases with only one scanner
+state.
 - Add derive `Debug` trait to `Scanner`
 - Add CHANGELOG
 

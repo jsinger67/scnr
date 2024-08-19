@@ -19,24 +19,16 @@ it. In case you find a bug, please report it.
 ## How to use it
 
 ```rust
-use std::sync::LazyLock;
+use scnr::ScannerBuilder;
 
-use scnr::{ScannerBuilder, ScannerMode};
-
-static MODES: LazyLock<[ScannerMode; 1]> = LazyLock::new(|| {
-    [ScannerMode::new(
-        "INITIAL",
-        vec![
-            (r";", 1),                          // Semicolon
-            (r"0|[1-9][0-9]*", 2),              // Number
-            (r"//.*(\r\n|\r|\n)", 2),           // Line comment
-            (r"/\*([.\r\n--*]|\*[^/])*\*/", 3), // Block comment
-            (r"[a-zA-Z_]\w*", 4),               // Identifier
-            (r"=", 8),                          // Assignment
-        ],
-        vec![],
-    )]
-});
+static PATTERNS: &[&str] = &[
+    r";",                          // Semicolon
+    r"0|[1-9][0-9]*",              // Number
+    r"//.*(\r\n|\r|\n)",           // Line comment
+    r"/\*([.\r\n--*]|\*[^/])*\*/", // Block comment
+    r"[a-zA-Z_]\w*",               // Identifier
+    r"=",                          // Assignment
+];
 
 const INPUT: &str = r#"
 // This is a comment
@@ -49,15 +41,14 @@ c = a;
 
 fn main() {
     let scanner = ScannerBuilder::new()
-        .add_scanner_modes(&*MODES)
+        .add_patterns(PATTERNS)
         .build()
         .expect("ScannerBuilder error");
-    let find_iter = scanner.find_iter(INPUT).expect("Scanner error");
+    let find_iter = scanner.find_iter(INPUT);
     for ma in find_iter {
-        println!("Match: {:?}: '{}'", ma, &INPUT[ma.start()..ma.end()]);
+        println!("Match: {:?}: '{}'", ma, &INPUT[ma.span().range()]);
     }
 }
-
 ```
 
 ## Guard rails
@@ -139,15 +130,15 @@ We can remove the `*` from the `.`:
 This looks more deterministic, but now we reveal another problem, which was actually inherent
 already in the first variant.
 
-Scanning such an input will mess up the match:
+Scanning the following input will mess up the match:
 
 ```
 /* a* */
 ```
 
 The scanner enters state 1 when reading the `*` after the `a` and then fails on matching the space
-when accepting a `/`. The reason is that the repeated expression doesn't care about the part that
-follows it.
+while instead expecting a `/`. The reason is that the repeated expression doesn't care about the
+part that follows it.
 
 So, we need to become more specific about this aspect, too:
 
@@ -167,10 +158,10 @@ if the exit condition fails.
 
 ### Scanner modes
 
-A more flexible but also a little more complex approach to the above mentions obstacles like
+A more flexible but also a little more complex approach to the above mentioned obstacles like
 ambiguity on exit conditions and handling of following expressions in the repeated expressions is
-to introduce a second scanner mode that is entered on the comment start `/\\*`, then handles all
-tokens inside a comment and enters INITIAL mode on the comment end `\\*/`.
+to introduce a second scanner mode that is entered on the **comment start** `/\\*`, then handles all
+tokens inside a comment and enters INITIAL mode on the **comment end** `\\*/` again.
 
 The scanner modes can be defined for instance in json:
 
@@ -192,11 +183,11 @@ The scanner modes can be defined for instance in json:
 ]
 ```
 
-Here you see two modes. The scanner alway starts in mode 0, usually INITIAL. When encountering a
-token type 1, *comment start* it switches to mode 1, COMMENT. Here the *comment end* token type 2
-has higher precedence than the `[.\\r\\n]` token 2, simply by having a lower index in the patterns
+Here you see two modes. The scanner always starts in mode 0, usually INITIAL. When encountering a
+token type 1, **comment start**, it switches to mode 1, COMMENT. Here the **comment end** token type
+2 has higher precedence than the `[.\\r\\n]` token 2, simply by having a lower index in the patterns
 slice. On token 2 it switches to mode INITIAL again. All other tokens are covered by token type 3,
-*comment content*.
+**comment content**.
 
-In this scenario you can imagine that the parser knows that token type 3 is *comment content* and
+In this scenario you can imagine that the parser knows that token type 3 is **comment content** and
 can handle it accordingly.

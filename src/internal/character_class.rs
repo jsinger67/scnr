@@ -108,7 +108,7 @@ mod tests {
     }
 
     #[test]
-    fn test_character_class_equality_specail() {
+    fn test_character_class_equality_special() {
         let ast1 = parse_regex_syntax("\r").unwrap();
         if let Ast::Literal(_) = &ast1 {
             let class1 = CharacterClass::new(0.into(), ast1.clone());

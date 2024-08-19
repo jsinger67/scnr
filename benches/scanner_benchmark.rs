@@ -1,4 +1,4 @@
-use std::{fs, sync::LazyLock};
+use std::{fs, sync::LazyLock, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use scnr::{scanner::Scanner, ScannerBuilder, ScannerMode};
@@ -33,7 +33,7 @@ fn scanner_benchmark(c: &mut Criterion) {
     c.bench_function("scanner_benchmark", |b| {
         b.iter(|| {
             // Create a matches iterator
-            let find_iter = SCANNER.find_iter(SCANNER_INPUT).unwrap();
+            let find_iter = SCANNER.find_iter(SCANNER_INPUT);
             // Collect all matches
             for t in find_iter {
                 black_box(t);
@@ -44,7 +44,7 @@ fn scanner_benchmark(c: &mut Criterion) {
 
 criterion_group! {
     name = benchesscanner;
-    config = Criterion::default().sample_size(50);
+    config = Criterion::default().measurement_time(Duration::from_secs(10));
     targets = scanner_benchmark
 }
 

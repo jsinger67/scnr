@@ -63,3 +63,40 @@ impl ScannerMode {
         &self.name
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn test_scanner_mode() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![],
+        );
+        assert_eq!("INITIAL", scanner_mode.name());
+        assert_eq!(2, scanner_mode.patterns.len());
+        assert_eq!(0, scanner_mode.transitions.len());
+    }
+
+    #[test]
+    fn test_scanner_mode_serialization() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![],
+        );
+
+        let serialized = serde_json::to_string(&scanner_mode).unwrap();
+        eprintln!("{}", serialized);
+        let deserialized: ScannerMode = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(scanner_mode, deserialized);
+    }
+}
