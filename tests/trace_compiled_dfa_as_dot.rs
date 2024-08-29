@@ -42,7 +42,7 @@ fn trace_compiled_dfa_as_dot() {
             .unwrap();
 
         scanner
-            .trace_compiled_dfa_as_dot(&scanner_modes)
+            .log_compiled_dfas_as_dot(&scanner_modes)
             .expect("Failed to trace compiled DFA as dot");
     }
 }

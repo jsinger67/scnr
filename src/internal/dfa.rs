@@ -58,11 +58,6 @@ impl Dfa {
         &self.pattern
     }
 
-    // Get the accepting states of the DFA.
-    // pub(crate) fn accepting_states(&self) -> &[StateID] {
-    //     &self.accepting_states
-    // }
-
     /// Get the pattern id if the given state is an accepting state.
     #[inline]
     pub(crate) fn is_accepting(&self, state_id: StateID) -> bool {
@@ -501,7 +496,7 @@ impl std::fmt::Display for Dfa {
         for (source_id, targets) in &self.transitions {
             write!(f, "{} -> ", source_id.as_usize())?;
             for (char_class, target_id) in targets {
-                write!(f, "{}:{}", char_class.id(), target_id.as_usize())?;
+                write!(f, "{}:{}, ", char_class.id(), target_id.as_usize())?;
             }
             writeln!(f)?
         }

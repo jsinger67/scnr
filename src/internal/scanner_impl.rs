@@ -1,4 +1,4 @@
-use log::trace;
+use log::{debug, trace};
 
 use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
@@ -12,14 +12,6 @@ pub(crate) struct ScannerImpl {
 }
 
 impl ScannerImpl {
-    // pub(crate) fn character_classes(&self) -> &CharacterClassRegistry {
-    //     &self.character_classes
-    // }
-
-    // pub(crate) fn scanner_modes(&self) -> &[CompiledScannerMode] {
-    //     &self.scanner_modes
-    // }
-
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
     pub(crate) fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
@@ -65,16 +57,16 @@ impl ScannerImpl {
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
-                trace!(
-                    "Advance DFA #{} with char {:?} and token type {}",
-                    dfa_index,
-                    c,
-                    patterns[*dfa_index].1
-                );
+                // trace!(
+                //     "Advance DFA #{} with char {:?} and token type {}",
+                //     dfa_index,
+                //     c,
+                //     patterns[*dfa_index].1
+                // );
                 patterns[*dfa_index].0.advance(i, c, match_char_class);
             }
 
-            trace!("Clear active DFAs");
+            // trace!("Clear active DFAs");
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
             active_dfas.retain(|&dfa_index| patterns[dfa_index].0.search_for_longer_match());
 
@@ -190,6 +182,7 @@ impl ScannerImpl {
     /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
     /// in the scanner mode.
     pub(crate) fn set_mode(&mut self, mode: usize) {
+        trace!("Set scanner mode to {}", mode);
         self.current_mode = mode;
     }
 
@@ -201,12 +194,12 @@ impl ScannerImpl {
 
     /// Traces the compiled DFAs as dot format.
     /// The output is written to the log.
-    /// This function is used for debugging purposes. It only works in test mode.
-    pub(crate) fn trace_compiled_dfa_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
+    /// This function is used for debugging purposes.
+    pub(crate) fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             for (j, (dfa, t)) in scanner_mode.patterns.iter().enumerate() {
-                trace!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
+                debug!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
                     let mut cursor = std::io::Cursor::new(Vec::new());
                     let title = format!(
                         "Compiled DFA {}::{}",

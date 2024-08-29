@@ -9,6 +9,8 @@ pub(crate) struct FindMatchesImpl<'h> {
     match_char_class: Box<dyn Fn(CharClassID, char) -> bool + 'static>,
     // The input haystack.
     char_indices: std::str::CharIndices<'h>,
+    // The last position of the char_indices iterator.
+    last_position: usize,
 }
 
 impl<'h> FindMatchesImpl<'h> {
@@ -18,7 +20,19 @@ impl<'h> FindMatchesImpl<'h> {
             scanner: scanner_impl.clone(),
             match_char_class: scanner_impl.create_match_char_class().unwrap(),
             char_indices: input.char_indices(),
+            last_position: 0,
         }
+    }
+
+    pub(crate) fn with_offset(self, offset: usize) -> Self {
+        let mut me = Self {
+            scanner: self.scanner,
+            match_char_class: self.match_char_class,
+            char_indices: self.char_indices,
+            last_position: self.last_position,
+        };
+        me.advance_to(offset);
+        me
     }
 
     /// Returns the next match in the haystack.
@@ -92,12 +106,7 @@ impl<'h> FindMatchesImpl<'h> {
             return;
         }
         let end = matched.span().end;
-        for (i, c) in self.char_indices.by_ref() {
-            if i + c.len_utf8() >= end {
-                // Stop at the end of the match.
-                break;
-            }
-        }
+        self.advance_to(end);
     }
 
     /// Advances the given char_indices iterator to the end of the given match.
@@ -112,6 +121,37 @@ impl<'h> FindMatchesImpl<'h> {
                 break;
             }
         }
+    }
+
+    /// Advane the char_indices iterator to the given position.
+    /// The function is used to skip a given number of characters in the haystack.
+    /// It can be used after a peek operation to skip the characters of the peeked matches.
+    /// The function returns the new position of the char_indices iterator.
+    /// If the new position is greater than the length of the haystack, the function returns the
+    /// length of the haystack.
+    /// If the new position is less than the current position of the char_indices iterator, the
+    /// function returns the current position of the char_indices iterator.
+    pub(crate) fn advance_to(&mut self, position: usize) -> usize {
+        let mut new_position = 0;
+        if position < self.last_position {
+            // The new position is less than the current position of the char_indices iterator.
+            // The iterator is advanced by one character and the next character is not returned by
+            // the iterator.
+            return self.last_position;
+        }
+        for (i, c) in self.char_indices.by_ref() {
+            new_position = i;
+            if i + c.len_utf8() >= position {
+                break;
+            }
+        }
+        self.last_position = new_position;
+        new_position
+    }
+
+    /// Retrieve the total offset of the char indices iterator in bytes.
+    pub(crate) fn offset(&self) -> usize {
+        self.last_position
     }
 }
 
@@ -273,6 +313,61 @@ Id2
                 Match::new(4, (17usize..20).into()),
                 Match::new(0, (20usize..21).into()),
             ])
+        );
+    }
+
+    #[test]
+    fn test_peek_does_not_effect_the_iterator() {
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
+        let mut find_iter = scanner.find_iter(INPUT);
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into()),
+            ])
+        );
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into()),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_advance_to() {
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
+        let mut find_iter = scanner.find_iter(INPUT);
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into()),
+            ])
+        );
+        let new_position = find_iter.advance_to(4);
+        assert_eq!(new_position, 3);
+        let peeked = find_iter.peek_n(3);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedModeSwitch((
+                vec![
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into()),
+                ],
+                1
+            ))
         );
     }
 }

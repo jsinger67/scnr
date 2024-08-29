@@ -1,4 +1,4 @@
-//! The `dot` module contains the conversion from an NFA to a graphviz dot format.
+//! The `dot` module contains the conversion from an finite automata to a graphviz dot format.
 //! The functions in this module are used for testing and debugging purposes.
 
 use std::io::Write;

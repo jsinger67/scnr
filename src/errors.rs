@@ -1,9 +1,9 @@
 use thiserror::Error;
 
-/// The result type for the `scangen` crate.
+/// The result type for the `scrn` crate.
 pub type Result<T> = std::result::Result<T, ScnrError>;
 
-/// The error type for the `scangen` crate.
+/// The error type for the `scrn` crate.
 #[derive(Error, Debug)]
 pub struct ScnrError {
     /// The source of the error.

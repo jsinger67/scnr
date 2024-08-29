@@ -45,8 +45,10 @@ impl Scanner {
         self.inner.mode_name(index)
     }
 
-    /// Traces the compiled DFAs as a Graphviz DOT file.
-    pub fn trace_compiled_dfa_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
-        self.inner.trace_compiled_dfa_as_dot(modes)
+    /// Logs the compiled DFAs as a Graphviz DOT file with the help of the `log` crate.
+    /// To enable debug output compliled DFA as dot file set the environment variable `RUST_LOG` to
+    /// `scnr::internal::scanner_impl=debug`.
+    pub fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
+        self.inner.log_compiled_dfas_as_dot(modes)
     }
 }

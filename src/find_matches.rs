@@ -35,6 +35,22 @@ impl<'h> FindMatches<'h> {
         }
     }
 
+    /// Sets an offset to the current position of the scanner. This offset is added to the start
+    /// position of each match.
+    /// If a parser resets the scanner to a previous position, it can set the offset to the number
+    /// of bytes where the scanner was reset.
+    pub fn with_offset(self, offset: usize) -> Self {
+        Self {
+            inner: self.inner.with_offset(offset),
+        }
+    }
+
+    /// Retrieve the byte offset of the char indices iterator from the start of the haystack.
+    #[inline]
+    pub fn offset(&self) -> usize {
+        self.inner.offset()
+    }
+
     /// Returns the next match in the haystack.
     ///
     /// If no match is found, `None` is returned.
@@ -57,6 +73,21 @@ impl<'h> FindMatches<'h> {
     /// being returned.
     pub fn peek_n(&mut self, n: usize) -> PeekResult {
         self.inner.peek_n(n)
+    }
+
+    /// Advane the char_indices iterator to the given position.
+    /// The function is used to skip a given number of characters in the haystack.
+    /// It can be used after a peek operation to skip the characters of the peeked matches.
+    /// The function returns the new position of the char_indices iterator.
+    /// If the new position is greater than the length of the haystack, the function returns the
+    /// length of the haystack.
+    /// If the new position is less than the current position of the char_indices iterator, the
+    /// function returns the current position of the char_indices iterator.
+    /// The current position of the char_indices iterator is the end index of the last match found
+    /// by the iterator, such that the next call to `next_match` will start searching for matches
+    /// at the following position.
+    pub fn advance_to(&mut self, position: usize) -> usize {
+        self.inner.advance_to(position)
     }
 }
 

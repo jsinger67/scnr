@@ -17,20 +17,34 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.2.0 - Not released yet
+## 0.3.0 - Not released yet
 
+### Breaking changes
+- Renamed `Scanner::trace_compiled_dfa_as_dot` to `Scanner::log_compiled_dfas_as_dot`
+### Non-breaking changes
+- Fixed some help comments
+- Fixed the `Display` implementation of `DFA`
+- Added a new test to module `internal::match_function`
+- Added new function `FindMatches::with_offset` to support resetting the input test
+- Added new function `FindMatches::offset` to retrieve the total offset of the char indices 
+iterator in bytes.
+
+
+## 0.2.0 - 2024-08-19
+
+### Breaking changes
 - `Scanner::find_iter` now returns a `FindMatches` directly instead of `Result<FindMatches>` because
 the construction is basically infallible.
->     This makes this version incompatible to the previous one.
+### Non-breaking changes
 - Add a new API `add_patterns` to `ScannerBuilder` to support simple use cases with only one scanner
 state.
 - Add derive `Debug` trait to `Scanner`
 - Add CHANGELOG
 
-## 0.1.1
+## 0.1.1 - 2024-08-17
 
 - Changed description in Cargo.toml
 
-## 0.1.0
+## 0.1.0 - 2024-08-17
 
 - First release

@@ -429,4 +429,16 @@ mod tests {
         assert!(!match_function.call('1'));
         assert!(!match_function.call(' '));
     }
+
+    // [^a--b]       A negated subtraction character class (matching b and everything but a)
+    //               This is equivalent to [^a]
+    #[test]
+    fn test_negated_subtraction() {
+        let ast = Parser::new().parse(r"[^a--b]").unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
+        assert!(!match_function.call('a'));
+        assert!(match_function.call('b'));
+        assert!(match_function.call('1'));
+        assert!(match_function.call(' '));
+    }
 }
