@@ -61,19 +61,21 @@ sequences.
 
 ## Not supported regex features
 
-We don't support **anchored matches**, i.e. ^, $, \b, \B, \A, \z and so on, are not available.
+We don't support **anchored matches**, i.e. `^`, `$`, `\b`, `\B`, `\A`, `\z` and so on, are not
+available.
 Mostly, this can be tolerated because of the overall properties of the scanner, and especially the
 fact that the longest match will win mitigates the need for such anchors.
 
 To elaborate this a bit more:
 
-Lets say you have a pattern for the keyword 'if' and a pattern for an identifier
-/[a-zA-Z_][a-zA-Z0-9_]*/. Both could match the 'if' but the keyword will win iff you have its
+Lets say you have a pattern for the keyword `if` and a pattern for an identifier
+`/[a-zA-Z_][a-zA-Z0-9_]*/`. Both could match the `if` but the keyword will win iff you have its
 pattern inserted before the pattern of the identifier. If the scanner encounters an input like,
-e.g. 'ifi' the identifier will match because of the longest match rule. With these guaranties it is
-simply unnecessary to declare the keyword 'if' with attached word boundaries (\b).
+e.g. `ifi` the identifier will match because of the longest match rule. With these guaranties it is
+simply unnecessary to declare the keyword 'if' with attached word boundaries (`\b`).
 
-Also we currently don't support **flags** (i, m, s, R, U, u, x), like in ```r"(?i)a+(?-i)b+"```.
+Also we currently don't support **flags** (`i`, `m`, `s`, `R`, `U`, `u`, `x`), like in
+```r"(?i)a+(?-i)b+"```.
 I need to evaluate if this is a problem, but at the moment I belief that this is tolerable.
 
 There is no need for **capture groups** in the context of token matching, so I see no necessity to
@@ -81,7 +83,7 @@ implement this feature.
 
 ## Not supported Flex features
 
-Additional to the anchors ^ and $, *trailing contexts*, like in ```ab/cd```, is currently not
+Additional to the anchors `^` and `$`, *trailing contexts*, like in ```ab/cd```, is currently not
 supported because of the need to provide lookahead outside of the normal advance loop of the
 character iterator. Although preparations are already made, we will postpone this as long as strong
 needs arise.
@@ -94,7 +96,7 @@ The normal Lex/Flex POSIX matching is greedy. It some sort adheres to the longes
 poses some overhead during backtracking on the scanner's runtime.
 
 Since `scnr` works with minimized DFAs only (current situation, may change) it always matches
-repetitions like * and + non-greedily.
+repetitions like `*` and `+` non-greedily.
 
 ### Exit conditions on repetitions
 
@@ -143,7 +145,7 @@ part that follows it.
 So, we need to become more specific about this aspect, too:
 
 ```regex
-/\\*([.--*]|\\*[^/])*\\*/
+/\*([.--*]|\*[^/])*\*/
 ```
 
 This says that the repeated expression is any character except `*`, or a `*` followed by a character
@@ -183,6 +185,9 @@ The scanner modes can be defined for instance in json:
 ]
 ```
 
+> Note, that this kind of JSON data can be deserialized to `Vec<ScannerMode>` thanks to `serde` and
+`serde_json`.
+
 Here you see two modes. The scanner always starts in mode 0, usually INITIAL. When encountering a
 token type 1, **comment start**, it switches to mode 1, COMMENT. Here the **comment end** token type
 2 has higher precedence than the `[.\\r\\n]` token 3, simply by having a lower index in the patterns
@@ -191,3 +196,6 @@ slice. On token 2 it switches to mode INITIAL again. All other tokens are covere
 
 In this scenario you can imagine that the parser knows that token type 3 is **comment content** and
 can handle it accordingly.
+
+Furthermore, if you add **comment start** `/\\*` also to the scanner mode COMMENT the parser should
+be able to handle nested block comments, too.
