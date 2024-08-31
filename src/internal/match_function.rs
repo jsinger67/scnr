@@ -5,6 +5,7 @@ use regex_syntax::ast::{
     ClassUnicodeKind::{Named, NamedValue, OneLetter},
     Literal,
 };
+use unicode_xid::UnicodeXID;
 
 use crate::{Result, ScnrError};
 
@@ -82,7 +83,12 @@ impl MatchFunction {
                     _ => return Err(unsupported!(format!("{:#?}", unicode))),
                 }
             }
-            Named(_) | NamedValue { .. } => {
+            Named(name) => match name.as_str() {
+                "XID_Start" => MatchFn::new(|ch| ch.is_xid_start()),
+                "XID_Continue" => MatchFn::new(|ch| ch.is_xid_continue()),
+                _ => return Err(unsupported!(format!("{:#?}", unicode))),
+            },
+            NamedValue { .. } => {
                 // Actually no support for named classes and named values
                 // We need to ensure that this is not a match even if it is negated
                 let no_match = negated;
@@ -440,5 +446,23 @@ mod tests {
         assert!(match_function.call('b'));
         assert!(match_function.call('1'));
         assert!(match_function.call(' '));
+    }
+
+    // \p{XID_Start} and \p{XID_Continue} are supported by unicode_xid
+    #[test]
+    fn test_named_classes() {
+        let ast = Parser::new().parse(r"\p{XID_Start}").unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
+        assert!(match_function.call('a'));
+        assert!(match_function.call('A'));
+        assert!(!match_function.call('1'));
+        assert!(!match_function.call(' '));
+
+        let ast = Parser::new().parse(r"\p{XID_Continue}").unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
+        assert!(match_function.call('a'));
+        assert!(match_function.call('A'));
+        assert!(match_function.call('1'));
+        assert!(!match_function.call(' '));
     }
 }

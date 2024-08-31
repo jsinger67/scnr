@@ -17,7 +17,12 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.3.0 - Not released yet
+## 0.3.1 - Not released yet
+
+- Add support of unicode named classes `XID_Start` and `XID_Continue` by the help of the
+`unicode-xid` crate
+
+## 0.3.0 - 2024-08-29
 
 ### Breaking changes
 - Renamed `Scanner::trace_compiled_dfa_as_dot` to `Scanner::log_compiled_dfas_as_dot`
@@ -28,7 +33,6 @@ new minor version numbers. Please note that this is no version handling covered 
 - Added new function `FindMatches::with_offset` to support resetting the input test
 - Added new function `FindMatches::offset` to retrieve the total offset of the char indices 
 iterator in bytes.
-
 
 ## 0.2.0 - 2024-08-19
 
