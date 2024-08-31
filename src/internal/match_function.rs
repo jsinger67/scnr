@@ -5,7 +5,7 @@ use regex_syntax::ast::{
     ClassUnicodeKind::{Named, NamedValue, OneLetter},
     Literal,
 };
-use unicode_xid::UnicodeXID;
+use seshat::unicode::Ucd;
 
 use crate::{Result, ScnrError};
 
@@ -64,35 +64,82 @@ impl MatchFunction {
     }
 
     fn try_from_class_unicode(unicode: ClassUnicode) -> Result<MatchFn> {
-        let negated = unicode.is_negated();
         let kind = unicode.kind.clone();
         let match_function = match kind {
             OneLetter(ch) => {
                 match ch {
                     // Unicode class for Letters
-                    'L' => MatchFn::new(|ch| ch.is_alphabetic()),
+                    'L' => MatchFn::new(|ch| ch.alpha()),
                     // Unicode class for Numbers
                     'N' => MatchFn::new(|ch| ch.is_numeric()),
                     // Unicode class for Whitespace
                     'Z' => MatchFn::new(|ch| ch.is_whitespace()),
-                    // Unicode class for Punctuation
-                    // Attention: Only ASCII based punctuation is supported
-                    'P' => MatchFn::new(|ch| ch.is_ascii_punctuation()),
+                    // Unicode class Terminal_Punctuation
+                    'P' => MatchFn::new(|ch| ch.term()),
                     // Unicode class for Control characters
                     'C' => MatchFn::new(|ch| ch.is_control()),
                     _ => return Err(unsupported!(format!("{:#?}", unicode))),
                 }
             }
             Named(name) => match name.as_str() {
-                "XID_Start" => MatchFn::new(|ch| ch.is_xid_start()),
-                "XID_Continue" => MatchFn::new(|ch| ch.is_xid_continue()),
+                "Alphabetic" => MatchFn::new(|ch| ch.alpha()),
+                "ASCII_Hex_Digit" => MatchFn::new(|ch| ch.ahex()),
+                "Bidi_Control" => MatchFn::new(|ch| ch.bidi_c()),
+                "Case_Ignorable" => MatchFn::new(|ch| ch.ci()),
+                "Cased" => MatchFn::new(|ch| ch.cased()),
+                "Composition_Exclusion" => MatchFn::new(|ch| ch.ce()),
+                "Dash" => MatchFn::new(|ch| ch.dash()),
+                "Default_Ignorable_Code_Point" => MatchFn::new(|ch| ch.di()),
+                "Deprecated" => MatchFn::new(|ch| ch.dep()),
+                "Diacritic" => MatchFn::new(|ch| ch.dia()),
+                "Emoji_Component" => MatchFn::new(|ch| ch.ecomp()),
+                "Emoji_Modifier_Base" => MatchFn::new(|ch| ch.ebase()),
+                "Emoji_Modifier" => MatchFn::new(|ch| ch.emod()),
+                "Emoji_Presentation" => MatchFn::new(|ch| ch.epres()),
+                "Emoji" => MatchFn::new(|ch| ch.emoji()),
+                "Extended_Pictographic" => MatchFn::new(|ch| ch.ext_pict()),
+                "Extender" => MatchFn::new(|ch| ch.ext()),
+                "Full_Composition_Exclusion" => MatchFn::new(|ch| ch.comp_ex()),
+                "Grapheme_Extend" => MatchFn::new(|ch| ch.gr_ext()),
+                "Hex_Digit" => MatchFn::new(|ch| ch.hex()),
+                "Hyphen" => MatchFn::new(|ch| ch.hyphen()),
+                "ID_Continue" => MatchFn::new(|ch| ch.idc()),
+                "ID_Start" => MatchFn::new(|ch| ch.ids()),
+                "Ideographic" => MatchFn::new(|ch| ch.ideo()),
+                "IDS_Binary_Operator" => MatchFn::new(|ch| ch.idsb()),
+                "IDS_Trinary_Operator" => MatchFn::new(|ch| ch.idst()),
+                "Join_Control" => MatchFn::new(|ch| ch.join_c()),
+                "Logical_Order_Exception" => MatchFn::new(|ch| ch.loe()),
+                "Lowercase" => MatchFn::new(|ch| ch.lower()),
+                "Math" => MatchFn::new(|ch| ch.math()),
+                "Noncharacter_Code_Point" => MatchFn::new(|ch| ch.nchar()),
+                "Other_Alphabetic" => MatchFn::new(|ch| ch.oalpha()),
+                "Other_Default_Ignorable_Code_Point" => MatchFn::new(|ch| ch.odi()),
+                "Other_Grapheme_Extend" => MatchFn::new(|ch| ch.ogr_ext()),
+                "Other_ID_Continue" => MatchFn::new(|ch| ch.oidc()),
+                "Other_ID_Start" => MatchFn::new(|ch| ch.oids()),
+                "Other_Lowercase" => MatchFn::new(|ch| ch.olower()),
+                "Other_Math" => MatchFn::new(|ch| ch.omath()),
+                "Other_Uppercase" => MatchFn::new(|ch| ch.oupper()),
+                "Pattern_Syntax" => MatchFn::new(|ch| ch.pat_syn()),
+                "Pattern_White_Space" => MatchFn::new(|ch| ch.pat_ws()),
+                "Prepended_Concatenation_Mark" => MatchFn::new(|ch| ch.pcm()),
+                "Quotation_Mark" => MatchFn::new(|ch| ch.qmark()),
+                "Radical" => MatchFn::new(|ch| ch.radical()),
+                "Regional_Indicator" => MatchFn::new(|ch| ch.ri()),
+                "Sentence_Terminal" => MatchFn::new(|ch| ch.sterm()),
+                "Soft_Dotted" => MatchFn::new(|ch| ch.sd()),
+                "Terminal_Punctuation" => MatchFn::new(|ch| ch.term()),
+                "Unified_Ideograph" => MatchFn::new(|ch| ch.uideo()),
+                "Uppercase" => MatchFn::new(|ch| ch.upper()),
+                "Variation_Selector" => MatchFn::new(|ch| ch.vs()),
+                "White_Space" => MatchFn::new(|ch| ch.wspace()),
+                "XID_Continue" => MatchFn::new(|ch| ch.xidc()),
+                "XID_Start" => MatchFn::new(|ch| ch.xids()),
                 _ => return Err(unsupported!(format!("{:#?}", unicode))),
             },
             NamedValue { .. } => {
-                // Actually no support for named classes and named values
-                // We need to ensure that this is not a match even if it is negated
-                let no_match = negated;
-                MatchFn::new(move |_| no_match)
+                return Err(unsupported!(format!("{:#?}", unicode)));
             }
         };
         Ok(if unicode.is_negated() {

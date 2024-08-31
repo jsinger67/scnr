@@ -3,6 +3,7 @@
         "bfnt",
         "POSIX",
         "println",
-        "scnr"
+        "scnr",
+        "seshat"
     ]
 }
