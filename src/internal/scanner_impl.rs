@@ -221,6 +221,12 @@ impl ScannerImpl {
         }
         Ok(())
     }
+
+    /// Resets the scanner to the initial state.
+    #[inline]
+    pub(crate) fn reset(&mut self) {
+        self.current_mode = 0;
+    }
 }
 
 impl TryFrom<Vec<ScannerMode>> for ScannerImpl {

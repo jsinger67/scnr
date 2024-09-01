@@ -16,12 +16,14 @@ pub(crate) struct FindMatchesImpl<'h> {
 impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
     pub(crate) fn new(scanner_impl: &ScannerImpl, input: &'h str) -> Self {
-        Self {
+        let mut me = Self {
             scanner: scanner_impl.clone(),
             match_char_class: scanner_impl.create_match_char_class().unwrap(),
             char_indices: input.char_indices(),
             last_position: 0,
-        }
+        };
+        me.scanner.reset();
+        me
     }
 
     pub(crate) fn with_offset(self, offset: usize) -> Self {
