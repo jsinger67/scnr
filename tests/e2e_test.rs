@@ -14,11 +14,11 @@ fn e2e_test() {
     // Initialize the regex for newlines. It is used to make the tests platform independent.
     let rx_newline: Regex = Regex::new(r"\r?\n|\r").unwrap();
 
-    // Iterate over all modes files in the data directory
+    // Iterate over all json files in the data directory that contain scanner modes
     for entry in fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data")).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if path.extension().unwrap() != "modes" {
+        if path.extension().unwrap() != "json" {
             continue;
         }
 

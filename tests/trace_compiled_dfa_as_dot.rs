@@ -15,11 +15,11 @@ fn trace_compiled_dfa_as_dot() {
         )
         .try_init();
 
-    // Iterate over all modes files in the data directory
+    // Iterate over all json files in the data directory that contain scanner modes
     for entry in fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data")).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if path.extension().unwrap() != "modes" {
+        if path.extension().unwrap() != "json" {
             continue;
         }
 

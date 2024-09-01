@@ -6,7 +6,7 @@ use scnr::{scanner::Scanner, ScannerBuilder, ScannerMode};
 const SCANNER_INPUT: &str = include_str!("./input_1.txt");
 
 static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.modes");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.json");
     let file = fs::File::open(path).unwrap();
     serde_json::from_reader(file).unwrap()
 });
