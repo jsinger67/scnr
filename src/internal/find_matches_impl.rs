@@ -1,12 +1,12 @@
-use super::{CharClassID, ScannerImpl};
+use std::{cell::RefCell, rc::Rc};
+
+use super::ScannerImpl;
 use crate::{Match, PeekResult};
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
     // The scanner used to find matches.
-    scanner: ScannerImpl,
-    // The function used to match characters to character classes.
-    match_char_class: Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+    scanner_impl: Rc<RefCell<ScannerImpl>>,
     // The input haystack.
     char_indices: std::str::CharIndices<'h>,
     // The last position of the char_indices iterator.
@@ -15,21 +15,19 @@ pub(crate) struct FindMatchesImpl<'h> {
 
 impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: &ScannerImpl, input: &'h str) -> Self {
-        let mut me = Self {
-            scanner: scanner_impl.clone(),
-            match_char_class: scanner_impl.create_match_char_class().unwrap(),
+    pub(crate) fn new(scanner_impl: Rc<RefCell<ScannerImpl>>, input: &'h str) -> Self {
+        let me = Self {
+            scanner_impl,
             char_indices: input.char_indices(),
             last_position: 0,
         };
-        me.scanner.reset();
+        me.scanner_impl.borrow_mut().reset();
         me
     }
 
     pub(crate) fn with_offset(self, offset: usize) -> Self {
         let mut me = Self {
-            scanner: self.scanner,
-            match_char_class: self.match_char_class,
+            scanner_impl: self.scanner_impl,
             char_indices: self.char_indices,
             last_position: self.last_position,
         };
@@ -50,8 +48,9 @@ impl<'h> FindMatchesImpl<'h> {
         let mut result;
         loop {
             result = self
-                .scanner
-                .find_from(&self.match_char_class, self.char_indices.clone());
+                .scanner_impl
+                .borrow_mut()
+                .find_from(self.char_indices.clone());
             if let Some(matched) = result {
                 self.advance_beyond_match(matched);
                 break;
@@ -76,12 +75,17 @@ impl<'h> FindMatchesImpl<'h> {
         let mut new_mode = 0;
         for _ in 0..n {
             let result = self
-                .scanner
-                .peek_from(&self.match_char_class, char_indices.clone());
+                .scanner_impl
+                .borrow_mut()
+                .peek_from(char_indices.clone());
             if let Some(matched) = result {
                 matches.push(matched);
                 Self::advance_char_indices_beyond_match(&mut char_indices, matched);
-                if let Some(mode) = self.scanner.has_transition(matched.token_type()) {
+                if let Some(mode) = self
+                    .scanner_impl
+                    .borrow()
+                    .has_transition(matched.token_type())
+                {
                     mode_switch = true;
                     new_mode = mode;
                     break;
@@ -227,7 +231,7 @@ Id2
             .build()
             .unwrap();
 
-        let find_matches = FindMatchesImpl::new(&scanner.inner, INPUT);
+        let find_matches = scanner.find_iter(INPUT);
         let matches: Vec<Match> = find_matches.collect();
         assert_eq!(matches.len(), 9);
         assert_eq!(

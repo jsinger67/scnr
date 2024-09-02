@@ -1,3 +1,5 @@
+use std::{cell::RefCell, rc::Rc};
+
 use crate::{scanner::Scanner, scanner_mode::ScannerMode, Result, ScannerImpl};
 
 /// A builder for creating a scanner.
@@ -42,7 +44,7 @@ impl ScannerBuilder {
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
         Ok(Scanner {
-            inner: ScannerImpl::try_from(self.scanner_modes)?,
+            inner: Rc::new(RefCell::new(ScannerImpl::try_from(self.scanner_modes)?)),
         })
     }
 }
@@ -77,9 +79,10 @@ impl SimpleScannerBuilder {
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Ok(Scanner {
-            inner: ScannerImpl::try_from(vec![self.scanner_mode])?,
-        })
+        let inner = Rc::new(RefCell::new(ScannerImpl::try_from(vec![
+            self.scanner_mode,
+        ])?));
+        Ok(Scanner { inner })
     }
 }
 
@@ -114,13 +117,13 @@ mod tests {
             .add_scanner_mode(scanner_mode)
             .build()
             .unwrap();
-        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
-        let compiled_dfa = &scanner.inner.scanner_modes[0].patterns[1].0;
+        assert_eq!("INITIAL", scanner.inner.borrow().scanner_modes[0].name);
+        let compiled_dfa = &scanner.inner.borrow().scanner_modes[0].patterns[1].0;
 
         compiled_dfa_render_to!(
             &compiled_dfa,
             "LineComment",
-            scanner.inner.character_classes
+            scanner.inner.borrow().character_classes
         );
     }
 
@@ -139,13 +142,13 @@ mod tests {
             .add_scanner_modes(&scanner_modes)
             .build()
             .unwrap();
-        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
-        let compiled_dfa = &scanner.inner.scanner_modes[0].patterns[1].0;
+        assert_eq!("INITIAL", scanner.inner.borrow().scanner_modes[0].name);
+        let compiled_dfa = &scanner.inner.borrow().scanner_modes[0].patterns[1].0;
 
         compiled_dfa_render_to!(
             &compiled_dfa,
             "LineComment",
-            scanner.inner.character_classes
+            scanner.inner.borrow().character_classes
         );
     }
 
@@ -156,7 +159,7 @@ mod tests {
             .add_patterns(["\r\n|\r|\n", "//.*(\r\n|\r|\n)"])
             .build()
             .unwrap();
-        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
+        assert_eq!("INITIAL", scanner.inner.borrow().scanner_modes[0].name);
         let input = r#"
         // Line comment1
 

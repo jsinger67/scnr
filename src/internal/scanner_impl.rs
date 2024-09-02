@@ -1,21 +1,24 @@
+use std::{cell::RefCell, rc::Rc};
+
 use log::{debug, trace};
 
 use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
 use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction};
 
-#[derive(Clone)]
 pub(crate) struct ScannerImpl {
     pub(crate) character_classes: CharacterClassRegistry,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     current_mode: usize,
+    // The function used to match characters to character classes.
+    pub(crate) match_char_class: Box<dyn Fn(CharClassID, char) -> bool + 'static>,
 }
 
 impl ScannerImpl {
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
-    pub(crate) fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
-        FindMatches::new(self, input)
+    pub(crate) fn find_iter(scanner: Rc<RefCell<Self>>, input: &str) -> FindMatches<'_> {
+        FindMatches::new(scanner, input)
     }
 
     pub(crate) fn create_match_char_class(
@@ -42,11 +45,7 @@ impl ScannerImpl {
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all DFAs are advanced in parallel by one character at a time.
-    pub(crate) fn find_from(
-        &mut self,
-        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
-        char_indices: std::str::CharIndices,
-    ) -> Option<Match> {
+    pub(crate) fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].patterns;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
@@ -63,7 +62,7 @@ impl ScannerImpl {
                 //     c,
                 //     patterns[*dfa_index].1
                 // );
-                patterns[*dfa_index].0.advance(i, c, match_char_class);
+                patterns[*dfa_index].0.advance(i, c, &self.match_char_class);
             }
 
             // trace!("Clear active DFAs");
@@ -101,11 +100,7 @@ impl ScannerImpl {
     /// The name `peek_from` is used to indicate that this method is used for peeking ahead.
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
-    pub(crate) fn peek_from(
-        &mut self,
-        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
-        char_indices: std::str::CharIndices,
-    ) -> Option<Match> {
+    pub(crate) fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].patterns;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
@@ -116,7 +111,7 @@ impl ScannerImpl {
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
-                patterns[*dfa_index].0.advance(i, c, match_char_class);
+                patterns[*dfa_index].0.advance(i, c, &self.match_char_class);
             }
 
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
@@ -243,11 +238,15 @@ impl TryFrom<Vec<ScannerMode>> for ScannerImpl {
                     )?);
                     Ok::<Vec<CompiledScannerMode>, ScnrError>(acc)
                 })?;
-        Ok(Self {
+
+        let mut me = Self {
             character_classes,
             scanner_modes,
             current_mode: 0,
-        })
+            match_char_class: Box::new(|_, _| false),
+        };
+        me.match_char_class = Self::create_match_char_class(&me)?;
+        Ok(me)
     }
 }
 

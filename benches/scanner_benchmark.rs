@@ -1,7 +1,7 @@
 use std::{fs, sync::LazyLock, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use scnr::{scanner::Scanner, ScannerBuilder, ScannerMode};
+use scnr::{ScannerBuilder, ScannerMode};
 
 const SCANNER_INPUT: &str = include_str!("./input_1.txt");
 
@@ -9,13 +9,6 @@ static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.json");
     let file = fs::File::open(path).unwrap();
     serde_json::from_reader(file).unwrap()
-});
-
-static SCANNER: LazyLock<Scanner> = LazyLock::new(|| {
-    ScannerBuilder::new()
-        .add_scanner_modes(&SCANNER_MODES)
-        .build()
-        .unwrap()
 });
 
 fn builder_benchmark(c: &mut Criterion) {
@@ -30,10 +23,15 @@ fn builder_benchmark(c: &mut Criterion) {
 }
 
 fn scanner_benchmark(c: &mut Criterion) {
+    let scanner = ScannerBuilder::new()
+        .add_scanner_modes(&SCANNER_MODES)
+        .build()
+        .unwrap();
+
     c.bench_function("scanner_benchmark", |b| {
         b.iter(|| {
             // Create a matches iterator
-            let find_iter = SCANNER.find_iter(SCANNER_INPUT);
+            let find_iter = scanner.find_iter(SCANNER_INPUT);
             // Collect all matches
             for t in find_iter {
                 black_box(t);
