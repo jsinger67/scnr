@@ -19,10 +19,11 @@ new minor version numbers. Please note that this is no version handling covered 
 
 ## 0.3.1 - Not released yet
 
-- Add support of lots of unicode named classes like `XID_Start` and `XID_Continue` by the help of
+- Add support for lots of unicode named classes like `XID_Start` and `XID_Continue` by the help of
 the `seshat-unicode` crate
 - Performance: Scanner holds ScannerImpl in a `Rc<RefCell<>>` to save time during creation of a new
 `find_iter`
+- Add support for generating compiled DFAs as DOT files to scanner implementation
 
 ## 0.3.0 - 2024-08-29
 

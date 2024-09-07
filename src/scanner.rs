@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, path::Path, rc::Rc};
 
 use crate::{FindMatches, Result, ScannerImpl, ScannerMode};
 
@@ -51,6 +51,22 @@ impl Scanner {
     /// `scnr::internal::scanner_impl=debug`.
     pub fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         self.inner.borrow().log_compiled_dfas_as_dot(modes)
+    }
+
+    /// Generates the compiled DFAs as a Graphviz DOT files.
+    /// The DOT files are written to the target folder.
+    /// The file names are derived from the scanner mode names and the index of the DFA.
+    pub fn generate_compiled_dfas_as_dot<T>(
+        &self,
+        modes: &[ScannerMode],
+        target_folder: T,
+    ) -> Result<()>
+    where
+        T: AsRef<Path>,
+    {
+        self.inner
+            .borrow()
+            .generate_compiled_dfas_as_dot(modes, target_folder)
     }
 }
 

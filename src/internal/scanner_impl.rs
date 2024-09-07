@@ -217,6 +217,39 @@ impl ScannerImpl {
         Ok(())
     }
 
+    /// Generates the compiled DFAs as a Graphviz DOT files.
+    /// The DOT files are written to the target folder.
+    /// The file names are derived from the scanner mode names and the index of the DFA.
+    pub(crate) fn generate_compiled_dfas_as_dot<T>(
+        &self,
+        modes: &[ScannerMode],
+        target_folder: T,
+    ) -> Result<()>
+    where
+        T: AsRef<std::path::Path>,
+    {
+        use std::fs::File;
+        for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
+            for (j, (dfa, t)) in scanner_mode.patterns.iter().enumerate() {
+                let title = format!(
+                    "Compiled DFA {} - {}",
+                    modes[i].name,
+                    modes[i].patterns[j].0.escape_default()
+                );
+                let file_name = format!(
+                    "{}/{}_{}_{}.dot",
+                    target_folder.as_ref().to_str().unwrap(),
+                    modes[i].name,
+                    j,
+                    t
+                );
+                let mut file = File::create(file_name)?;
+                super::dot::compiled_dfa_render(dfa, &title, &self.character_classes, &mut file);
+            }
+        }
+        Ok(())
+    }
+
     /// Resets the scanner to the initial state.
     #[inline]
     pub(crate) fn reset(&mut self) {
@@ -263,7 +296,7 @@ impl std::fmt::Debug for ScannerImpl {
 mod tests {
     use super::*;
     use crate::ScannerMode;
-    use std::convert::TryInto;
+    use std::{convert::TryInto, fs};
 
     #[test]
     fn test_try_from() {
@@ -290,5 +323,56 @@ mod tests {
         assert!(!match_char_class(1.into(), 'a'));
         assert!(match_char_class(1.into(), 'b'));
         assert!(!match_char_class(1.into(), 'c'));
+    }
+
+    #[test]
+    fn test_generate_dot_files() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/string.json");
+        let file = fs::File::open(path).unwrap();
+
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)
+            .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
+
+        let scanner_impl: ScannerImpl = scanner_modes.clone().try_into().unwrap();
+        let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/string_dfas");
+
+        // Delete all previously generated dot files.
+        let _ = fs::remove_dir_all(target_folder);
+        // Create the target folder.
+        fs::create_dir_all(target_folder).unwrap();
+
+        // Generate the compiled DFAs as dot files.
+        scanner_impl
+            .generate_compiled_dfas_as_dot(&scanner_modes, target_folder)
+            .unwrap();
+
+        // Check if the dot files are generated.
+        let dot_files: Vec<_> = fs::read_dir(target_folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+
+        assert_eq!(dot_files.len(), 12);
+        assert_eq!(
+            dot_files
+                .iter()
+                .filter(|p| p.extension().unwrap() == "dot")
+                .count(),
+            12
+        );
+        assert_eq!(
+            dot_files
+                .iter()
+                .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("INITIAL"))
+                .count(),
+            7
+        );
+        assert_eq!(
+            dot_files
+                .iter()
+                .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("STRING"))
+                .count(),
+            5
+        );
     }
 }
