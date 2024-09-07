@@ -17,7 +17,7 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.3.1 - Not released yet
+## 0.3.1 - 2024-09-07
 
 - Add support for lots of unicode named classes like `XID_Start` and `XID_Continue` by the help of
 the `seshat-unicode` crate
