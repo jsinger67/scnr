@@ -1,5 +1,3 @@
-use std::{cell::RefCell, rc::Rc};
-
 use crate::{FindMatchesImpl, Match, ScannerImpl};
 
 /// The result of a peek operation.
@@ -31,7 +29,7 @@ pub struct FindMatches<'h> {
 
 impl<'h> FindMatches<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: Rc<RefCell<ScannerImpl>>, input: &'h str) -> Self {
+    pub(crate) fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
         Self {
             inner: FindMatchesImpl::new(scanner_impl, input),
         }

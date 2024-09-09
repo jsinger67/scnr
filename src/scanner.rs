@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, path::Path, rc::Rc};
+use std::{fmt::Debug, path::Path};
 
 use crate::{FindMatches, Result, ScannerImpl, ScannerMode};
 
@@ -16,7 +16,7 @@ use crate::{FindMatches, Result, ScannerImpl, ScannerMode};
 /// To create a scanner, you can use the `ScannerBuilder` to add scanner mode data.
 /// At least one scanner mode must be added to the scanner. This is usually the mode named `INITIAL`.
 pub struct Scanner {
-    pub(crate) inner: Rc<RefCell<ScannerImpl>>,
+    pub(crate) inner: ScannerImpl,
 }
 
 impl Scanner {
@@ -28,7 +28,7 @@ impl Scanner {
 
     /// Returns the current scanner mode.
     pub fn current_mode(&self) -> usize {
-        self.inner.borrow().current_mode()
+        self.inner.current_mode()
     }
 
     /// Sets the current scanner mode.
@@ -37,20 +37,20 @@ impl Scanner {
     /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
     /// in the active scanner mode.
     pub fn set_mode(&mut self, mode: usize) {
-        self.inner.borrow_mut().set_mode(mode);
+        self.inner.set_mode(mode);
     }
 
     /// Returns the name of the scanner mode with the given index.
     /// If the index is out of bounds, None is returned.
-    pub fn mode_name(&self, index: usize) -> Option<String> {
-        self.inner.borrow().mode_name(index).map(|s| s.to_owned())
+    pub fn mode_name(&self, index: usize) -> Option<&str> {
+        self.inner.mode_name(index)
     }
 
     /// Logs the compiled DFAs as a Graphviz DOT file with the help of the `log` crate.
     /// To enable debug output compliled DFA as dot file set the environment variable `RUST_LOG` to
     /// `scnr::internal::scanner_impl=debug`.
     pub fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
-        self.inner.borrow().log_compiled_dfas_as_dot(modes)
+        self.inner.log_compiled_dfas_as_dot(modes)
     }
 
     /// Generates the compiled DFAs as a Graphviz DOT files.
@@ -65,7 +65,6 @@ impl Scanner {
         T: AsRef<Path>,
     {
         self.inner
-            .borrow()
             .generate_compiled_dfas_as_dot(modes, target_folder)
     }
 }

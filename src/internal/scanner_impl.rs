@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::sync::Arc;
 
 use log::{debug, trace};
 
@@ -6,24 +6,25 @@ use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
 use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction};
 
+#[derive(Clone)]
 pub(crate) struct ScannerImpl {
     pub(crate) character_classes: CharacterClassRegistry,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     current_mode: usize,
     // The function used to match characters to character classes.
-    pub(crate) match_char_class: Box<dyn Fn(CharClassID, char) -> bool + 'static>,
+    pub(crate) match_char_class: Arc<dyn Fn(CharClassID, char) -> bool + 'static + Send + Sync>,
 }
 
 impl ScannerImpl {
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
-    pub(crate) fn find_iter(scanner: Rc<RefCell<Self>>, input: &str) -> FindMatches<'_> {
+    pub(crate) fn find_iter(scanner: Self, input: &str) -> FindMatches<'_> {
         FindMatches::new(scanner, input)
     }
 
     pub(crate) fn create_match_char_class(
         &self,
-    ) -> Result<Box<dyn Fn(CharClassID, char) -> bool + 'static>> {
+    ) -> Result<Box<dyn Fn(CharClassID, char) -> bool + 'static + Send + Sync>> {
         let match_functions =
             self.character_classes
                 .iter()
@@ -62,7 +63,9 @@ impl ScannerImpl {
                 //     c,
                 //     patterns[*dfa_index].1
                 // );
-                patterns[*dfa_index].0.advance(i, c, &self.match_char_class);
+                patterns[*dfa_index]
+                    .0
+                    .advance(i, c, &*self.match_char_class);
             }
 
             // trace!("Clear active DFAs");
@@ -111,7 +114,9 @@ impl ScannerImpl {
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
-                patterns[*dfa_index].0.advance(i, c, &self.match_char_class);
+                patterns[*dfa_index]
+                    .0
+                    .advance(i, c, &*self.match_char_class);
             }
 
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
@@ -276,9 +281,9 @@ impl TryFrom<Vec<ScannerMode>> for ScannerImpl {
             character_classes,
             scanner_modes,
             current_mode: 0,
-            match_char_class: Box::new(|_, _| false),
+            match_char_class: Arc::new(|_, _| false),
         };
-        me.match_char_class = Self::create_match_char_class(&me)?;
+        me.match_char_class = Arc::new(Self::create_match_char_class(&me)?);
         Ok(me)
     }
 }

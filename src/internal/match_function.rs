@@ -17,12 +17,12 @@ macro_rules! unsupported {
     };
 }
 
-pub(crate) struct MatchFn(Box<dyn Fn(char) -> bool + 'static>);
+pub(crate) struct MatchFn(Box<dyn Fn(char) -> bool + 'static + Send + Sync>);
 
 impl MatchFn {
     pub(crate) fn new<F>(f: F) -> Self
     where
-        F: Fn(char) -> bool + 'static,
+        F: Fn(char) -> bool + 'static + Send + Sync,
     {
         MatchFn(Box::new(f))
     }
@@ -42,7 +42,7 @@ impl MatchFunction {
     /// Create a new match function from a closure.
     pub(crate) fn new<F>(f: F) -> Self
     where
-        F: Fn(char) -> bool + 'static,
+        F: Fn(char) -> bool + 'static + Send + Sync,
     {
         MatchFunction {
             match_fn: MatchFn::new(f),
