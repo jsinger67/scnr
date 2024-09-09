@@ -196,6 +196,3 @@ slice. On token 2 it switches to mode INITIAL again. All other tokens are covere
 
 In this scenario you can imagine that the parser knows that token type 3 is **comment content** and
 can handle it accordingly.
-
-Furthermore, if you add **comment start** `/\\*` also to the scanner mode COMMENT the parser should
-be able to handle nested block comments, too.
