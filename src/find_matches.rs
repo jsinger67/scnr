@@ -1,4 +1,4 @@
-use crate::{FindMatchesImpl, Match, ScannerImpl};
+use crate::{FindMatchesImpl, Match, Position, PositionProvider, ScannerImpl};
 
 /// The result of a peek operation.
 #[derive(Debug, PartialEq)]
@@ -96,5 +96,16 @@ impl Iterator for FindMatches<'_> {
 
     fn next(&mut self) -> Option<Self::Item> {
         self.next_match()
+    }
+}
+
+impl PositionProvider for FindMatches<'_> {
+    /// Returns the line and column numbers of the given offset.
+    /// The line number is the index of the line offset in the vector plus one.
+    /// The column number is the offset minus the line offset.
+    /// If the offset is greater than the length of the haystack, the function returns the last
+    /// recorded line and the column number is calculated from the last recorded position.
+    fn position(&self, offset: usize) -> Position {
+        self.inner.position(offset)
     }
 }

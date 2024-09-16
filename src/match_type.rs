@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::Position;
+
 use super::Span;
 
 /// A match in the haystack.
@@ -57,5 +59,53 @@ impl Match {
     #[inline]
     pub fn token_type(&self) -> usize {
         self.token_type
+    }
+}
+
+/// A match with start and end positions.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+pub struct MatchExt {
+    /// The token type number associated with the match.
+    token_type: usize,
+    /// The underlying match span.
+    span: Span,
+    /// The position of the start of the match.
+    start_location: Position,
+    /// The position of the end of the match.
+    /// The end position is exclusive.
+    end_location: Position,
+}
+
+impl MatchExt {
+    pub(crate) fn new(
+        token_type: usize,
+        span: Span,
+        start_location: Position,
+        end_location: Position,
+    ) -> Self {
+        Self {
+            token_type,
+            span,
+            start_location,
+            end_location,
+        }
+    }
+
+    /// Get the start of the match.
+    #[inline]
+    pub fn start(&self) -> usize {
+        self.span.start
+    }
+
+    /// Get the end of the match.
+    #[inline]
+    pub fn end(&self) -> usize {
+        self.span.end
+    }
+
+    /// Get the span of the match.
+    #[inline]
+    pub fn span(&self) -> Span {
+        self.span
     }
 }

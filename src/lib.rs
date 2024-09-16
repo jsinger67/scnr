@@ -33,12 +33,20 @@ pub mod scanner;
 
 /// Module that provides a Match type
 mod match_type;
-pub use match_type::Match;
+pub use match_type::{Match, MatchExt};
 
 /// Module that provides a Span type
 mod span;
 pub use span::Span;
 
+/// Module that provides a position type
+mod position;
+pub use position::{Position, PositionProvider};
+
 /// Module that provides a FindMatches type
 mod find_matches;
 pub use find_matches::{FindMatches, PeekResult};
+
+/// Module that provides a WithPositions type
+mod with_positions;
+pub use with_positions::{MatchExtIterator, WithPositions};
