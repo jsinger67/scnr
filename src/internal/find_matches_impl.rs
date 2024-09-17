@@ -383,9 +383,8 @@ Id2
     #[test]
     fn test_with_positions() {
         let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
-        let find_iter = scanner.find_iter(INPUT);
-        let with_positions = find_iter.with_positions();
-        let matches: Vec<MatchExt> = with_positions.collect();
+        let find_iter = scanner.find_iter(INPUT).with_positions();
+        let matches: Vec<MatchExt> = find_iter.collect();
         assert_eq!(matches.len(), 9);
         assert_eq!(
             matches,
