@@ -17,6 +17,17 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
+## 0.3.3 - Not released yet
+
+- Provide an iterator adapter `WithPositions` to convert the iterator over type `Match` to an
+iterator over types `MatchExt` which contains line and column information for the start and end
+position of each match.
+```rust
+let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
+let find_iter = scanner.find_iter(INPUT).with_positions();
+let matches: Vec<MatchExt> = find_iter.collect();
+```
+
 ## 0.3.2 - 2024-09-09
 
 - Performance: `Scanner` no more holds `ScannerImpl` in a `Rc<RefCell<>>` to save time during
