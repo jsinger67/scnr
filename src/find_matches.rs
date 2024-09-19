@@ -1,4 +1,4 @@
-use crate::{FindMatchesImpl, Match, Position, PositionProvider, ScannerImpl};
+use crate::{ FindMatchesImpl, Match, Position, PositionProvider, ScannerImpl };
 
 /// The result of a peek operation.
 #[derive(Debug, PartialEq)]
@@ -88,6 +88,13 @@ impl<'h> FindMatches<'h> {
     /// at the following position.
     pub fn advance_to(&mut self, position: usize) -> usize {
         self.inner.advance_to(position)
+    }
+
+    /// Returns the current scanner mode. Used for tests and debugging purposes.
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn current_mode(&self) -> usize {
+        self.inner.current_mode()
     }
 }
 

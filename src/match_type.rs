@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{ Deserialize, Serialize };
 
 use crate::Position;
 
@@ -70,24 +70,24 @@ pub struct MatchExt {
     /// The underlying match span.
     span: Span,
     /// The position of the start of the match.
-    start_location: Position,
+    start_position: Position,
     /// The position of the end of the match.
     /// The end position is exclusive.
-    end_location: Position,
+    end_position: Position,
 }
 
 impl MatchExt {
     pub(crate) fn new(
         token_type: usize,
         span: Span,
-        start_location: Position,
-        end_location: Position,
+        start_position: Position,
+        end_position: Position
     ) -> Self {
         Self {
             token_type,
             span,
-            start_location,
-            end_location,
+            start_position,
+            end_position,
         }
     }
 
@@ -107,5 +107,41 @@ impl MatchExt {
     #[inline]
     pub fn span(&self) -> Span {
         self.span
+    }
+
+    /// Get the span as range
+    #[inline]
+    pub fn range(&self) -> std::ops::Range<usize> {
+        self.span.range()
+    }
+
+    /// Get the length of the match.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.span.len()
+    }
+
+    /// Check if the match is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.span.is_empty()
+    }
+
+    /// Get the token type of the match.
+    #[inline]
+    pub fn token_type(&self) -> usize {
+        self.token_type
+    }
+
+    /// Get the start position of the match.
+    #[inline]
+    pub fn start_position(&self) -> Position {
+        self.start_position
+    }
+
+    /// Get the end position of the match.
+    #[inline]
+    pub fn end_position(&self) -> Position {
+        self.end_position
     }
 }

@@ -1,4 +1,4 @@
-use crate::{scanner::Scanner, scanner_mode::ScannerMode, Result, ScannerImpl};
+use crate::{ scanner::Scanner, scanner_mode::ScannerMode, Result };
 
 /// A builder for creating a scanner.
 #[derive(Debug, Clone, Default)]
@@ -20,9 +20,7 @@ impl ScannerBuilder {
     /// Adding more scanner modes as well as transitions between scanner modes are not supported.
     /// Note that all previously added scanner modes will be ignored after calling this method.
     pub fn add_patterns<P, S>(self, patterns: P) -> SimpleScannerBuilder
-    where
-        P: IntoIterator<Item = S>,
-        S: AsRef<str>,
+        where P: IntoIterator<Item = S>, S: AsRef<str>
     {
         SimpleScannerBuilder::new(patterns)
     }
@@ -41,9 +39,7 @@ impl ScannerBuilder {
 
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Ok(Scanner {
-            inner: ScannerImpl::try_from(self.scanner_modes)?,
-        })
+        Scanner::try_new(self.scanner_modes)
     }
 }
 
@@ -60,11 +56,7 @@ pub struct SimpleScannerBuilder {
 
 impl SimpleScannerBuilder {
     /// Creates a new simple scanner builder.
-    fn new<P, S>(patterns: P) -> Self
-    where
-        P: IntoIterator<Item = S>,
-        S: AsRef<str>,
-    {
+    fn new<P, S>(patterns: P) -> Self where P: IntoIterator<Item = S>, S: AsRef<str> {
         let patterns = patterns
             .into_iter()
             .enumerate()
@@ -77,8 +69,7 @@ impl SimpleScannerBuilder {
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        let inner = ScannerImpl::try_from(vec![self.scanner_mode])?;
-        Ok(Scanner { inner })
+        Scanner::try_new(vec![self.scanner_mode])
     }
 }
 
@@ -107,20 +98,13 @@ mod tests {
         let scanner_mode = ScannerMode::new(
             "INITIAL",
             vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
-            vec![(1, 1), (3, 1)],
+            vec![(1, 1), (3, 1)]
         );
-        let scanner = ScannerBuilder::new()
-            .add_scanner_mode(scanner_mode)
-            .build()
-            .unwrap();
+        let scanner = ScannerBuilder::new().add_scanner_mode(scanner_mode).build().unwrap();
         assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
         let compiled_dfa = &scanner.inner.scanner_modes[0].patterns[1].0;
 
-        compiled_dfa_render_to!(
-            &compiled_dfa,
-            "LineComment",
-            scanner.inner.character_classes
-        );
+        compiled_dfa_render_to!(&compiled_dfa, "LineComment", scanner.inner.character_classes);
     }
 
     #[test]
@@ -130,22 +114,15 @@ mod tests {
             ScannerMode::new(
                 "INITIAL",
                 vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
-                vec![(1, 1), (3, 1)],
+                vec![(1, 1), (3, 1)]
             ),
-            ScannerMode::new("STRING", vec![(r#""[^"]*""#, 2)], vec![(2, 0)]),
+            ScannerMode::new("STRING", vec![(r#""[^"]*""#, 2)], vec![(2, 0)])
         ];
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&scanner_modes)
-            .build()
-            .unwrap();
+        let scanner = ScannerBuilder::new().add_scanner_modes(&scanner_modes).build().unwrap();
         assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
         let compiled_dfa = &scanner.inner.scanner_modes[0].patterns[1].0;
 
-        compiled_dfa_render_to!(
-            &compiled_dfa,
-            "LineComment",
-            scanner.inner.character_classes
-        );
+        compiled_dfa_render_to!(&compiled_dfa, "LineComment", scanner.inner.character_classes);
     }
 
     #[test]
@@ -166,15 +143,9 @@ mod tests {
         assert_eq!(matches.len(), 4);
         assert_eq!(matches[0].token_type(), 0);
         assert_eq!(matches[1].token_type(), 1);
-        assert_eq!(
-            &input[matches[1].span().range()].to_string().trim(),
-            &"// Line comment1"
-        );
+        assert_eq!(&input[matches[1].span().range()].to_string().trim(), &"// Line comment1");
         assert_eq!(matches[2].token_type(), 0);
         assert_eq!(matches[3].token_type(), 1);
-        assert_eq!(
-            &input[matches[3].span().range()].to_string().trim(),
-            &"// Line comment2"
-        );
+        assert_eq!(&input[matches[3].span().range()].to_string().trim(), &"// Line comment2");
     }
 }

@@ -27,6 +27,9 @@ let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
 let find_iter = scanner.find_iter(INPUT).with_positions();
 let matches: Vec<MatchExt> = find_iter.collect();
 ```
+- Fixed handling of current scanner mode. There was a bug that scanner mode switching from the
+outside had no effect on cloned `ScannerImpl` instances. This was fixed by using a shared mode
+field.
 
 ## 0.3.2 - 2024-09-09
 

@@ -191,6 +191,13 @@ impl<'h> FindMatchesImpl<'h> {
         }
         self.last_char = c;
     }
+
+    /// Returns the current scanner mode. Used for tests and debugging purposes.
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn current_mode(&self) -> usize {
+        self.scanner_impl.current_mode()
+    }
 }
 
 impl std::fmt::Debug for FindMatchesImpl<'_> {
