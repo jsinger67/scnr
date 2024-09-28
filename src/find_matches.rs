@@ -1,4 +1,6 @@
-use crate::{ FindMatchesImpl, Match, Position, PositionProvider, ScannerImpl };
+use log::trace;
+
+use crate::{FindMatchesImpl, Match, Position, PositionProvider, ScannerImpl, ScannerModeSwitcher};
 
 /// The result of a peek operation.
 #[derive(Debug, PartialEq)]
@@ -89,13 +91,6 @@ impl<'h> FindMatches<'h> {
     pub fn advance_to(&mut self, position: usize) -> usize {
         self.inner.advance_to(position)
     }
-
-    /// Returns the current scanner mode. Used for tests and debugging purposes.
-    #[allow(dead_code)]
-    #[inline]
-    pub(crate) fn current_mode(&self) -> usize {
-        self.inner.current_mode()
-    }
 }
 
 impl Iterator for FindMatches<'_> {
@@ -114,5 +109,28 @@ impl PositionProvider for FindMatches<'_> {
     /// recorded line and the column number is calculated from the last recorded position.
     fn position(&self, offset: usize) -> Position {
         self.inner.position(offset)
+    }
+}
+
+impl ScannerModeSwitcher for FindMatches<'_> {
+    /// Sets the current scanner mode of the scanner implementation.
+    ///
+    /// A parser can explicitly set the scanner mode to switch to a different set of DFAs.
+    /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
+    /// in the active scanner mode.
+    fn set_mode(&mut self, mode: usize) {
+        trace!("Set scanner mode to {}", mode);
+        self.inner.set_mode(mode);
+    }
+
+    /// Returns the current scanner mode. Used for tests and debugging purposes.
+    #[allow(dead_code)]
+    #[inline]
+    fn current_mode(&self) -> usize {
+        self.inner.current_mode()
+    }
+
+    fn mode_name(&self, index: usize) -> Option<&str> {
+        self.inner.mode_name(index)
     }
 }

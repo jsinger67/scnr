@@ -30,6 +30,7 @@ pub use scanner_mode::ScannerMode;
 
 /// The module with the scanner.
 pub mod scanner;
+pub use scanner::{Scanner, ScannerModeSwitcher};
 
 /// Module that provides a Match type
 mod match_type;

@@ -1,5 +1,5 @@
 use super::ScannerImpl;
-use crate::{ Match, PeekResult, Position };
+use crate::{Match, PeekResult, Position};
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
@@ -176,11 +176,10 @@ impl<'h> FindMatchesImpl<'h> {
     pub(crate) fn position(&self, offset: usize) -> Position {
         match self.line_offsets.binary_search_by(|&x| x.cmp(&offset)) {
             Ok(i) => Position::new(i + 1, offset.saturating_sub(self.line_offsets[i]) + 1),
-            Err(_) =>
-                Position::new(
-                    self.line_offsets.len() - 1 + 1,
-                    offset.saturating_sub(*self.line_offsets.last().unwrap()) + 1
-                ),
+            Err(_) => Position::new(
+                self.line_offsets.len() - 1 + 1,
+                offset.saturating_sub(*self.line_offsets.last().unwrap()) + 1,
+            ),
         }
     }
 
@@ -197,6 +196,14 @@ impl<'h> FindMatchesImpl<'h> {
     #[inline]
     pub(crate) fn current_mode(&self) -> usize {
         self.scanner_impl.current_mode()
+    }
+
+    pub(crate) fn set_mode(&mut self, mode: usize) {
+        self.scanner_impl.set_mode(mode);
+    }
+
+    pub(crate) fn mode_name(&self, index: usize) -> Option<&str> {
+        self.scanner_impl.mode_name(index)
     }
 }
 
@@ -219,37 +226,37 @@ mod tests {
     use std::sync::LazyLock;
 
     use super::*;
-    use crate::{ MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode };
+    use crate::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
 
     static MODES: LazyLock<[ScannerMode; 2]> = LazyLock::new(|| {
         [
             ScannerMode::new(
                 "INITIAL",
                 vec![
-                    (r"\r\n|\r|\n", 0), // Newline
-                    (r"[\s--\r\n]+", 1), // Whitespace
-                    (r"//.*(\r\n|\r|\n)", 2), // Line comment
+                    (r"\r\n|\r|\n", 0),                 // Newline
+                    (r"[\s--\r\n]+", 1),                // Whitespace
+                    (r"//.*(\r\n|\r|\n)", 2),           // Line comment
                     (r"/\*([.\r\n--*]|\*[^/])*\*/", 3), // Block comment
-                    (r"[a-zA-Z_]\w*", 4), // Identifier
-                    (r"\u{22}", 8), // String delimiter
-                    (r".", 9) // Error
+                    (r"[a-zA-Z_]\w*", 4),               // Identifier
+                    (r"\u{22}", 8),                     // String delimiter
+                    (r".", 9),                          // Error
                 ],
                 vec![
-                    (8, 1) // Token "String delimiter" -> Mode "STRING"
-                ]
+                    (8, 1), // Token "String delimiter" -> Mode "STRING"
+                ],
             ),
             ScannerMode::new(
                 "STRING",
                 vec![
                     (r"\u{5c}[\u{22}\u{5c}bfnt]", 5), // Escape sequence
-                    (r"\u{5c}[\s^\n\r]*\r?\n", 6), // Line continuation
-                    (r"[^\u{22}\u{5c}]+", 7), // String content
-                    (r"\u{22}", 8), // String delimiter
-                    (r".", 9) // Error
+                    (r"\u{5c}[\s^\n\r]*\r?\n", 6),    // Line continuation
+                    (r"[^\u{22}\u{5c}]+", 7),         // String content
+                    (r"\u{22}", 8),                   // String delimiter
+                    (r".", 9),                        // Error
                 ],
                 vec![
-                    (8, 0) // Token "String delimiter" -> Mode "INITIAL"
-                ]
+                    (8, 0), // Token "String delimiter" -> Mode "INITIAL"
+                ],
             ),
         ]
     });
@@ -265,7 +272,10 @@ Id2
     #[test]
     fn test_find_matches_impl() {
         println!("{}", serde_json::to_string(&*MODES).unwrap());
-        let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
 
         let find_matches = scanner.find_iter(INPUT);
         let matches: Vec<Match> = find_matches.collect();
@@ -292,20 +302,34 @@ Id2
                     INPUT.get(rng).unwrap()
                 })
                 .collect::<Vec<_>>(),
-            vec!["\n", "Id1", "\n", "\"", "1. String", "\"", "\n", "Id2", "\n"]
+            vec![
+                "\n",
+                "Id1",
+                "\n",
+                "\"",
+                "1. String",
+                "\"",
+                "\n",
+                "Id2",
+                "\n"
+            ]
         );
     }
 
     #[test]
     fn test_peek_n() {
-        let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
         let mut find_iter = scanner.find_iter(INPUT);
         let peeked = find_iter.peek_n(2);
         assert_eq!(
             peeked,
-            PeekResult::Matches(
-                vec![Match::new(0, (0usize..1).into()), Match::new(4, (1usize..4).into())]
-            )
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
         );
         let peeked = find_iter.peek_n(4);
         assert_eq!(
@@ -337,42 +361,52 @@ Id2
         let peeked = find_iter.peek_n(4);
         assert_eq!(
             peeked,
-            PeekResult::MatchesReachedEnd(
-                vec![Match::new(4, (17usize..20).into()), Match::new(0, (20usize..21).into())]
-            )
+            PeekResult::MatchesReachedEnd(vec![
+                Match::new(4, (17usize..20).into()),
+                Match::new(0, (20usize..21).into())
+            ])
         );
     }
 
     #[test]
     fn test_peek_does_not_effect_the_iterator() {
-        let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
         let mut find_iter = scanner.find_iter(INPUT);
         let peeked = find_iter.peek_n(2);
         assert_eq!(
             peeked,
-            PeekResult::Matches(
-                vec![Match::new(0, (0usize..1).into()), Match::new(4, (1usize..4).into())]
-            )
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
         );
         let peeked = find_iter.peek_n(2);
         assert_eq!(
             peeked,
-            PeekResult::Matches(
-                vec![Match::new(0, (0usize..1).into()), Match::new(4, (1usize..4).into())]
-            )
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
         );
     }
 
     #[test]
     fn test_advance_to() {
-        let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
         let mut find_iter = scanner.find_iter(INPUT);
         let peeked = find_iter.peek_n(2);
         assert_eq!(
             peeked,
-            PeekResult::Matches(
-                vec![Match::new(0, (0usize..1).into()), Match::new(4, (1usize..4).into())]
-            )
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
         );
         let new_position = find_iter.advance_to(4);
         assert_eq!(new_position, 3);
@@ -380,7 +414,10 @@ Id2
         assert_eq!(
             peeked,
             PeekResult::MatchesReachedModeSwitch((
-                vec![Match::new(0, (4usize..5).into()), Match::new(8, (5usize..6).into())],
+                vec![
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into())
+                ],
                 1,
             ))
         );
@@ -389,22 +426,70 @@ Id2
     // Test the WithPositions iterator.
     #[test]
     fn test_with_positions() {
-        let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
         let find_iter = scanner.find_iter(INPUT).with_positions();
         let matches: Vec<MatchExt> = find_iter.collect();
         assert_eq!(matches.len(), 9);
         assert_eq!(
             matches,
             vec![
-                MatchExt::new(0, (0usize..1).into(), Position::new(1, 1), Position::new(1, 2)),
-                MatchExt::new(4, (1usize..4).into(), Position::new(2, 1), Position::new(2, 4)),
-                MatchExt::new(0, (4usize..5).into(), Position::new(2, 4), Position::new(2, 5)),
-                MatchExt::new(8, (5usize..6).into(), Position::new(3, 1), Position::new(3, 2)),
-                MatchExt::new(7, (6usize..15).into(), Position::new(3, 2), Position::new(3, 11)),
-                MatchExt::new(8, (15usize..16).into(), Position::new(3, 11), Position::new(3, 12)),
-                MatchExt::new(0, (16usize..17).into(), Position::new(3, 12), Position::new(3, 13)),
-                MatchExt::new(4, (17usize..20).into(), Position::new(4, 1), Position::new(4, 4)),
-                MatchExt::new(0, (20usize..21).into(), Position::new(4, 4), Position::new(4, 5))
+                MatchExt::new(
+                    0,
+                    (0usize..1).into(),
+                    Position::new(1, 1),
+                    Position::new(1, 2)
+                ),
+                MatchExt::new(
+                    4,
+                    (1usize..4).into(),
+                    Position::new(2, 1),
+                    Position::new(2, 4)
+                ),
+                MatchExt::new(
+                    0,
+                    (4usize..5).into(),
+                    Position::new(2, 4),
+                    Position::new(2, 5)
+                ),
+                MatchExt::new(
+                    8,
+                    (5usize..6).into(),
+                    Position::new(3, 1),
+                    Position::new(3, 2)
+                ),
+                MatchExt::new(
+                    7,
+                    (6usize..15).into(),
+                    Position::new(3, 2),
+                    Position::new(3, 11)
+                ),
+                MatchExt::new(
+                    8,
+                    (15usize..16).into(),
+                    Position::new(3, 11),
+                    Position::new(3, 12)
+                ),
+                MatchExt::new(
+                    0,
+                    (16usize..17).into(),
+                    Position::new(3, 12),
+                    Position::new(3, 13)
+                ),
+                MatchExt::new(
+                    4,
+                    (17usize..20).into(),
+                    Position::new(4, 1),
+                    Position::new(4, 4)
+                ),
+                MatchExt::new(
+                    0,
+                    (20usize..21).into(),
+                    Position::new(4, 4),
+                    Position::new(4, 5)
+                )
             ]
         );
         assert_eq!(
@@ -415,7 +500,17 @@ Id2
                     INPUT.get(rng).unwrap()
                 })
                 .collect::<Vec<_>>(),
-            vec!["\n", "Id1", "\n", "\"", "1. String", "\"", "\n", "Id2", "\n"]
+            vec![
+                "\n",
+                "Id1",
+                "\n",
+                "\"",
+                "1. String",
+                "\"",
+                "\n",
+                "Id2",
+                "\n"
+            ]
         );
     }
 }

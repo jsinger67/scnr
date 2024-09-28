@@ -1,4 +1,4 @@
-use crate::{ Match, MatchExt, PositionProvider };
+use crate::{scanner::ScannerModeSwitcher, Match, MatchExt, PositionProvider};
 
 /// An iterator over all non-overlapping matches with positions.
 #[derive(Debug)]
@@ -6,14 +6,20 @@ pub struct WithPositions<I> {
     iter: I,
 }
 
-impl<I> WithPositions<I> where I: Iterator<Item = Match> + PositionProvider + Sized {
+impl<I> WithPositions<I>
+where
+    I: Iterator<Item = Match> + PositionProvider + Sized,
+{
     /// Create a new `WithPositions` iterator.
     pub(crate) fn new(iter: I) -> Self {
         Self { iter }
     }
 }
 
-impl<I> Iterator for WithPositions<I> where I: Iterator<Item = Match> + PositionProvider + Sized {
+impl<I> Iterator for WithPositions<I>
+where
+    I: Iterator<Item = Match> + PositionProvider + Sized,
+{
     type Item = MatchExt;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -22,6 +28,23 @@ impl<I> Iterator for WithPositions<I> where I: Iterator<Item = Match> + Position
             let end_position = self.iter.position(m.end());
             MatchExt::new(m.token_type(), m.span(), start_positon, end_position)
         })
+    }
+}
+
+impl<I> ScannerModeSwitcher for WithPositions<I>
+where
+    I: ScannerModeSwitcher,
+{
+    fn set_mode(&mut self, mode: usize) {
+        self.iter.set_mode(mode);
+    }
+
+    fn current_mode(&self) -> usize {
+        self.iter.current_mode()
+    }
+
+    fn mode_name(&self, index: usize) -> Option<&str> {
+        self.iter.mode_name(index)
     }
 }
 

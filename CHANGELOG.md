@@ -28,8 +28,11 @@ let find_iter = scanner.find_iter(INPUT).with_positions();
 let matches: Vec<MatchExt> = find_iter.collect();
 ```
 - Fixed handling of current scanner mode. There was a bug that scanner mode switching from the
-outside had no effect on cloned `ScannerImpl` instances. This was fixed by using a shared mode
-field.
+outside had no effect on cloned `ScannerImpl` instances. This was fixed by removing the mode from
+the `Scanner` and leaving is only on the `ScannerImpl`.
+
+- We also allow now to set the scanner mode on a `FindMatches` and even on a `WithPositions` by
+implementing the new trait `ScannerModeSwitcher` for both of them
 
 ## 0.3.2 - 2024-09-09
 

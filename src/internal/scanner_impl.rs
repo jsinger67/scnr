@@ -1,10 +1,10 @@
-use std::sync::{ Arc, Mutex };
+use std::sync::Arc;
 
-use log::{ debug, trace };
+use log::{debug, trace};
 
-use crate::{ FindMatches, Match, Result, ScannerMode, ScnrError };
+use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
-use super::{ CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction };
+use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction};
 
 #[derive(Clone)]
 pub(crate) struct ScannerImpl {
@@ -17,7 +17,7 @@ pub(crate) struct ScannerImpl {
     // ScannerImpl instances are always created by the Scanner::try_new method and of course by
     // the clone method. So the current mode is always shared between all ScannerImpl instances of
     // the same Scanner instance.
-    current_mode: Arc<Mutex<usize>>,
+    current_mode: usize,
 }
 
 impl ScannerImpl {
@@ -30,30 +30,31 @@ impl ScannerImpl {
     }
 
     pub(crate) fn create_match_char_class(
-        &self
+        &self,
     ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
-        let match_functions = self.character_classes.iter().try_fold(Vec::new(), |mut acc, cc| {
-            trace!("Create match function for char class {:?}", cc);
-            let match_function: MatchFunction = cc.ast().try_into()?;
-            acc.push(match_function);
-            Ok::<Vec<MatchFunction>, ScnrError>(acc)
-        })?;
-        Ok(
-            Box::new(move |char_class, c| {
-                let res = match_functions[char_class.as_usize()].call(c);
-                if res {
-                    trace!("Match char class: {:?} {:?} -> {:?}", char_class, c, res);
-                }
-                res
-            })
-        )
+        let match_functions =
+            self.character_classes
+                .iter()
+                .try_fold(Vec::new(), |mut acc, cc| {
+                    trace!("Create match function for char class {:?}", cc);
+                    let match_function: MatchFunction = cc.ast().try_into()?;
+                    acc.push(match_function);
+                    Ok::<Vec<MatchFunction>, ScnrError>(acc)
+                })?;
+        Ok(Box::new(move |char_class, c| {
+            let res = match_functions[char_class.as_usize()].call(c);
+            if res {
+                trace!("Match char class: {:?} {:?} -> {:?}", char_class, c, res);
+            }
+            res
+        }))
     }
 
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all DFAs are advanced in parallel by one character at a time.
     pub(crate) fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let patterns = &mut self.scanner_modes[*self.current_mode.lock().unwrap()].patterns;
+        let patterns = &mut self.scanner_modes[self.current_mode].patterns;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
         }
@@ -66,11 +67,13 @@ impl ScannerImpl {
                 trace!(
                     "Advance DFA #{} of mode {} with char {:?} and token type {}",
                     dfa_index,
-                    *self.current_mode.lock().unwrap(),
+                    self.current_mode,
                     c,
                     patterns[*dfa_index].1
                 );
-                patterns[*dfa_index].0.advance(i, c, &*self.match_char_class);
+                patterns[*dfa_index]
+                    .0
+                    .advance(i, c, &*self.match_char_class);
             }
 
             // trace!("Clear active DFAs");
@@ -109,7 +112,7 @@ impl ScannerImpl {
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
     pub(crate) fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let patterns = &mut self.scanner_modes[*self.current_mode.lock().unwrap()].patterns;
+        let patterns = &mut self.scanner_modes[self.current_mode].patterns;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
         }
@@ -119,7 +122,9 @@ impl ScannerImpl {
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
-                patterns[*dfa_index].0.advance(i, c, &*self.match_char_class);
+                patterns[*dfa_index]
+                    .0
+                    .advance(i, c, &*self.match_char_class);
             }
 
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
@@ -140,14 +145,13 @@ impl ScannerImpl {
     fn find_first_longest_match(&mut self) -> Option<Match> {
         let mut current_match: Option<Match> = None;
         {
-            let patterns = &self.scanner_modes[*self.current_mode.lock().unwrap()].patterns;
+            let patterns = &self.scanner_modes[self.current_mode].patterns;
             for (dfa, tok_type) in patterns.iter() {
                 if let Some(dfa_match) = dfa.current_match() {
-                    if
-                        current_match.is_none() ||
-                        dfa_match.start < current_match.unwrap().start() ||
-                        (dfa_match.start == current_match.unwrap().start() &&
-                            dfa_match.len() > current_match.unwrap().span().len())
+                    if current_match.is_none()
+                        || dfa_match.start < current_match.unwrap().start()
+                        || (dfa_match.start == current_match.unwrap().start()
+                            && dfa_match.len() > current_match.unwrap().span().len())
                     {
                         // We have a match and we continue the look for a longer match.
                         current_match = Some(Match::new(tok_type.as_usize(), dfa_match));
@@ -161,17 +165,17 @@ impl ScannerImpl {
     /// Executes a possible mode switch if a transition is defined for the token type found.
     #[inline]
     fn execute_possible_mode_switch(&mut self, current_match: &Match) {
-        let current_mode = &self.scanner_modes[*self.current_mode.lock().unwrap()];
+        let current_mode = &self.scanner_modes[self.current_mode];
         // We perform a scanner mode switch if a transition is defined for the token type found.
         if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
-            *self.current_mode.lock().unwrap() = next_mode;
+            self.current_mode = next_mode;
         }
     }
 
     /// Returns the number of the next scanner mode if a transition is defined for the token type.
     /// If no transition is defined, None returned.
     pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
-        self.scanner_modes[*self.current_mode.lock().unwrap()].has_transition(token_type)
+        self.scanner_modes[self.current_mode].has_transition(token_type)
     }
 
     /// Returns the name of the scanner mode with the given index.
@@ -184,7 +188,7 @@ impl ScannerImpl {
     #[allow(dead_code)]
     #[inline]
     pub(crate) fn current_mode(&self) -> usize {
-        *self.current_mode.lock().unwrap()
+        self.current_mode
     }
 
     /// Traces the compiled DFAs as dot format.
@@ -205,7 +209,7 @@ impl ScannerImpl {
                         dfa,
                         &title,
                         &self.character_classes,
-                        &mut cursor
+                        &mut cursor,
                     );
                     let mut dot_format = String::new();
                     cursor.set_position(0);
@@ -223,9 +227,10 @@ impl ScannerImpl {
     pub(crate) fn generate_compiled_dfas_as_dot<T>(
         &self,
         modes: &[ScannerMode],
-        target_folder: T
+        target_folder: T,
     ) -> Result<()>
-        where T: AsRef<std::path::Path>
+    where
+        T: AsRef<std::path::Path>,
     {
         use std::fs::File;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
@@ -252,11 +257,11 @@ impl ScannerImpl {
     /// Resets the scanner to the initial state.
     #[inline]
     pub(crate) fn reset(&mut self) {
-        *self.current_mode.lock().unwrap() = 0;
+        self.current_mode = 0;
     }
 
-    pub(crate) fn common_mode(&mut self, current_mode: Arc<Mutex<usize>>) {
-        self.current_mode = current_mode;
+    pub(crate) fn set_mode(&mut self, mode: usize) {
+        self.current_mode = mode;
     }
 }
 
@@ -264,17 +269,21 @@ impl TryFrom<Vec<ScannerMode>> for ScannerImpl {
     type Error = crate::ScnrError;
     fn try_from(scanner_modes: Vec<ScannerMode>) -> Result<Self> {
         let mut character_classes = CharacterClassRegistry::new();
-        let scanner_modes = scanner_modes.into_iter().try_fold(Vec::new(), |mut acc, scanner_mode| {
-            acc.push(
-                CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_classes)?
-            );
-            Ok::<Vec<CompiledScannerMode>, ScnrError>(acc)
-        })?;
+        let scanner_modes =
+            scanner_modes
+                .into_iter()
+                .try_fold(Vec::new(), |mut acc, scanner_mode| {
+                    acc.push(CompiledScannerMode::try_from_scanner_mode(
+                        scanner_mode,
+                        &mut character_classes,
+                    )?);
+                    Ok::<Vec<CompiledScannerMode>, ScnrError>(acc)
+                })?;
 
         let mut me = Self {
             character_classes,
             scanner_modes,
-            current_mode: Arc::new(Mutex::new(0)),
+            current_mode: 0,
             match_char_class: Arc::new(|_, _| false),
         };
         me.match_char_class = Arc::new(Self::create_match_char_class(&me)?);
@@ -295,13 +304,13 @@ impl std::fmt::Debug for ScannerImpl {
 mod tests {
     use super::*;
     use crate::ScannerMode;
-    use std::{ convert::TryInto, fs };
+    use std::{convert::TryInto, fs};
 
     #[test]
     fn test_try_from() {
         let scanner_modes = vec![
             ScannerMode::new("mode1", vec![("a".to_string(), 0)], vec![]),
-            ScannerMode::new("mode2", vec![("b".to_string(), 1)], vec![])
+            ScannerMode::new("mode2", vec![("b".to_string(), 1)], vec![]),
         ];
         let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         assert_eq!(scanner_impl.character_classes.len(), 2);
@@ -312,7 +321,7 @@ mod tests {
     fn test_match_char_class() {
         let scanner_modes = vec![
             ScannerMode::new("mode1", vec![("a".to_string(), 0)], vec![]),
-            ScannerMode::new("mode2", vec![("b".to_string(), 1)], vec![])
+            ScannerMode::new("mode2", vec![("b".to_string(), 1)], vec![]),
         ];
         let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         let match_char_class = scanner_impl.create_match_char_class().unwrap();
@@ -329,8 +338,7 @@ mod tests {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/string.json");
         let file = fs::File::open(path).unwrap();
 
-        let scanner_modes: Vec<ScannerMode> = serde_json
-            ::from_reader(file)
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)
             .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
 
         let scanner_impl: ScannerImpl = scanner_modes.clone().try_into().unwrap();
@@ -342,11 +350,12 @@ mod tests {
         fs::create_dir_all(target_folder).unwrap();
 
         // Generate the compiled DFAs as dot files.
-        scanner_impl.generate_compiled_dfas_as_dot(&scanner_modes, target_folder).unwrap();
+        scanner_impl
+            .generate_compiled_dfas_as_dot(&scanner_modes, target_folder)
+            .unwrap();
 
         // Check if the dot files are generated.
-        let dot_files: Vec<_> = fs
-            ::read_dir(target_folder)
+        let dot_files: Vec<_> = fs::read_dir(target_folder)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect();
