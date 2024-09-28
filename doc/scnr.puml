@@ -1,0 +1,211 @@
+@startuml
+
+title Scnr version 0.3.3
+
+struct ScnrError {
+}
+
+enum ScnrErrorKind {
+    RegexSyntaxError
+    IoError
+    UnsupportedFeature
+    DfaError
+
+}
+
+interface PositionProvider<<trait>> {
+    + position(&self) -> Position
+}
+
+struct FindMatches {
+    + with_offset(self, offset: usize) -> FindMatches
+    + offset(&self) -> usize
+    + next_match(&mut self) -> Option<Match>
+    + peek_n(&mut self, n: usize) -> PeekResult
+    + advance_to(&mut self, position: usize) -> usize
+}
+
+enum PeekResult {
+    {field} Matches(Vec<Match>)
+    {field} MatchesReachedEnd(Vec<Match>)
+    {field} MatchesReachedModeSwitch((Vec<Match>, usize))
+    NotFound
+}
+
+struct Match {
+    - token_type: usize
+}
+
+struct MatchExt {
+    - token_type: usize
+    - start_position: Position
+    - end_position: Position
+}
+
+struct Position {
+    + line: usize
+    + column: usize
+}
+
+struct Span {
+    + start: usize
+    + end: usize
+}
+
+struct ScannerMode {
+    ~ name: str
+    {field} ~ patterns: Vec<(String, TerminalID)>
+    {field} ~ transitions: Vec<(TerminalID, ScannerModeID)>
+    name() -> str
+}
+
+struct ScannerBuilder {
+    build() -> Result<Scanner>
+}
+
+interface ScannerModeSwitcher<<trait>> {
+    + set_mode(&mut self, mode: usize);
+    + current_mode(&self) -> usize;
+    + mode_name(&self, index: usize) -> Option<&str>
+}
+
+struct Scanner {
+    find_iter(input: &str) -> FindMatches
+    set_mode(mode: usize)
+    current_mode() -> usize
+    mode_name(index: usize) -> Option<&str>
+}
+
+struct WithPositions<I> {
+    iter: I
+    next() -> Option<MatchExt>
+}
+
+interface MatchIteratorExt<<trait>> {
+    with_positions() -> WithPositions<Self>
+}
+
+package internal {
+    struct FindMatchesImpl {
+        - char_indices: CharIndices
+        - last_position: usize
+        - last_char: char
+        - line_offsets: Vec<usize>
+
+        ~ position(&self, offset: usize) -> Position
+        ~ with_offset(self, offset: usize) -> FindMatchesImpl
+        ~ offset(&self) -> usize
+        ~ next_match(&mut self) -> Option<Match>
+        ~ peek_n(&mut self, n: usize) -> PeekResult
+        ~ advance_to(&mut self, position: usize) -> usize
+        ~ current_mode(&self) -> usize
+
+        - advance_beyond_match(&mut self, matched: &Match)
+        - advance_char_indices_beyond_match(char_indices: &mut CharIndices, matched: Match)
+
+    }
+    struct ScannerImpl {
+        - current_mode: Arc<Mutex<usize>>
+        ~ match_char_class(char_class_id: CharClassID, c: char) -> bool
+        ~ mode_name(&self, index: usize) -> Option<&str>
+    }
+    struct CharacterClassRegistry {
+    }
+    struct CharacterClass {
+        id: CharClassID
+    }
+    struct ComparableAst {
+    }
+    struct CompiledScannerMode {
+        ~ name: String
+        ~ patterns: Vec<(Regex, TerminalID)>
+        ~ transitions: Vec<(TerminalID, ScannerModeID)>
+    }
+    struct CompiledDfa {
+        - accepting_states: Vec<StateID>
+        {field} - state_ranges: Vec<(usize, usize)>
+        transitions: Vec<(CharClassID, StateID)>
+    }
+    struct MatchingState<S> {
+        current_state: S
+        start_position: Option<usize>
+        end_position: Option<usize>
+    }
+    enum InnerMatchingState {
+        None
+        Start
+        Accepting
+        Longest
+    }
+    struct DfaState {
+        id: StateID
+        nfa_states: Vec<StateID>
+        marked: bool
+    }
+    struct Dfa {
+        ~ pattern: String
+        ~ accepting_states: BTreeSet<StateID>
+        ~ transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>
+    }
+
+    FindMatchesImpl *--> ScannerImpl: - scanner_impl
+
+    ScannerImpl *--> CharacterClassRegistry: ~ character_classes
+    ScannerImpl *--> "*" CompiledScannerMode: ~ scanner_modes
+
+    CharacterClassRegistry *--> "*" CharacterClass: - character_classes
+
+    CharacterClass *--> ComparableAst: ~ ast
+
+    ComparableAst *--> Ast: ~ ast
+
+    CompiledScannerMode *--> MatchingState: - matching_state
+
+    MatchingState *--> InnerMatchingState: - state
+
+    Dfa *--> "*" DfaState: ~ states
+}
+
+
+ScnrError *--> ScnrErrorKind: + source
+
+FindMatches *--> internal.FindMatchesImpl: - inner
+FindMatches --|> PositionProvider: implements
+FindMatches -|> ScannerModeSwitcher: implements
+
+Match *--> Span: - span
+
+MatchExt *--> Span: - span
+
+ScannerBuilder ..> Scanner: create
+ScannerBuilder *--> "1*" ScannerMode: - scanner_modes
+
+Scanner *--> internal.ScannerImpl: - inner
+Scanner -|> ScannerModeSwitcher: implements
+Scanner ..> FindMatches: create
+
+WithPositions "for I: ScannerModeSwitcher" --|> ScannerModeSwitcher: implements
+
+note top of FindMatches
+    An iterator over all non-overlapping matches.
+    The iterator yields a `Match` value until no
+    more matches could be found. This iterator can
+    be created with the `Scanner::find_iter` method.
+    It's scanner mode can be changed by the scanner
+    which created it, because it shares the current
+    mode with the scanner.
+end note
+
+note top of WithPositions
+    An iterator over all non-overlapping
+    matches with positions.
+end note
+
+note top of MatchIteratorExt
+    An extension trait for all types that implement
+    Iterator<Item = Match> + PositionProvider + Sized
+    In this crate this trait is implemented for
+    `FindMatches` to provide the `with_positions` method.
+end note
+
+@enduml
