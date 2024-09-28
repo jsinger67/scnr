@@ -166,7 +166,7 @@ mod tests {
             .build()
             .unwrap();
         assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
-        let compiled_dfa = &scanner.inner.scanner_modes[0].patterns[1].0;
+        let compiled_dfa = &scanner.inner.scanner_modes[0].dfas[1].0;
 
         compiled_dfa_render_to!(
             &compiled_dfa,

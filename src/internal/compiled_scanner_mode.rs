@@ -19,7 +19,7 @@ pub(crate) struct CompiledScannerMode {
     /// type numbers.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
-    pub(crate) patterns: Vec<(CompiledDfa, TerminalID)>,
+    pub(crate) dfas: Vec<(CompiledDfa, TerminalID)>,
     pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
 }
 
@@ -61,7 +61,7 @@ impl CompiledScannerMode {
         )?;
         Ok(Self {
             name,
-            patterns,
+            dfas: patterns,
             transitions,
         })
     }
@@ -115,7 +115,7 @@ mod tests {
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)
                 .unwrap();
         assert_eq!(compiled_scanner_mode.name, "test");
-        assert_eq!(compiled_scanner_mode.patterns.len(), 1);
+        assert_eq!(compiled_scanner_mode.dfas.len(), 1);
         assert_eq!(compiled_scanner_mode.transitions.len(), 1);
     }
 

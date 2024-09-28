@@ -118,7 +118,7 @@ package internal {
     }
     struct CompiledScannerMode {
         ~ name: String
-        ~ patterns: Vec<(Regex, TerminalID)>
+        ~ dfas: Vec<(CompiledDfa, TerminalID)>
         ~ transitions: Vec<(TerminalID, ScannerModeID)>
     }
     struct CompiledDfa {

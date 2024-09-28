@@ -54,7 +54,7 @@ impl ScannerImpl {
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all DFAs are advanced in parallel by one character at a time.
     pub(crate) fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].patterns;
+        let patterns = &mut self.scanner_modes[self.current_mode].dfas;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
         }
@@ -112,23 +112,21 @@ impl ScannerImpl {
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
     pub(crate) fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].patterns;
-        for (dfa, _) in patterns.iter_mut() {
+        let dfas = &mut self.scanner_modes[self.current_mode].dfas;
+        for (dfa, _) in dfas.iter_mut() {
             dfa.reset();
         }
 
         // All indices of the DFAs that are still active.
-        let mut active_dfas = (0..patterns.len()).collect::<Vec<_>>();
+        let mut active_dfas = (0..dfas.len()).collect::<Vec<_>>();
 
         for (i, c) in char_indices {
             for dfa_index in &active_dfas {
-                patterns[*dfa_index]
-                    .0
-                    .advance(i, c, &*self.match_char_class);
+                dfas[*dfa_index].0.advance(i, c, &*self.match_char_class);
             }
 
             // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
-            active_dfas.retain(|&dfa_index| patterns[dfa_index].0.search_for_longer_match());
+            active_dfas.retain(|&dfa_index| dfas[dfa_index].0.search_for_longer_match());
 
             // If all DFAs have finished, we can stop the search.
             if active_dfas.is_empty() {
@@ -145,7 +143,7 @@ impl ScannerImpl {
     fn find_first_longest_match(&mut self) -> Option<Match> {
         let mut current_match: Option<Match> = None;
         {
-            let patterns = &self.scanner_modes[self.current_mode].patterns;
+            let patterns = &self.scanner_modes[self.current_mode].dfas;
             for (dfa, tok_type) in patterns.iter() {
                 if let Some(dfa_match) = dfa.current_match() {
                     if current_match.is_none()
@@ -197,7 +195,7 @@ impl ScannerImpl {
     pub(crate) fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, (dfa, t)) in scanner_mode.patterns.iter().enumerate() {
+            for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
                 debug!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
                     let mut cursor = std::io::Cursor::new(Vec::new());
                     let title = format!(
@@ -234,7 +232,7 @@ impl ScannerImpl {
     {
         use std::fs::File;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, (dfa, t)) in scanner_mode.patterns.iter().enumerate() {
+            for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
                 let title = format!(
                     "Compiled DFA {} - {}",
                     modes[i].name,
