@@ -3,7 +3,6 @@
 //! The DFA is generated from the NFA using the subset construction algorithm.
 
 use log::trace;
-use serde::de;
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::Result;
@@ -42,7 +41,7 @@ pub(crate) struct Dfa {
     // The patterns for the accepting states.
     pub(crate) patterns: Vec<(String, TerminalID)>,
     // The accepting states of the DFA as well as the corresponding pattern id.
-    pub(crate) accepting_states: BTreeSet<StateID>,
+    pub(crate) accepting_states: BTreeSet<(StateID, TerminalID)>,
     // The transitions of the DFA.
     pub(crate) transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
 }
@@ -68,7 +67,7 @@ impl Dfa {
     /// Get the pattern id if the given state is an accepting state.
     #[inline]
     pub(crate) fn is_accepting(&self, state_id: StateID) -> bool {
-        self.accepting_states.contains(&state_id)
+        self.accepting_states.iter().any(|s| s.0 == state_id)
     }
 
     /// Get the transitions of the DFA.
@@ -188,7 +187,7 @@ impl Dfa {
     pub(crate) fn add_state_if_new<I>(
         &mut self,
         nfa_states: I,
-        accepting_states: &[(StateID, TerminalID)],
+        accepting_nfa_states: &[(StateID, TerminalID)],
     ) -> Result<StateID>
     where
         I: IntoIterator<Item = StateID>,
@@ -214,19 +213,22 @@ impl Dfa {
             state
                 .nfa_states
                 .iter()
-                .filter(|nfa_state_id| accepting_states.iter().any(|a| a.0 == **nfa_state_id))
+                .filter(|nfa_state_id| accepting_nfa_states.iter().any(|a| a.0 == **nfa_state_id))
                 .count()
                 <= 1
         );
 
         // Check if the state contains an accepting state and if so add it to the accepting states.
         for nfa_state_id in &state.nfa_states {
-            if let Some((_, t)) = accepting_states.iter().find(|a| a.0 == *nfa_state_id) {
+            if let Some((_, t)) = accepting_nfa_states.iter().find(|a| a.0 == *nfa_state_id) {
                 // The state is an accepting state.
-                trace!("* State {} is accepting state.", state_id.as_usize());
-                self.accepting_states.insert(state_id);
+                trace!(
+                    "* State {} is an accepting state for terminal {}.",
+                    state_id.id(),
+                    t
+                );
+                self.accepting_states.insert((state_id, *t));
                 state.terminal_id = Some(*t);
-                break;
             }
         }
 
@@ -243,30 +245,33 @@ impl Dfa {
     fn add_representive_state(
         &mut self,
         group: &BTreeSet<StateID>,
-        accepting_states: &BTreeSet<StateID>,
+        accepting_states: &BTreeSet<(StateID, TerminalID)>,
     ) -> Result<StateID> {
         let state_id = StateID::new(self.states.len() as StateIDBase);
-        let state = DfaState::new(state_id, Vec::new());
+        let mut state = DfaState::new(state_id, Vec::new());
 
         // First state in group is the representative state.
         let representative_state_id = group.first().unwrap();
 
         trace!(
-            "Add representive state {} with id {}",
-            representative_state_id.as_usize(),
-            state_id.as_usize()
+            "Add representive state {} with id {} and terminal id {:?}.",
+            representative_state_id.id(),
+            state_id.id(),
+            state.terminal_id
         );
 
         // Insert the representative state into the accepting states if any state in its group is
         // an accepting state.
         for state_in_group in group.iter() {
-            if accepting_states.contains(state_in_group) {
+            if let Some((_, t)) = accepting_states.iter().find(|a| a.0 == *state_in_group) {
                 trace!(
-                    "* State {} is accepting state (from state {}).",
+                    "* State {} is accepting state (from state {}) and terminal id {:?}.",
                     state_id.as_usize(),
-                    state_in_group.as_usize()
+                    state_in_group.as_usize(),
+                    state.terminal_id
                 );
-                self.accepting_states.insert(state_id);
+                state.terminal_id = Some(*t);
+                self.accepting_states.insert((state_id, *t));
             }
         }
 
@@ -563,7 +568,7 @@ impl std::fmt::Display for Dfa {
         writeln!(f, "{:?}", self.patterns)?;
         writeln!(f, "Accepting states:")?;
         for state_id in &self.accepting_states {
-            writeln!(f, "{}", state_id.id())?;
+            writeln!(f, "{}:T{}", state_id.0.id(), state_id.1.id())?;
         }
         writeln!(f, "Transitions:")?;
         for (source_id, targets) in &self.transitions {
@@ -662,7 +667,7 @@ mod tests {
         name: &'static str,
         pattern: &'static str,
         states: Vec<StateID>,
-        accepting_states: Vec<StateID>,
+        accepting_states: Vec<(StateID, TerminalID)>,
         char_classes: Vec<CharacterClass>,
         transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>,
     }
@@ -692,13 +697,22 @@ mod tests {
         };
     }
 
+    /// A macro that simplifies the rendering of a dot file for a MultiPatternNfa.
+    macro_rules! mp_nfa_render_to {
+        ($nfa:expr, $label:expr, $char_class:ident) => {
+            let label = format!("{}MpNfa", $label);
+            let mut f = std::fs::File::create(format!("target/{}MpNfa.dot", $label)).unwrap();
+            $crate::internal::dot::multi_pattern_nfa_render($nfa, &label, &$char_class, &mut f);
+        };
+    }
+
     static TEST_DATA: LazyLock<[TestData; 10]> = LazyLock::new(|| {
         [
             TestData {
                 name: "SingleCharacter",
                 pattern: "a",
                 states: vec![StateID::new(0), StateID::new(1)],
-                accepting_states: vec![StateID::new(1)],
+                accepting_states: vec![(StateID::new(1), TerminalID::new(0))],
                 char_classes: vec![CharacterClass::new(CharClassID::new(0), parse!("a"))],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
@@ -709,7 +723,7 @@ mod tests {
                 name: "Alternation",
                 pattern: "a|b",
                 states: vec![StateID::new(0), StateID::new(1)],
-                accepting_states: vec![StateID::new(1)],
+                accepting_states: vec![(StateID::new(1), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("a")),
                     CharacterClass::new(CharClassID::new(1), parse!("b")),
@@ -726,7 +740,7 @@ mod tests {
                 name: "Concatenation",
                 pattern: "ab",
                 states: vec![StateID::new(0), StateID::new(1), StateID::new(2)],
-                accepting_states: vec![StateID::new(2)],
+                accepting_states: vec![(StateID::new(2), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("a")),
                     CharacterClass::new(CharClassID::new(1), parse!("b")),
@@ -746,7 +760,7 @@ mod tests {
                 name: "KleeneStar",
                 pattern: "a*",
                 states: vec![StateID::new(0)],
-                accepting_states: vec![StateID::new(0)],
+                accepting_states: vec![(StateID::new(0), TerminalID::new(0))],
                 char_classes: vec![CharacterClass::new(CharClassID::new(0), parse!("a"))],
                 transitions: BTreeMap::from([(
                     StateID::new(0),
@@ -757,7 +771,7 @@ mod tests {
                 name: "KleeneStarAlternation",
                 pattern: "(a|b)*",
                 states: vec![StateID::new(0)],
-                accepting_states: vec![StateID::new(0)],
+                accepting_states: vec![(StateID::new(0), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("a")),
                     CharacterClass::new(CharClassID::new(1), parse!("b")),
@@ -774,7 +788,7 @@ mod tests {
                 name: "KleeneStarConcatenation",
                 pattern: "(ab)*",
                 states: vec![StateID::new(0), StateID::new(1)],
-                accepting_states: vec![StateID::new(0)],
+                accepting_states: vec![(StateID::new(0), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("a")),
                     CharacterClass::new(CharClassID::new(1), parse!("b")),
@@ -794,7 +808,7 @@ mod tests {
                 name: "KleeneStarConcatenationAlternation",
                 pattern: "(a|b)*c",
                 states: vec![StateID::new(0), StateID::new(1)],
-                accepting_states: vec![StateID::new(1)],
+                accepting_states: vec![(StateID::new(1), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("a")),
                     CharacterClass::new(CharClassID::new(1), parse!("b")),
@@ -818,7 +832,7 @@ mod tests {
                     StateID::new(2),
                     StateID::new(3),
                 ],
-                accepting_states: vec![StateID::new(3)],
+                accepting_states: vec![(StateID::new(3), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("a")),
                     CharacterClass::new(CharClassID::new(1), parse!("b")),
@@ -864,7 +878,10 @@ mod tests {
                     StateID::new(3),
                     StateID::new(5),
                 ],
-                accepting_states: vec![StateID::new(3), StateID::new(4)],
+                accepting_states: vec![
+                    (StateID::new(3), TerminalID::new(0)),
+                    (StateID::new(4), TerminalID::new(0)),
+                ],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("/")),
                     CharacterClass::new(CharClassID::new(1), parse!(".")),
@@ -904,7 +921,7 @@ mod tests {
                     StateID::new(3),
                     StateID::new(4),
                 ],
-                accepting_states: vec![StateID::new(4)],
+                accepting_states: vec![(StateID::new(4), TerminalID::new(0))],
                 char_classes: vec![
                     CharacterClass::new(CharClassID::new(0), parse!("/")),
                     CharacterClass::new(CharClassID::new(1), parse!(r"\*")),
@@ -988,6 +1005,32 @@ mod tests {
                 data.pattern.escape_default()
             );
         }
+    }
+
+    #[test]
+    fn test_try_from_mp_nfa_simple() {
+        init();
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let multi_pattern_nfa = MultiPatternNfa::try_from_patterns(
+            &[
+                ("aab".to_owned(), 0usize.into()),
+                ("abb".to_owned(), 1usize.into()),
+                // ("abc", 2),
+                // ("bbc", 3),
+                // ("bca", 4),
+            ],
+            &mut character_class_registry,
+        )
+        .unwrap();
+        mp_nfa_render_to!(
+            &multi_pattern_nfa,
+            "SimpleMultiPattern",
+            character_class_registry
+        );
+        let dfa = Dfa::try_from_mp_nfa(multi_pattern_nfa, &mut character_class_registry).unwrap();
+        dfa_render_to!(&dfa, "SimpleMultiPattern", character_class_registry);
+        let dfa = Dfa::minimize(&dfa).unwrap();
+        dfa_render_to!(&dfa, "SimpleMultiPatternMin", character_class_registry);
     }
 
     #[test]

@@ -15,10 +15,10 @@ macro_rules! unsupported {
 pub(crate) struct CompiledScannerMode {
     /// The name of the scanner mode.
     pub(crate) name: String,
-    /// The regular expressions that are valid token types in this mode, bundled with their token
-    /// type numbers.
+    /// The regular expression that can match valid token types in this mode.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
+    // pub(crate) dfa: CompiledDfa,
     pub(crate) dfas: Vec<(CompiledDfa, TerminalID)>,
     pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
 }

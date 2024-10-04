@@ -21,7 +21,7 @@ pub(crate) struct CompiledDfa {
     /// The pattern matched by the DFA.
     // pattern: String,
     /// The accepting states of the DFA as well as the corresponding pattern id.
-    accepting_states: Vec<StateID>,
+    accepting_states: Vec<(StateID, TerminalID)>,
     /// Each entry in the vector represents a state in the DFA. The entry is a tuple of first and
     /// last index into the transitions vector.
     state_ranges: Vec<(usize, usize)>,
@@ -46,9 +46,9 @@ impl CompiledDfa {
 
     /// Get the pattern id if the given state is an accepting state.
     /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
-    #[allow(unused)]
+    #[inline]
     pub(crate) fn is_accepting(&self, state_id: StateID) -> bool {
-        self.accepting_states.contains(&state_id)
+        self.accepting_states.iter().any(|a| a.0 == state_id)
     }
 
     /// Returns the state ranges of the DFA.
@@ -102,7 +102,7 @@ impl CompiledDfa {
         }
         // Get the transitions for the current state
         if let Some(next_state) = self.find_transition(c, match_char_class) {
-            if self.accepting_states.contains(&next_state) {
+            if self.is_accepting(next_state) {
                 self.matching_state.transition_to_accepting(c_pos, c);
             } else {
                 self.matching_state.transition_to_non_accepting(c_pos);
@@ -178,7 +178,7 @@ impl TryFrom<Dfa> for CompiledDfa {
 
     fn try_from(dfa: Dfa) -> std::result::Result<Self, Self::Error> {
         let Dfa {
-            // pattern,
+            // patterns,
             states,
             accepting_states,
             transitions,
@@ -211,7 +211,10 @@ impl TryFrom<Dfa> for CompiledDfa {
 
         Ok(Self {
             // pattern,
-            accepting_states: accepting_states.into_iter().collect(),
+            accepting_states: accepting_states
+                .iter()
+                .map(|(state, terminal_id)| (*state, *terminal_id))
+                .collect(),
             state_ranges,
             transitions: compiled_transitions,
             matching_state,

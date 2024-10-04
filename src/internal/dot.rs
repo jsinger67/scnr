@@ -192,7 +192,7 @@ pub(crate) fn dfa_render<W: Write>(
                 .set_label(&format!(
                     "{}\n'{}'",
                     state.id(),
-                    dfa.pattern(state.terminal_id().unwrap_or_default())
+                    dfa.pattern(state.terminal_id().unwrap())
                         .unwrap_or_default()
                         .escape_default(),
                 ));
