@@ -4,7 +4,8 @@ use crate::{
 };
 
 use super::{
-    dfa::Dfa, matching_state::MatchingState, CharClassID, CharacterClassRegistry, StateID,
+    dfa::Dfa, matching_state::MatchingState, multi_pattern_nfa::MultiPatternNfa, CharClassID,
+    CharacterClassRegistry, StateID, TerminalID,
 };
 
 /// A compiled DFA that can be used to match a string.
@@ -141,13 +142,33 @@ impl CompiledDfa {
 
     pub(crate) fn try_from_pattern(
         pattern: &str,
+        terminal_id: TerminalID,
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<CompiledDfa> {
         let ast = parse_regex_syntax(pattern)?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
-        let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
+        let dfa: Dfa = Dfa::try_from_nfa(nfa, terminal_id, character_class_registry)?;
         let dfa = dfa.minimize()?;
         let compiled_dfa = CompiledDfa::try_from(dfa)?;
+        Ok(compiled_dfa)
+    }
+
+    /// Create a new compiled DFA from a slice of (pattern, pattern_id) tuples.
+    /// This function is used to create a compiled DFA from a scanner mode, just like the
+    /// Flex scanner generator does.
+    pub(crate) fn try_from_scanner_mode(
+        patterns: &[(String, TerminalID)],
+        transitions: Vec<(usize, usize)>,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
+        let dfa = Dfa::try_from_mp_nfa(nfa, character_class_registry)?;
+        let dfa = dfa.minimize()?;
+        let mut compiled_dfa = CompiledDfa::try_from(dfa)?;
+        compiled_dfa.transitions = transitions
+            .iter()
+            .map(|(char_class, to_state)| ((*char_class).into(), (*to_state).into()))
+            .collect();
         Ok(compiled_dfa)
     }
 }
@@ -217,7 +238,8 @@ mod tests {
         let mut character_class_registry = CharacterClassRegistry::new();
         let pattern = "(//.*(\\r\\n|\\r|\\n))";
         let compiled_dfa =
-            CompiledDfa::try_from_pattern(pattern, &mut character_class_registry).unwrap();
+            CompiledDfa::try_from_pattern(pattern, 0usize.into(), &mut character_class_registry)
+                .unwrap();
         compiled_dfa_render_to!(&compiled_dfa, "LineComment", character_class_registry);
     }
 }

@@ -323,12 +323,12 @@ mod tests {
         ];
         let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         let match_char_class = scanner_impl.create_match_char_class().unwrap();
-        assert!(match_char_class((0).into(), 'a'));
-        assert!(!match_char_class((0).into(), 'b'));
-        assert!(!match_char_class((0).into(), 'c'));
-        assert!(!match_char_class((1).into(), 'a'));
-        assert!(match_char_class((1).into(), 'b'));
-        assert!(!match_char_class((1).into(), 'c'));
+        assert!(match_char_class(0usize.into(), 'a'));
+        assert!(!match_char_class(0usize.into(), 'b'));
+        assert!(!match_char_class(0usize.into(), 'c'));
+        assert!(!match_char_class(1usize.into(), 'a'));
+        assert!(match_char_class(1usize.into(), 'b'));
+        assert!(!match_char_class(1usize.into(), 'c'));
     }
 
     #[test]

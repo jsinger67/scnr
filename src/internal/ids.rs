@@ -100,14 +100,26 @@ macro_rules! impl_id {
     };
 }
 
+macro_rules! impl_from_usize_for_id {
+    ($name:ident, $tp:ty) => {
+        impl From<usize> for $name {
+            fn from(index: usize) -> Self {
+                $name::new(index as $tp)
+            }
+        }
+    };
+}
+
 /// The ID type for automata states. Used in NFA and DFA.
 pub(crate) type StateIDBase = u32;
 impl_id!(StateID, StateIDBase);
+impl_from_usize_for_id!(StateID, StateIDBase);
 
 /// The ID type for character classes. This is the index of the character class in the character
 /// class registry which in turn is used for all DFAs in the scanner.
 pub(crate) type CharClassIDBase = u32;
 impl_id!(CharClassID, CharClassIDBase);
+impl_from_usize_for_id!(CharClassID, CharClassIDBase);
 
 /// The ID type for patterns. Actually the index of the pattern in the pattern vector of a scanner
 /// mode. It determines the priority of the pattern, i.e. lower indices have higher priority.
@@ -118,6 +130,7 @@ impl_id!(PatternID, PatternIDBase);
 /// the scanner over all scanner modes.
 pub(crate) type TerminalIDBase = u32;
 impl_id!(TerminalID, TerminalIDBase);
+impl_from_usize_for_id!(TerminalID, TerminalIDBase);
 
 /// The ID type for scanner modes. This is the index of the scanner mode in the scanner mode vector
 /// of the scanner.

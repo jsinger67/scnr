@@ -100,9 +100,9 @@ mod tests {
         let ast1 = Literal!('a');
         let ast2 = Literal!('a');
         let ast3 = Literal!('b');
-        let class1 = CharacterClass::new(0.into(), ast1);
-        let class2 = CharacterClass::new(0.into(), ast2);
-        let class3 = CharacterClass::new(1.into(), ast3);
+        let class1 = CharacterClass::new(0usize.into(), ast1);
+        let class2 = CharacterClass::new(0usize.into(), ast2);
+        let class3 = CharacterClass::new(1usize.into(), ast3);
         assert_eq!(class1, class2);
         assert_ne!(class1, class3);
     }
@@ -111,8 +111,8 @@ mod tests {
     fn test_character_class_equality_special() {
         let ast1 = parse_regex_syntax("\r").unwrap();
         if let Ast::Literal(_) = &ast1 {
-            let class1 = CharacterClass::new(0.into(), ast1.clone());
-            let class2 = CharacterClass::new(0.into(), Literal!('\r'));
+            let class1 = CharacterClass::new(0usize.into(), ast1.clone());
+            let class2 = CharacterClass::new(0usize.into(), Literal!('\r'));
             eprintln!("{:?} <=> {:?}", class1.ast(), class2.ast());
             assert_eq!(class1, class2);
         } else {
@@ -124,8 +124,8 @@ mod tests {
     fn test_character_class_ordering() {
         let ast1 = Literal!('a');
         let ast2 = Literal!('b');
-        let class1 = CharacterClass::new(0.into(), ast1);
-        let class2 = CharacterClass::new(1.into(), ast2);
+        let class1 = CharacterClass::new(0usize.into(), ast1);
+        let class2 = CharacterClass::new(1usize.into(), ast2);
         assert!(class1 < class2);
         assert!(class2 > class1);
     }

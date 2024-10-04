@@ -37,7 +37,8 @@ impl CompiledScannerMode {
         let patterns = patterns.iter().enumerate().try_fold(
             Vec::new(),
             |mut acc, (index, (pattern, terminal_id))| {
-                let result = CompiledDfa::try_from_pattern(pattern, character_class_registry);
+                let result =
+                    CompiledDfa::try_from_pattern(pattern, *terminal_id, character_class_registry);
                 match &result {
                     Err(ScnrError { source }) => match &**source {
                         ScnrErrorKind::RegexSyntaxError(r, _) => {
@@ -98,7 +99,8 @@ mod tests {
         let mut character_class_registry = CharacterClassRegistry::new();
         let pattern = "(//.*(\r\n|\r|\n))";
         let compiled_dfa =
-            CompiledDfa::try_from_pattern(pattern, &mut character_class_registry).unwrap();
+            CompiledDfa::try_from_pattern(pattern, 0usize.into(), &mut character_class_registry)
+                .unwrap();
         compiled_dfa_render_to!(&compiled_dfa, "LineComment_", character_class_registry);
         // assert_eq!(compiled_dfa.accepting_states.len(), 1);
     }
@@ -108,8 +110,8 @@ mod tests {
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
             name: "test".to_string(),
-            patterns: vec![("a".to_string(), 0.into())],
-            transitions: vec![(0.into(), 1.into())],
+            patterns: vec![("a".to_string(), 0usize.into())],
+            transitions: vec![(0usize.into(), 1.into())],
         };
         let compiled_scanner_mode =
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)
@@ -124,8 +126,8 @@ mod tests {
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
             name: "test".to_string(),
-            patterns: vec![("[".to_string(), 0.into())],
-            transitions: vec![(0.into(), 1.into())],
+            patterns: vec![("[".to_string(), 0usize.into())],
+            transitions: vec![(0usize.into(), 1.into())],
         };
         let compiled_scanner_mode =
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry);
@@ -137,8 +139,8 @@ mod tests {
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
             name: "test".to_string(),
-            patterns: vec![("a".to_string(), 0.into())],
-            transitions: vec![(0.into(), 1.into()), (1.into(), 2.into())],
+            patterns: vec![("a".to_string(), 0usize.into())],
+            transitions: vec![(0usize.into(), 1.into()), (1usize.into(), 2.into())],
         };
         let compiled_scanner_mode =
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)

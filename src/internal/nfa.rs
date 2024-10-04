@@ -110,13 +110,24 @@ impl Nfa {
     }
 
     /// Apply an offset to every state number.
-    pub(crate) fn shift_ids(&mut self, offset: usize) -> (StateID, StateID) {
+    pub(crate) fn offset_states(&mut self, offset: usize) -> (StateID, StateID) {
         for state in self.states.iter_mut() {
             state.offset(offset);
         }
         self.start_state = StateID::new(self.start_state.id() + offset as StateIDBase);
         self.end_state = StateID::new(self.end_state.id() + offset as StateIDBase);
         (self.start_state, self.end_state)
+    }
+
+    /// Returns the number of the highest state.
+    /// If no states are present, it returns 0.
+    /// It is used for debugging purposes.
+    #[allow(dead_code)]
+    pub(crate) fn highest_state_number(&self) -> StateIDBase {
+        self.states
+            .iter()
+            .max_by(|x, y| x.id().cmp(&y.id()))
+            .map_or(0, |s| s.id().id())
     }
 
     /// Concatenates the current NFA with another NFA.
@@ -131,7 +142,7 @@ impl Nfa {
         }
 
         // Apply an offset to the state numbers of the given NFA
-        let (nfa_start_state, nfa_end_state) = nfa.shift_ids(self.states.len());
+        let (nfa_start_state, nfa_end_state) = nfa.offset_states(self.states.len());
         // Move the states of the given NFA to the current NFA
         self.append(nfa);
 
@@ -153,7 +164,7 @@ impl Nfa {
         }
 
         // Apply an offset to the state numbers of the given NFA
-        let (nfa_start_state, nfa_end_state) = nfa.shift_ids(self.states.len());
+        let (nfa_start_state, nfa_end_state) = nfa.offset_states(self.states.len());
 
         // Move the states of given the NFA to the current NFA
         self.append(nfa);
@@ -346,18 +357,7 @@ impl Nfa {
     /// Calculate the epsilon closure of a state.
     pub(crate) fn epsilon_closure(&self, state: StateID) -> Vec<StateID> {
         // The state itself is always part of the ε-closure
-        let mut closure = vec![state];
-        let mut i = 0;
-        while i < closure.len() {
-            let current_state = closure[i];
-            for epsilon_transition in self.states[current_state].epsilon_transitions() {
-                if !closure.contains(&epsilon_transition.target_state()) {
-                    closure.push(epsilon_transition.target_state());
-                }
-            }
-            i += 1;
-        }
-        closure
+        self.epsilon_closure_set(vec![state])
     }
 
     /// Calculate the epsilon closure of a set of states and return the unique states.
@@ -369,15 +369,18 @@ impl Nfa {
         let mut i = 0;
         while i < closure.len() {
             let current_state = closure[i];
-            for epsilon_transition in self.states[current_state].epsilon_transitions() {
-                if !closure.contains(&epsilon_transition.target_state()) {
-                    closure.push(epsilon_transition.target_state());
+            if let Some(current_state) = self.find_state(current_state) {
+                for epsilon_transition in current_state.epsilon_transitions() {
+                    if !closure.contains(&epsilon_transition.target_state()) {
+                        closure.push(epsilon_transition.target_state());
+                    }
                 }
+            } else {
+                panic!("State not found: {:?}", current_state);
             }
             i += 1;
         }
         closure.sort_unstable();
-        closure.dedup();
         closure
     }
 
@@ -386,15 +389,27 @@ impl Nfa {
     pub(crate) fn move_set(&self, states: &[StateID], char_class: CharClassID) -> Vec<StateID> {
         let mut move_set = Vec::new();
         for state in states {
-            for transition in self.states()[*state].transitions() {
-                if transition.char_class() == char_class {
-                    move_set.push(transition.target_state());
+            if let Some(state) = self.find_state(*state) {
+                for transition in state.transitions() {
+                    if transition.char_class() == char_class {
+                        move_set.push(transition.target_state());
+                    }
                 }
+            } else {
+                panic!("State not found: {:?}", state);
             }
         }
         move_set.sort_unstable();
         move_set.dedup();
         move_set
+    }
+
+    pub(crate) fn contains_state(&self, state: StateID) -> bool {
+        self.states.iter().any(|s| s.id() == state)
+    }
+
+    fn find_state(&self, state: StateID) -> Option<&NfaState> {
+        self.states.iter().find(|s| s.id() == state)
     }
 }
 
@@ -480,6 +495,10 @@ pub(crate) struct EpsilonTransition {
 }
 
 impl EpsilonTransition {
+    pub(crate) fn new(target_state: StateID) -> Self {
+        Self { target_state }
+    }
+
     pub(crate) fn target_state(&self) -> StateID {
         self.target_state
     }
@@ -648,7 +667,7 @@ mod tests {
         // Create an example AST and convert the AST to an NFA
         let mut nfa: Nfa =
             Nfa::try_from_ast(parse_regex_syntax("a").unwrap(), &mut char_class_registry).unwrap();
-        nfa.shift_ids(10);
+        nfa.offset_states(10);
 
         // Add assertions here to validate the NFA
         assert_eq!(nfa.states.len(), 2);

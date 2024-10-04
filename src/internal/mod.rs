@@ -40,6 +40,12 @@ pub(crate) use match_function::MatchFunction;
 /// Module that provides functions and types related to matching states.
 pub(crate) mod matching_state;
 
+// Module that provides functions and types related to multi-pattern DFAs.
+// pub(crate) mod multi_pattern_dfa;
+
+/// Module that provides functions and types related to multi-pattern NFAs.
+pub(crate) mod multi_pattern_nfa;
+
 /// The nfa module contains the NFA implementation.
 mod nfa;
 pub(crate) use nfa::Nfa;
