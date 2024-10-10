@@ -628,12 +628,6 @@ impl DfaState {
         self.marked = marked;
     }
 
-    /// Set the terminal id of the DFA state.
-    /// The terminal id is used to determine the pattern that matched the input string.
-    pub(crate) fn set_terminal_id(&mut self, terminal_id: TerminalID) {
-        self.terminal_id = Some(terminal_id);
-    }
-
     /// Get the terminal id of the DFA state.
     /// The terminal id is used to determine the pattern that matched the input string.
     pub(crate) fn terminal_id(&self) -> Option<TerminalID> {

@@ -54,53 +54,13 @@ impl ScannerImpl {
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all DFAs are advanced in parallel by one character at a time.
     pub(crate) fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].dfas;
-        for (dfa, _) in patterns.iter_mut() {
-            dfa.reset();
-        }
-
-        // All indices of the DFAs that are still active.
-        let mut active_dfas = (0..patterns.len()).collect::<Vec<_>>();
-
-        for (i, c) in char_indices {
-            for dfa_index in &active_dfas {
-                trace!(
-                    "Advance DFA #{} of mode {} with char {:?} and token type {}",
-                    dfa_index,
-                    self.current_mode,
-                    c,
-                    patterns[*dfa_index].1
-                );
-                patterns[*dfa_index]
-                    .0
-                    .advance(i, c, &*self.match_char_class);
-            }
-
-            // trace!("Clear active DFAs");
-            // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
-            active_dfas.retain(|&dfa_index| patterns[dfa_index].0.search_for_longer_match());
-
-            for dfa_index in &active_dfas {
-                trace!(
-                    "Matching state: #{} {:?}",
-                    dfa_index,
-                    patterns[*dfa_index].0.matching_state()
-                );
-            }
-
-            // If all DFAs have finished, we can stop the search.
-            if active_dfas.is_empty() {
-                break;
-            }
-        }
-
-        let current_match = self.find_first_longest_match();
-        if let Some(m) = current_match.as_ref() {
+        let dfa = &mut self.scanner_modes[self.current_mode].dfa;
+        let ma = dfa.find_match(char_indices, &*self.match_char_class);
+        if let Some(ref m) = ma {
             self.execute_possible_mode_switch(m);
         }
-        current_match
+        ma
     }
-
     /// This function is used by [super::find_matches_impl::FindMatchesImpl::peek_n].
     ///
     /// Executes a leftmost search and returns the first match that is found, if one exists.
@@ -112,52 +72,8 @@ impl ScannerImpl {
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
     pub(crate) fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let dfas = &mut self.scanner_modes[self.current_mode].dfas;
-        for (dfa, _) in dfas.iter_mut() {
-            dfa.reset();
-        }
-
-        // All indices of the DFAs that are still active.
-        let mut active_dfas = (0..dfas.len()).collect::<Vec<_>>();
-
-        for (i, c) in char_indices {
-            for dfa_index in &active_dfas {
-                dfas[*dfa_index].0.advance(i, c, &*self.match_char_class);
-            }
-
-            // We remove all DFAs from `active_dfas` that finished or did not find a match so far.
-            active_dfas.retain(|&dfa_index| dfas[dfa_index].0.search_for_longer_match());
-
-            // If all DFAs have finished, we can stop the search.
-            if active_dfas.is_empty() {
-                break;
-            }
-        }
-
-        self.find_first_longest_match()
-    }
-
-    /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the
-    /// lowest index.
-    /// We find the pattern with the lowest start position and the longest length.
-    fn find_first_longest_match(&mut self) -> Option<Match> {
-        let mut current_match: Option<Match> = None;
-        {
-            let patterns = &self.scanner_modes[self.current_mode].dfas;
-            for (dfa, tok_type) in patterns.iter() {
-                if let Some(dfa_match) = dfa.current_match() {
-                    if current_match.is_none()
-                        || dfa_match.start < current_match.unwrap().start()
-                        || (dfa_match.start == current_match.unwrap().start()
-                            && dfa_match.len() > current_match.unwrap().span().len())
-                    {
-                        // We have a match and we continue the look for a longer match.
-                        current_match = Some(Match::new(tok_type.as_usize(), dfa_match));
-                    }
-                }
-            }
-        }
-        current_match
+        let dfa = &mut self.scanner_modes[self.current_mode].dfa;
+        dfa.find_match(char_indices, &*self.match_char_class)
     }
 
     /// Executes a possible mode switch if a transition is defined for the token type found.
@@ -195,26 +111,20 @@ impl ScannerImpl {
     pub(crate) fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
-                debug!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
-                    let mut cursor = std::io::Cursor::new(Vec::new());
-                    let title = format!(
-                        "Compiled DFA {}::{}",
-                        modes[i].name,
-                        modes[i].patterns[j].0.escape_default()
-                    );
-                    super::dot::compiled_dfa_render(
-                        dfa,
-                        &title,
-                        &self.character_classes,
-                        &mut cursor,
-                    );
-                    let mut dot_format = String::new();
-                    cursor.set_position(0);
-                    cursor.read_to_string(&mut dot_format)?;
-                    dot_format
-                });
-            }
+            debug!("Compiled DFA: Mode {}\n{}", i, {
+                let mut cursor = std::io::Cursor::new(Vec::new());
+                let title = format!("Compiled DFA {}", modes[i].name);
+                super::dot::compiled_dfa_render(
+                    &scanner_mode.dfa,
+                    &title,
+                    &self.character_classes,
+                    &mut cursor,
+                );
+                let mut dot_format = String::new();
+                cursor.set_position(0);
+                cursor.read_to_string(&mut dot_format)?;
+                dot_format
+            });
         }
         Ok(())
     }
@@ -232,22 +142,19 @@ impl ScannerImpl {
     {
         use std::fs::File;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
-                let title = format!(
-                    "Compiled DFA {} - {}",
-                    modes[i].name,
-                    modes[i].patterns[j].0.escape_default()
-                );
-                let file_name = format!(
-                    "{}/{}_{}_{}.dot",
-                    target_folder.as_ref().to_str().unwrap(),
-                    modes[i].name,
-                    j,
-                    t
-                );
-                let mut file = File::create(file_name)?;
-                super::dot::compiled_dfa_render(dfa, &title, &self.character_classes, &mut file);
-            }
+            let title = format!("Compiled DFA {}", modes[i].name);
+            let file_name = format!(
+                "{}/{}.dot",
+                target_folder.as_ref().to_str().unwrap(),
+                modes[i].name,
+            );
+            let mut file = File::create(file_name)?;
+            super::dot::compiled_dfa_render(
+                &scanner_mode.dfa,
+                &title,
+                &self.character_classes,
+                &mut file,
+            );
         }
         Ok(())
     }
@@ -358,27 +265,27 @@ mod tests {
             .map(|entry| entry.unwrap().path())
             .collect();
 
-        assert_eq!(dot_files.len(), 12);
+        assert_eq!(dot_files.len(), 2);
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.extension().unwrap() == "dot")
                 .count(),
-            12
+            2
         );
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("INITIAL"))
                 .count(),
-            7
+            1
         );
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("STRING"))
                 .count(),
-            5
+            1
         );
     }
 }

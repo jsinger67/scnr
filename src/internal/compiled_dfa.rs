@@ -1,13 +1,11 @@
 use crate::{
     internal::{parse_regex_syntax, Nfa},
-    Match, Result, ScnrError, Span,
+    Match, Result, ScnrError,
 };
 
 use super::{
-    dfa::Dfa,
-    matching_state::{self, MatchingState},
-    multi_pattern_nfa::MultiPatternNfa,
-    CharClassID, CharacterClassRegistry, StateID, TerminalID,
+    dfa::Dfa, matching_state::MatchingState, multi_pattern_nfa::MultiPatternNfa, CharClassID,
+    CharacterClassRegistry, StateID, TerminalID,
 };
 
 /// A compiled DFA that can be used to match a string.
@@ -20,34 +18,19 @@ use super::{
 /// which is Clone and Copy neither.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompiledDfa {
-    /// The pattern matched by the DFA.
-    // pattern: String,
-    /// The accepting states of the DFA as well as the corresponding pattern id with the index of
-    /// the terminal in the patterns vector, which is indirectly proportional to the priority of
-    /// the matched terminal.
-    accepting_states: Vec<(StateID, TerminalID, usize)>,
+    /// The accepting states of the DFA as well as the corresponding pattern id.
+    /// The vector is sorted by priority of the terminal. The lower the index, the higher the
+    /// priority.
+    accepting_states: Vec<(StateID, TerminalID)>,
     /// Each entry in the vector represents a state in the DFA. The entry is a tuple of first and
     /// last index into the transitions vector.
     state_ranges: Vec<(usize, usize)>,
     /// The transitions of the DFA. The indices that are relevant for a state are stored in the
     /// state_ranges vector.
     transitions: Vec<(CharClassID, StateID)>,
-    /// The state of matching
-    matching_state: MatchingState<StateID>,
 }
 
 impl CompiledDfa {
-    // Creates a new compiled DFA with the given pattern and accepting states.
-    // Returns the pattern matched by the DFA.
-    // pub fn pattern(&self) -> &str {
-    //     &self.pattern
-    // }
-
-    // Returns the accepting states of the DFA.
-    // pub fn accepting_states(&self) -> &[StateID] {
-    //     &self.accepting_states
-    // }
-
     /// Get the pattern id if the given state is an accepting state.
     /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
     #[inline]
@@ -69,54 +52,6 @@ impl CompiledDfa {
         &self.transitions
     }
 
-    /// Returns the matching state of the DFA.
-    /// It is used for debugging purposes.
-    #[allow(unused)]
-    pub(crate) fn matching_state(&self) -> &MatchingState<StateID> {
-        &self.matching_state
-    }
-
-    /// Resets the matching state of the DFA.
-    pub(crate) fn reset(&mut self) {
-        self.matching_state = MatchingState::new();
-    }
-
-    /// Returns the current state of the DFA.
-    /// It is used for debugging purposes.
-    #[allow(unused)]
-    pub(crate) fn current_state(&self) -> StateID {
-        self.matching_state.current_state()
-    }
-
-    /// Returns the last match of the DFA.
-    pub(crate) fn current_match(&self) -> Option<Span> {
-        self.matching_state.last_match()
-    }
-
-    /// Advances the DFA by one character.
-    pub(crate) fn advance(
-        &mut self,
-        c_pos: usize,
-        c: char,
-        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
-    ) {
-        // If we already have the longest match, we can stop
-        if self.matching_state.is_longest_match() {
-            return;
-        }
-        // Get the transitions for the current state
-        if let Some(next_state) = self.find_transition(&self.matching_state, c, match_char_class) {
-            if self.is_accepting(next_state) {
-                self.matching_state.transition_to_accepting(c_pos, c);
-            } else {
-                self.matching_state.transition_to_non_accepting(c_pos);
-            }
-            self.matching_state.set_current_state(next_state);
-        } else {
-            self.matching_state.no_transition();
-        }
-    }
-
     /// Find a match in a multi-pattern DFA.
     /// Takes a CharIndices iterator and returns an Option<Match>.
     /// The Match contains the start and end position of the match as well as the pattern id.
@@ -126,7 +61,7 @@ impl CompiledDfa {
     /// pattern.
     /// The DFA is reset before the search starts.
     pub(crate) fn find_match(
-        &mut self,
+        &self,
         mut char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<Match> {
@@ -170,47 +105,57 @@ impl CompiledDfa {
                 break;
             }
             if matching_states.iter().all(|m| m.is_longest_match()) {
-                // Find the longest match.
-                // If there are more than one longest matches with the same length, the one with the
-                // highest priority (i.e. the lowest third element in the tripple in the
-                // accepting_states vector) is returned.
-                matching_states.sort_by(|a, b| {
-                    a.last_match()
-                        .unwrap()
-                        .len()
-                        .cmp(&b.last_match().unwrap().len())
-                        .reverse()
-                });
-                let max_len = matching_states[0].last_match().unwrap().len();
-                let mut priority = usize::MAX;
-                let mut index = usize::MAX;
-                for (i, matching_state) in matching_states.iter().enumerate() {
-                    if matching_state.last_match().unwrap().len() < max_len {
-                        break;
-                    }
-                    let match_priority = self.priority_of_terminal(matching_state.current_state());
-                    if match_priority < priority {
-                        priority = match_priority;
-                        index = i;
-                    }
+                break;
+            }
+        }
+        // Find the longest match.
+        // If there are more than one longest matches with the same length, the one with the
+        // highest priority (i.e. the lowest third element in the tripple in the
+        // accepting_states vector) is returned.
+        if !matching_states.is_empty() {
+            matching_states.sort_by(|a, b| {
+                a.last_match()
+                    .unwrap()
+                    .len()
+                    .cmp(&b.last_match().unwrap().len())
+                    .reverse()
+            });
+            let max_len = matching_states[0].last_match().unwrap().len();
+            let mut priority = usize::MAX;
+            let mut index = usize::MAX;
+            for (i, matching_state) in matching_states.iter().enumerate() {
+                if matching_state.last_match().unwrap().len() < max_len {
+                    break;
                 }
-                if index != usize::MAX {
-                    let state = matching_states[index].current_state();
-                    let (_, terminal_id, _) = self.accepting_states[state.as_usize()];
-                    let span = matching_states[index].last_match().unwrap();
-                    return Some(Match::new(terminal_id.as_usize(), span));
+                let match_priority = self.terminal_priority(matching_state.current_state());
+                if match_priority < priority {
+                    priority = match_priority;
+                    index = i;
                 }
+            }
+            if index != usize::MAX {
+                let state = matching_states[index].current_state();
+                let terminal_id = self.terminal_of_accepting_state(state);
+                let span = matching_states[index].last_match().unwrap();
+                return Some(Match::new(terminal_id.as_usize(), span));
             }
         }
         None
     }
 
-    fn priority_of_terminal(&self, state_id: StateID) -> usize {
+    fn terminal_priority(&self, state_id: StateID) -> usize {
         self.accepting_states
             .iter()
-            .find(|(state, _, _)| *state == state_id)
-            .map(|(_, _, priotity)| *priotity)
+            .position(|(state, _)| *state == state_id)
             .unwrap_or(usize::MAX)
+    }
+
+    fn terminal_of_accepting_state(&self, state_id: StateID) -> TerminalID {
+        self.accepting_states
+            .iter()
+            .find(|(state, _)| *state == state_id)
+            .map(|(_, terminal_id)| *terminal_id)
+            .unwrap()
     }
 
     /// Returns the target state of the transition for the given character.
@@ -230,17 +175,6 @@ impl CompiledDfa {
         None
     }
 
-    // pub(crate) fn search_on(&self) -> bool {
-    //     !self.matching_state.is_longest_match()
-    // }
-
-    /// Returns true if the search should continue on the next character if the automaton has ever
-    /// been in the matching state Start.
-    #[inline]
-    pub(crate) fn search_for_longer_match(&self) -> bool {
-        !self.matching_state.is_longest_match() && !self.matching_state.is_no_match()
-    }
-
     pub(crate) fn try_from_pattern(
         pattern: &str,
         terminal_id: TerminalID,
@@ -257,20 +191,14 @@ impl CompiledDfa {
     /// Create a new compiled DFA from a slice of (pattern, pattern_id) tuples.
     /// This function is used to create a compiled DFA from a scanner mode, just like the
     /// Flex scanner generator does.
-    pub(crate) fn try_from_scanner_mode(
+    pub(crate) fn try_from_patterns(
         patterns: &[(String, TerminalID)],
-        transitions: Vec<(usize, usize)>,
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
         let nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
         let dfa = Dfa::try_from_mp_nfa(nfa, character_class_registry)?;
         let dfa = dfa.minimize()?;
-        let mut compiled_dfa = CompiledDfa::try_from(dfa)?;
-        compiled_dfa.transitions = transitions
-            .iter()
-            .map(|(char_class, to_state)| ((*char_class).into(), (*to_state).into()))
-            .collect();
-        Ok(compiled_dfa)
+        CompiledDfa::try_from(dfa)
     }
 }
 
@@ -288,7 +216,6 @@ impl TryFrom<Dfa> for CompiledDfa {
 
         let mut state_ranges = Vec::new();
         let mut compiled_transitions = Vec::new();
-        let matching_state = MatchingState::new();
 
         // Initialize state ranges with dummy values.
         for _ in 0..states.len() {
@@ -310,31 +237,33 @@ impl TryFrom<Dfa> for CompiledDfa {
             compiled_transitions.append(&mut transitions_for_state);
         }
 
-        Ok(Self {
-            accepting_states: accepting_states
+        // Sort the accepting states by the index of the terminal id in the pattern vector.
+        let mut accepting_states: Vec<(StateID, TerminalID)> = accepting_states
+            .iter()
+            .map(|(state, terminal_id)| (*state, *terminal_id))
+            .collect();
+        accepting_states.sort_by(|a, b| {
+            patterns
                 .iter()
-                .map(|(state, terminal_id)| {
-                    (
-                        *state,
-                        *terminal_id,
-                        patterns
-                            .iter()
-                            .position(|(_, id)| *id == *terminal_id)
-                            .unwrap(),
-                    )
-                })
-                .collect(),
+                .position(|(_, id)| *id == a.1)
+                .unwrap()
+                .cmp(&patterns.iter().position(|(_, id)| *id == b.1).unwrap())
+        });
+
+        Ok(Self {
+            accepting_states,
             state_ranges,
             transitions: compiled_transitions,
-            matching_state,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use super::*;
-    use crate::internal::CharacterClassRegistry;
+    use crate::{internal::CharacterClassRegistry, ScannerImpl, ScannerMode, Span};
 
     /// A macro that simplifies the rendering of a dot file for a DFA.
     macro_rules! compiled_dfa_render_to {
@@ -353,5 +282,54 @@ mod tests {
             CompiledDfa::try_from_pattern(pattern, 0usize.into(), &mut character_class_registry)
                 .unwrap();
         compiled_dfa_render_to!(&compiled_dfa, "LineComment", character_class_registry);
+    }
+
+    #[test]
+    fn test_compiled_dfa_from_patterns() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.json");
+        let file = fs::File::open(path).unwrap();
+
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)
+            .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
+
+        assert_eq!(scanner_modes.len(), 1);
+
+        let mut compiled_dfa = CompiledDfa::try_from_patterns(
+            &scanner_modes[0].patterns,
+            &mut character_class_registry,
+        )
+        .unwrap();
+        compiled_dfa_render_to!(&compiled_dfa, "ParolMpDfa", character_class_registry);
+
+        // Assert that the accepting states are sorted in the same order as the patterns.
+        let mut index_in_patterns = usize::MAX;
+        let accepting_states = &compiled_dfa.accepting_states;
+        for (_, terminal_id) in accepting_states.iter() {
+            let pattern_id = scanner_modes[0]
+                .patterns
+                .iter()
+                .position(|(_, id)| *id == *terminal_id)
+                .unwrap();
+            if index_in_patterns == usize::MAX {
+                index_in_patterns = pattern_id;
+            } else {
+                assert!(
+                    index_in_patterns <= pattern_id,
+                    "Accepting states are not sorted: {} <= {}",
+                    index_in_patterns,
+                    pattern_id
+                );
+                index_in_patterns = pattern_id;
+            }
+        }
+
+        let match_char_class = ScannerImpl::try_from(scanner_modes)
+            .unwrap()
+            .create_match_char_class()
+            .unwrap();
+
+        let find_iter = compiled_dfa.find_match("::".char_indices(), &*match_char_class);
+        assert_eq!(find_iter, Some(Match::new(18, Span::new(0, 2))));
     }
 }
