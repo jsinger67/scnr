@@ -1,11 +1,13 @@
 use crate::{
     internal::{parse_regex_syntax, Nfa},
-    Result, ScnrError, Span,
+    Match, Result, ScnrError, Span,
 };
 
 use super::{
-    dfa::Dfa, matching_state::MatchingState, multi_pattern_nfa::MultiPatternNfa, CharClassID,
-    CharacterClassRegistry, StateID, TerminalID,
+    dfa::Dfa,
+    matching_state::{self, MatchingState},
+    multi_pattern_nfa::MultiPatternNfa,
+    CharClassID, CharacterClassRegistry, StateID, TerminalID,
 };
 
 /// A compiled DFA that can be used to match a string.
@@ -20,8 +22,10 @@ use super::{
 pub(crate) struct CompiledDfa {
     /// The pattern matched by the DFA.
     // pattern: String,
-    /// The accepting states of the DFA as well as the corresponding pattern id.
-    accepting_states: Vec<(StateID, TerminalID)>,
+    /// The accepting states of the DFA as well as the corresponding pattern id with the index of
+    /// the terminal in the patterns vector, which is indirectly proportional to the priority of
+    /// the matched terminal.
+    accepting_states: Vec<(StateID, TerminalID, usize)>,
     /// Each entry in the vector represents a state in the DFA. The entry is a tuple of first and
     /// last index into the transitions vector.
     state_ranges: Vec<(usize, usize)>,
@@ -101,7 +105,7 @@ impl CompiledDfa {
             return;
         }
         // Get the transitions for the current state
-        if let Some(next_state) = self.find_transition(c, match_char_class) {
+        if let Some(next_state) = self.find_transition(&self.matching_state, c, match_char_class) {
             if self.is_accepting(next_state) {
                 self.matching_state.transition_to_accepting(c_pos, c);
             } else {
@@ -113,13 +117,110 @@ impl CompiledDfa {
         }
     }
 
+    /// Find a match in a multi-pattern DFA.
+    /// Takes a CharIndices iterator and returns an Option<Match>.
+    /// The Match contains the start and end position of the match as well as the pattern id.
+    /// If no match is found, None is returned.
+    /// The DFA is advanced by one character at a time.
+    /// A list of MatchingStates is used to keep track of the current state of the DFA for each
+    /// pattern.
+    /// The DFA is reset before the search starts.
+    pub(crate) fn find_match(
+        &mut self,
+        mut char_indices: std::str::CharIndices,
+        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
+    ) -> Option<Match> {
+        let mut matching_states = Vec::new();
+        // Initialize the matching states after reading one character from the input.
+        let (c_pos, c) = char_indices.next()?;
+        // Take all transitions from the start state and initialize the matching states.
+        for transition in self.state_ranges[0].0..self.state_ranges[0].1 {
+            let (char_class, next_state) = self.transitions[transition];
+            if match_char_class(char_class, c) {
+                let mut matching_state = MatchingState::new();
+                if self.is_accepting(next_state) {
+                    matching_state.transition_to_accepting(c_pos, c);
+                } else {
+                    matching_state.transition_to_non_accepting(c_pos);
+                }
+                matching_state.set_current_state(next_state);
+                matching_states.push(matching_state);
+            }
+        }
+        // Advance the DFA by one character at a time for each remaining matching state.
+        for (c_pos, c) in char_indices {
+            for matching_state in &mut matching_states {
+                if matching_state.is_longest_match() {
+                    continue;
+                }
+                if let Some(next_state) = self.find_transition(matching_state, c, match_char_class)
+                {
+                    if self.is_accepting(next_state) {
+                        matching_state.transition_to_accepting(c_pos, c);
+                    } else {
+                        matching_state.transition_to_non_accepting(c_pos);
+                    }
+                    matching_state.set_current_state(next_state);
+                } else {
+                    matching_state.no_transition();
+                }
+            }
+            matching_states.retain(|m| !m.is_no_match());
+            if matching_states.is_empty() {
+                break;
+            }
+            if matching_states.iter().all(|m| m.is_longest_match()) {
+                // Find the longest match.
+                // If there are more than one longest matches with the same length, the one with the
+                // highest priority (i.e. the lowest third element in the tripple in the
+                // accepting_states vector) is returned.
+                matching_states.sort_by(|a, b| {
+                    a.last_match()
+                        .unwrap()
+                        .len()
+                        .cmp(&b.last_match().unwrap().len())
+                        .reverse()
+                });
+                let max_len = matching_states[0].last_match().unwrap().len();
+                let mut priority = usize::MAX;
+                let mut index = usize::MAX;
+                for (i, matching_state) in matching_states.iter().enumerate() {
+                    if matching_state.last_match().unwrap().len() < max_len {
+                        break;
+                    }
+                    let match_priority = self.priority_of_terminal(matching_state.current_state());
+                    if match_priority < priority {
+                        priority = match_priority;
+                        index = i;
+                    }
+                }
+                if index != usize::MAX {
+                    let state = matching_states[index].current_state();
+                    let (_, terminal_id, _) = self.accepting_states[state.as_usize()];
+                    let span = matching_states[index].last_match().unwrap();
+                    return Some(Match::new(terminal_id.as_usize(), span));
+                }
+            }
+        }
+        None
+    }
+
+    fn priority_of_terminal(&self, state_id: StateID) -> usize {
+        self.accepting_states
+            .iter()
+            .find(|(state, _, _)| *state == state_id)
+            .map(|(_, _, priotity)| *priotity)
+            .unwrap_or(usize::MAX)
+    }
+
     /// Returns the target state of the transition for the given character.
     fn find_transition(
         &self,
+        matching_state: &MatchingState<StateID>,
         c: char,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<StateID> {
-        let (start, end) = self.state_ranges[self.matching_state.current_state().as_usize()];
+        let (start, end) = self.state_ranges[matching_state.current_state().as_usize()];
         let transitions = &self.transitions[start..end];
         for (char_class, target_state) in transitions {
             if match_char_class(*char_class, c) {
@@ -178,7 +279,7 @@ impl TryFrom<Dfa> for CompiledDfa {
 
     fn try_from(dfa: Dfa) -> std::result::Result<Self, Self::Error> {
         let Dfa {
-            // patterns,
+            patterns,
             states,
             accepting_states,
             transitions,
@@ -210,10 +311,18 @@ impl TryFrom<Dfa> for CompiledDfa {
         }
 
         Ok(Self {
-            // pattern,
             accepting_states: accepting_states
                 .iter()
-                .map(|(state, terminal_id)| (*state, *terminal_id))
+                .map(|(state, terminal_id)| {
+                    (
+                        *state,
+                        *terminal_id,
+                        patterns
+                            .iter()
+                            .position(|(_, id)| *id == *terminal_id)
+                            .unwrap(),
+                    )
+                })
                 .collect(),
             state_ranges,
             transitions: compiled_transitions,
