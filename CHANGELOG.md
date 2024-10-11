@@ -17,11 +17,11 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.3.3 - Not released yet
+## 0.3.3 - 2024-10-11
 
 - Provide an iterator adapter `WithPositions` to convert the iterator over type `Match` to an
-iterator over types `MatchExt` which contains line and column information for the start and end
-position of each match.
+iterator over types `MatchExt` which contains line and column information for the start position as
+well as the end position of each match.
 ```rust
 let scanner = ScannerBuilder::new().add_scanner_modes(&*MODES).build().unwrap();
 let find_iter = scanner.find_iter(INPUT).with_positions();
@@ -33,6 +33,12 @@ the `Scanner` and leaving is only on the `ScannerImpl`.
 
 - We also allow now to set the scanner mode on a `FindMatches` and even on a `WithPositions` by
 implementing the new trait `ScannerModeSwitcher` for both of them
+
+- Add some documentation like PlantUML overview diagram to the `doc` folder. Also moved
+`matching_state.dot` into this folder to have anything in one place. For viewing the PlantUML
+diagram in Visual Studio Code I recommend the excellent
+[PlantUML extension](https://marketplace.visualstudio.com/items?itemName=jebbs.plantuml).
+Let me add that this overview diagram is in no way complete. It should just give a rough overview.
 
 ## 0.3.2 - 2024-09-09
 
