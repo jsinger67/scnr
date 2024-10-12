@@ -2,15 +2,15 @@
   {
     "name": "INITIAL",
     "patterns": [
-      ["/\\*", 1]
+      { "pattern": "/\\*", "token_type": 1}
     ],
     "transitions": [[1, 1]]
   },
   {
     "name": "COMMENT",
     "patterns": [
-      ["\\*/", 2],
-      ["[.\r\n]", 3]
+      { "pattern": "\\*/", "token_type": 2},
+      { "pattern": "[.\r\n]", "token_type": 3}
     ],
     "transitions": [[2, 0]]
   }

@@ -2,13 +2,13 @@
   {
     "name": "INITIAL",
     "patterns": [
-      ["\\r\\n|\\r|\\n", 0],
-      ["[\\s--\\r\\n]+", 1],
-      ["//.*(\\r\\n|\\r|\\n)", 2],
-      ["/\\*([.\\r\\n--*]|\\*[^/])*\\*/", 3],
-      ["[a-zA-Z_]\\w*", 4],
-      ["\\u{22}", 8],
-      [".", 9]
+      { "pattern": "\\r\\n|\\r|\\n", "token_type": 0},
+      { "pattern": "[\\s--\\r\\n]+", "token_type": 1},
+      { "pattern": "//.*(\\r\\n|\\r|\\n)", "token_type": 2},
+      { "pattern": "/\\*([.\\r\\n--*]|\\*[^/])*\\*/", "token_type": 3},
+      { "pattern": "[a-zA-Z_]\\w*", "token_type": 4},
+      { "pattern": "\\u{22}", "token_type": 8},
+      { "pattern": ".", "token_type": 9}
     ],
     "transitions": [
       [8, 1]
@@ -17,11 +17,11 @@
   {
     "name": "STRING",
     "patterns": [
-      ["\\u{5c}[\\u{22}\\u{5c}bfnt]", 5],
-      ["\\u{5c}[\\s^\\n\\r]*\\r?\\n", 6],
-      ["[^\\u{22}\\u{5c}]+", 7],
-      ["\\u{22}", 8],
-      [".", 9]
+      { "pattern": "\\u{5c}[\\u{22}\\u{5c}bfnt]", "token_type": 5},
+      { "pattern": "\\u{5c}[\\s^\\n\\r]*\\r?\\n", "token_type": 6},
+      { "pattern": "[^\\u{22}\\u{5c}]+", "token_type": 7},
+      { "pattern": "\\u{22}", "token_type": 8},
+      { "pattern": ".", "token_type": 9}
     ],
     "transitions": [
       [8, 0]

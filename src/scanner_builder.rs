@@ -1,4 +1,4 @@
-use crate::{scanner::Scanner, scanner_mode::ScannerMode, Result};
+use crate::{scanner::Scanner, scanner_mode::ScannerMode, Pattern, Result};
 
 /// A builder for creating a scanner.
 #[derive(Debug, Clone, Default)]
@@ -24,6 +24,11 @@ impl ScannerBuilder {
         P: IntoIterator<Item = S>,
         S: AsRef<str>,
     {
+        let patterns = patterns
+            .into_iter()
+            .enumerate()
+            .map(|(i, pattern)| Pattern::new(pattern.as_ref().to_string(), i))
+            .collect::<Vec<_>>();
         SimpleScannerBuilder::new(patterns)
     }
 
@@ -58,16 +63,10 @@ pub struct SimpleScannerBuilder {
 
 impl SimpleScannerBuilder {
     /// Creates a new simple scanner builder.
-    fn new<P, S>(patterns: P) -> Self
+    fn new<P>(patterns: P) -> Self
     where
-        P: IntoIterator<Item = S>,
-        S: AsRef<str>,
+        P: IntoIterator<Item = Pattern>,
     {
-        let patterns = patterns
-            .into_iter()
-            .enumerate()
-            .map(|(index, pattern)| (pattern, index))
-            .collect::<Vec<_>>();
         Self {
             scanner_mode: ScannerMode::new("INITIAL", patterns, vec![]),
         }
@@ -81,6 +80,8 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
+    use crate::Pattern;
+
     use super::*;
 
     /// A macro that simplifies the rendering of a dot file for a DFA.
@@ -103,7 +104,10 @@ mod tests {
         init();
         let scanner_mode = ScannerMode::new(
             "INITIAL",
-            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
             vec![(1, 1), (3, 1)],
         );
         let scanner = ScannerBuilder::new()
@@ -126,10 +130,17 @@ mod tests {
         let scanner_modes = vec![
             ScannerMode::new(
                 "INITIAL",
-                vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+                vec![
+                    Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                    Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+                ],
                 vec![(1, 1), (3, 1)],
             ),
-            ScannerMode::new("STRING", vec![(r#""[^"]*""#, 2)], vec![(2, 0)]),
+            ScannerMode::new(
+                "STRING",
+                vec![Pattern::new(r#""[^"]*""#.to_string(), 2)],
+                vec![(2, 0)],
+            ),
         ];
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&scanner_modes)

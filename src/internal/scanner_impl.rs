@@ -198,11 +198,7 @@ impl ScannerImpl {
             for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
                 debug!("Compiled DFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
                     let mut cursor = std::io::Cursor::new(Vec::new());
-                    let title = format!(
-                        "Compiled DFA {}::{}",
-                        modes[i].name,
-                        modes[i].patterns[j].0.escape_default()
-                    );
+                    let title = format!("Compiled DFA {}::{}", modes[i].name, modes[i].patterns[j]);
                     super::dot::compiled_dfa_render(
                         dfa,
                         &title,
@@ -233,11 +229,7 @@ impl ScannerImpl {
         use std::fs::File;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
-                let title = format!(
-                    "Compiled DFA {} - {}",
-                    modes[i].name,
-                    modes[i].patterns[j].0.escape_default()
-                );
+                let title = format!("Compiled DFA {} - {}", modes[i].name, modes[i].patterns[j]);
                 let file_name = format!(
                     "{}/{}_{}_{}.dot",
                     target_folder.as_ref().to_str().unwrap(),
@@ -301,14 +293,14 @@ impl std::fmt::Debug for ScannerImpl {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ScannerMode;
+    use crate::{Pattern, ScannerMode};
     use std::{convert::TryInto, fs};
 
     #[test]
     fn test_try_from() {
         let scanner_modes = vec![
-            ScannerMode::new("mode1", vec![("a".to_string(), 0)], vec![]),
-            ScannerMode::new("mode2", vec![("b".to_string(), 1)], vec![]),
+            ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
+            ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
         ];
         let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         assert_eq!(scanner_impl.character_classes.len(), 2);
@@ -318,8 +310,8 @@ mod tests {
     #[test]
     fn test_match_char_class() {
         let scanner_modes = vec![
-            ScannerMode::new("mode1", vec![("a".to_string(), 0)], vec![]),
-            ScannerMode::new("mode2", vec![("b".to_string(), 1)], vec![]),
+            ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
+            ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
         ];
         let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         let match_char_class = scanner_impl.create_match_char_class().unwrap();

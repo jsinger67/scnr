@@ -226,20 +226,20 @@ mod tests {
     use std::sync::LazyLock;
 
     use super::*;
-    use crate::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
+    use crate::{MatchExt, MatchExtIterator, Pattern, ScannerBuilder, ScannerMode};
 
     static MODES: LazyLock<[ScannerMode; 2]> = LazyLock::new(|| {
         [
             ScannerMode::new(
                 "INITIAL",
                 vec![
-                    (r"\r\n|\r|\n", 0),                 // Newline
-                    (r"[\s--\r\n]+", 1),                // Whitespace
-                    (r"//.*(\r\n|\r|\n)", 2),           // Line comment
-                    (r"/\*([.\r\n--*]|\*[^/])*\*/", 3), // Block comment
-                    (r"[a-zA-Z_]\w*", 4),               // Identifier
-                    (r"\u{22}", 8),                     // String delimiter
-                    (r".", 9),                          // Error
+                    Pattern::new(r"\r\n|\r|\n".to_string(), 0),  // Newline
+                    Pattern::new(r"[\s--\r\n]+".to_string(), 1), // Whitespace
+                    Pattern::new(r"//.*(\r\n|\r|\n)".to_string(), 2), // Line comment
+                    Pattern::new(r"/\*([.\r\n--*]|\*[^/])*\*/".to_string(), 3), // Block comment
+                    Pattern::new(r"[a-zA-Z_]\w*".to_string(), 4), // Identifier
+                    Pattern::new(r"\u{22}".to_string(), 8),      // String delimiter
+                    Pattern::new(r".".to_string(), 9),           // Error
                 ],
                 vec![
                     (8, 1), // Token "String delimiter" -> Mode "STRING"
@@ -248,11 +248,11 @@ mod tests {
             ScannerMode::new(
                 "STRING",
                 vec![
-                    (r"\u{5c}[\u{22}\u{5c}bfnt]", 5), // Escape sequence
-                    (r"\u{5c}[\s^\n\r]*\r?\n", 6),    // Line continuation
-                    (r"[^\u{22}\u{5c}]+", 7),         // String content
-                    (r"\u{22}", 8),                   // String delimiter
-                    (r".", 9),                        // Error
+                    Pattern::new(r"\u{5c}[\u{22}\u{5c}bfnt]".to_string(), 5), // Escape sequence
+                    Pattern::new(r"\u{5c}[\s^\n\r]*\r?\n".to_string(), 6),    // Line continuation
+                    Pattern::new(r"[^\u{22}\u{5c}]+".to_string(), 7),         // String content
+                    Pattern::new(r"\u{22}".to_string(), 8),                   // String delimiter
+                    Pattern::new(r".".to_string(), 9),                        // Error
                 ],
                 vec![
                     (8, 0), // Token "String delimiter" -> Mode "INITIAL"

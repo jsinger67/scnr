@@ -1,6 +1,6 @@
 use crate::{
     internal::{parse_regex_syntax, Nfa},
-    Result, ScnrError, Span,
+    Pattern, Result, ScnrError, Span,
 };
 
 use super::{
@@ -140,10 +140,10 @@ impl CompiledDfa {
     }
 
     pub(crate) fn try_from_pattern(
-        pattern: &str,
+        pattern: &Pattern,
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<CompiledDfa> {
-        let ast = parse_regex_syntax(pattern)?;
+        let ast = parse_regex_syntax(pattern.pattern())?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
         let dfa = dfa.minimize()?;
@@ -215,9 +215,9 @@ mod tests {
     #[test]
     fn test_compiled_dfa() {
         let mut character_class_registry = CharacterClassRegistry::new();
-        let pattern = "(//.*(\\r\\n|\\r|\\n))";
+        let pattern = Pattern::new("(//.*(\\r\\n|\\r|\\n))".to_string(), 0);
         let compiled_dfa =
-            CompiledDfa::try_from_pattern(pattern, &mut character_class_registry).unwrap();
+            CompiledDfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
         compiled_dfa_render_to!(&compiled_dfa, "LineComment", character_class_registry);
     }
 }

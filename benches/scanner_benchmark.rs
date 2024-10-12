@@ -1,7 +1,7 @@
 use std::{fs, sync::LazyLock, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use scnr::{scanner::Scanner, ScannerBuilder, ScannerMode};
+use scnr::{Scanner, ScannerBuilder, ScannerMode};
 
 const SCANNER_INPUT: &str = include_str!("./input_1.par");
 

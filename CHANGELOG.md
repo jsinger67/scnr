@@ -17,6 +17,10 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
+## 0.3.4 - Not released yet
+
+- Support for lookahead, negative and positive
+
 ## 0.3.3 - 2024-10-11
 
 - Provide an iterator adapter `WithPositions` to convert the iterator over type `Match` to an

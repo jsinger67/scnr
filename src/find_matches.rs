@@ -1,6 +1,9 @@
 use log::trace;
 
-use crate::{FindMatchesImpl, Match, Position, PositionProvider, ScannerImpl, ScannerModeSwitcher};
+use crate::{
+    internal::{find_matches_impl::FindMatchesImpl, ScannerImpl},
+    Match, Position, PositionProvider, ScannerModeSwitcher,
+};
 
 /// The result of a peek operation.
 #[derive(Debug, PartialEq)]

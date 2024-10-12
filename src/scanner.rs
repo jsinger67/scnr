@@ -2,7 +2,7 @@ use std::{fmt::Debug, path::Path};
 
 use log::trace;
 
-use crate::{FindMatches, Result, ScannerImpl, ScannerMode};
+use crate::{internal::ScannerImpl, FindMatches, Result, ScannerMode};
 
 /// A trait to switch between scanner modes.
 ///
@@ -134,7 +134,7 @@ impl Debug for Scanner {
 
 #[cfg(test)]
 mod tests {
-    use crate::ScannerBuilder;
+    use crate::{Pattern, ScannerBuilder};
 
     use super::*;
 
@@ -158,7 +158,10 @@ mod tests {
         init();
         let scanner_mode = ScannerMode::new(
             "INITIAL",
-            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
             vec![(1, 1), (3, 1)],
         );
         let scanner = ScannerBuilder::new()
@@ -181,7 +184,10 @@ mod tests {
         init();
         let scanner_mode = ScannerMode::new(
             "INITIAL",
-            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
             vec![(1, 1), (3, 1)],
         );
         let mut scanner = ScannerBuilder::new()

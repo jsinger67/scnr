@@ -1,4 +1,7 @@
-use crate::internal::{ScannerModeID, TerminalID, TerminalIDBase};
+use crate::{
+    internal::{ScannerModeID, TerminalID, TerminalIDBase},
+    Pattern,
+};
 use serde::{Deserialize, Serialize};
 
 /// A scanner mode that can be used to scan specific parts of the input.
@@ -11,7 +14,7 @@ pub struct ScannerMode {
     /// type numbers.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
-    pub(crate) patterns: Vec<(String, TerminalID)>,
+    pub(crate) patterns: Vec<Pattern>,
 
     /// The transitions between the scanner modes triggered by a token type number.
     /// The entries are tuples of the token type numbers and the new scanner mode index and are
@@ -33,16 +36,12 @@ impl ScannerMode {
     ///     scanner.
     /// # Returns
     /// The new scanner mode.
-    pub fn new<P, S, T>(name: &str, patterns: P, mode_transitions: T) -> Self
+    pub fn new<P, T>(name: &str, patterns: P, mode_transitions: T) -> Self
     where
-        P: IntoIterator<Item = (S, usize)>,
-        S: AsRef<str>,
+        P: IntoIterator<Item = Pattern>,
         T: IntoIterator<Item = (usize, usize)>,
     {
-        let patterns = patterns
-            .into_iter()
-            .map(|(p, t)| (p.as_ref().to_string(), TerminalID::new(t as TerminalIDBase)))
-            .collect();
+        let patterns = patterns.into_iter().collect::<Vec<_>>();
         let transitions = mode_transitions
             .into_iter()
             .map(|(t, m)| (TerminalID::new(t as TerminalIDBase), ScannerModeID::new(m)))
@@ -77,7 +76,10 @@ mod tests {
         init();
         let scanner_mode = ScannerMode::new(
             "INITIAL",
-            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
             vec![],
         );
         assert_eq!("INITIAL", scanner_mode.name());
@@ -90,7 +92,10 @@ mod tests {
         init();
         let scanner_mode = ScannerMode::new(
             "INITIAL",
-            vec![(r"\r\n|\r|\n", 1), (r"(//.*(\r\n|\r|\n))", 3)],
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
             vec![],
         );
 
