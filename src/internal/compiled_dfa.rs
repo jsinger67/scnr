@@ -4,7 +4,8 @@ use crate::{
 };
 
 use super::{
-    dfa::Dfa, matching_state::MatchingState, CharClassID, CharacterClassRegistry, StateID,
+    dfa::Dfa, matching_state::MatchingState, CharClassID, CharacterClassRegistry,
+    CompiledLookahead, StateID,
 };
 
 /// A compiled DFA that can be used to match a string.
@@ -15,7 +16,7 @@ use super::{
 ///
 /// MatchFunctions are not Clone nor Copy, so we aggregate them into a new struct CompiledDfa
 /// which is Clone and Copy neither.
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompiledDfa {
     /// The pattern matched by the DFA.
     // pattern: String,
@@ -29,20 +30,11 @@ pub(crate) struct CompiledDfa {
     transitions: Vec<(CharClassID, StateID)>,
     /// The state of matching
     matching_state: MatchingState<StateID>,
+    /// An optional compiled lookahead that is used to check if the DFA should match the input.
+    lookahead: Option<CompiledLookahead>,
 }
 
 impl CompiledDfa {
-    // Creates a new compiled DFA with the given pattern and accepting states.
-    // Returns the pattern matched by the DFA.
-    // pub fn pattern(&self) -> &str {
-    //     &self.pattern
-    // }
-
-    // Returns the accepting states of the DFA.
-    // pub fn accepting_states(&self) -> &[StateID] {
-    //     &self.accepting_states
-    // }
-
     /// Get the pattern id if the given state is an accepting state.
     /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
     #[allow(unused)]
@@ -86,6 +78,25 @@ impl CompiledDfa {
     /// Returns the last match of the DFA.
     pub(crate) fn current_match(&self) -> Option<Span> {
         self.matching_state.last_match()
+    }
+
+    /// Returns true if the DFA has a lookahead.
+    #[inline]
+    pub(crate) fn has_lookahead(&self) -> bool {
+        self.lookahead.is_some()
+    }
+
+    /// Returns true if the lookahead matches the input.
+    pub(crate) fn matches_lookahead(
+        &self,
+        char_indices: std::str::CharIndices,
+        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
+    ) -> bool {
+        if let Some(lookahead) = &mut self.lookahead.clone() {
+            lookahead.matches(char_indices, match_char_class)
+        } else {
+            true
+        }
     }
 
     /// Advances the DFA by one character.
@@ -147,7 +158,11 @@ impl CompiledDfa {
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
         let dfa = dfa.minimize()?;
-        let compiled_dfa = CompiledDfa::try_from(dfa)?;
+        let mut compiled_dfa = CompiledDfa::try_from(dfa)?;
+        compiled_dfa.lookahead = pattern.lookahead().map(|lookahead| {
+            CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)
+                .expect("Failed to compile lookahead")
+        });
         Ok(compiled_dfa)
     }
 }
@@ -194,6 +209,7 @@ impl TryFrom<Dfa> for CompiledDfa {
             state_ranges,
             transitions: compiled_transitions,
             matching_state,
+            lookahead: None,
         })
     }
 }
@@ -201,7 +217,7 @@ impl TryFrom<Dfa> for CompiledDfa {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::internal::CharacterClassRegistry;
+    use crate::{internal::CharacterClassRegistry, Lookahead};
 
     /// A macro that simplifies the rendering of a dot file for a DFA.
     macro_rules! compiled_dfa_render_to {
@@ -219,5 +235,20 @@ mod tests {
         let compiled_dfa =
             CompiledDfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
         compiled_dfa_render_to!(&compiled_dfa, "LineComment", character_class_registry);
+    }
+
+    #[test]
+    fn test_compiled_dfa_with_lookahead() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let pattern = Pattern::new(">:".to_string(), 0)
+            .with_lookahead(Lookahead::new(false, ":".to_string()));
+
+        let compiled_dfa =
+            CompiledDfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
+        compiled_dfa_render_to!(
+            &compiled_dfa,
+            "OperatorWithNegativeLookahead",
+            character_class_registry
+        );
     }
 }

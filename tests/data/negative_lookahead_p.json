@@ -1,0 +1,13 @@
+[
+  {
+    "name": "INITIAL",
+    "patterns": [
+      {
+        "pattern": ">:",
+        "token_type": 1,
+        "lookahead": { "is_positive": false, "pattern": ":" }
+      }
+    ],
+    "transitions": []
+  }
+]

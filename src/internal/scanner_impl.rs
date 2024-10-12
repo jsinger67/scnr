@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{char, sync::Arc};
 
 use log::{debug, trace};
 
@@ -59,6 +59,8 @@ impl ScannerImpl {
             dfa.reset();
         }
 
+        let cloned_char_indices = char_indices.clone();
+
         // All indices of the DFAs that are still active.
         let mut active_dfas = (0..patterns.len()).collect::<Vec<_>>();
 
@@ -94,7 +96,7 @@ impl ScannerImpl {
             }
         }
 
-        let current_match = self.find_first_longest_match();
+        let current_match = self.find_first_longest_match(cloned_char_indices);
         if let Some(m) = current_match.as_ref() {
             self.execute_possible_mode_switch(m);
         }
@@ -117,6 +119,8 @@ impl ScannerImpl {
             dfa.reset();
         }
 
+        let cloned_char_indices = char_indices.clone();
+
         // All indices of the DFAs that are still active.
         let mut active_dfas = (0..dfas.len()).collect::<Vec<_>>();
 
@@ -134,13 +138,13 @@ impl ScannerImpl {
             }
         }
 
-        self.find_first_longest_match()
+        self.find_first_longest_match(cloned_char_indices)
     }
 
     /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the
     /// lowest index.
     /// We find the pattern with the lowest start position and the longest length.
-    fn find_first_longest_match(&mut self) -> Option<Match> {
+    fn find_first_longest_match(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
         let mut current_match: Option<Match> = None;
         {
             let patterns = &self.scanner_modes[self.current_mode].dfas;
@@ -151,6 +155,19 @@ impl ScannerImpl {
                         || (dfa_match.start == current_match.unwrap().start()
                             && dfa_match.len() > current_match.unwrap().span().len())
                     {
+                        if dfa.has_lookahead() {
+                            // We have to check if the lookahead pattern matches.
+                            let mut char_indices = char_indices.clone();
+                            // We advance the char_indices iterator by the length of the match.
+                            for _ in 0..dfa_match.len() {
+                                char_indices.next();
+                            }
+                            // We check if the lookahead pattern matches.
+                            if !dfa.matches_lookahead(char_indices, &*self.match_char_class) {
+                                // The lookahead pattern does not match, we continue.
+                                continue;
+                            }
+                        }
                         // We have a match and we continue the look for a longer match.
                         current_match = Some(Match::new(tok_type.as_usize(), dfa_match));
                     }

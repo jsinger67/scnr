@@ -10,6 +10,10 @@ pub(crate) use character_class_registry::CharacterClassRegistry;
 pub(crate) mod compiled_dfa;
 pub(crate) use compiled_dfa::CompiledDfa;
 
+/// Module that provides functions and types related to compiled Lookahead.
+pub(crate) mod compiled_lookahead;
+pub(crate) use compiled_lookahead::CompiledLookahead;
+
 /// Module that provides functions and types related to compiled ScannerModes.
 pub(crate) mod compiled_scanner_mode;
 pub(crate) use compiled_scanner_mode::CompiledScannerMode;

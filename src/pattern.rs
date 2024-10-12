@@ -72,10 +72,10 @@ impl Pattern {
     }
 
     /// Create a new pattern with lookahead.
-    pub fn new_with_lookahead(pattern: Self, lookahead: Lookahead) -> Self {
+    pub fn with_lookahead(self, lookahead: Lookahead) -> Self {
         Self {
-            pattern: pattern.pattern,
-            token_type: pattern.token_type,
+            pattern: self.pattern,
+            token_type: self.token_type,
             lookahead: Some(lookahead),
         }
     }
