@@ -40,7 +40,9 @@ impl CompiledLookahead {
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> bool {
+        let mut ever_looped = false;
         for (c_pos, c) in char_indices {
+            ever_looped = true;
             self.dfa.advance(c_pos, c, match_char_class);
             if !self.dfa.search_for_longer_match() {
                 if self.is_positive {
@@ -50,6 +52,10 @@ impl CompiledLookahead {
                 }
             }
         }
-        false
+        if self.is_positive {
+            ever_looped
+        } else {
+            !ever_looped
+        }
     }
 }

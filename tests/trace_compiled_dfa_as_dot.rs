@@ -19,7 +19,14 @@ fn trace_compiled_dfa_as_dot() {
     for entry in fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data")).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if path.extension().unwrap() != "json" {
+        if path.extension().unwrap() != "json"
+            || path
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .ends_with("_tokens")
+        {
             continue;
         }
 

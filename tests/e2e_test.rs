@@ -4,7 +4,7 @@
 use std::fs;
 
 use regex::Regex;
-use scnr::{Match, ScannerBuilder, ScannerMode};
+use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
 
 #[test]
 fn e2e_test() {
@@ -18,7 +18,14 @@ fn e2e_test() {
     for entry in fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data")).unwrap() {
         let entry = entry.unwrap();
         let path = entry.path();
-        if path.extension().unwrap() != "json" {
+        if path.extension().unwrap() != "json"
+            || path
+                .file_stem()
+                .unwrap()
+                .to_str()
+                .unwrap()
+                .ends_with("_tokens")
+        {
             continue;
         }
 
@@ -40,14 +47,16 @@ fn e2e_test() {
         // Open the input file which has the same base name as the json file but with a .input
         // extension.
         let input_path = path.with_extension("input");
-        let input = fs::read_to_string(&input_path).unwrap();
+        let input = fs::read_to_string(&input_path)
+            .unwrap_or_else(|_| panic!("Failed to open token file {}", input_path.display()));
+
         let input = rx_newline.replace_all(&input, "\n");
 
         // Find all matches in the input file
-        let find_iter = scanner.find_iter(&input);
+        let find_iter = scanner.find_iter(&input).with_positions();
 
         // Collect all matches
-        let matches: Vec<Match> = find_iter.collect();
+        let matches: Vec<MatchExt> = find_iter.collect();
 
         println!("Matches:\n{}\n", serde_json::to_string(&matches).unwrap());
         for ma in &matches {
@@ -57,10 +66,22 @@ fn e2e_test() {
         println!("Matches count: {}", matches.len());
 
         // Open the expected output file which has the same base name as the json file but with a
-        // .tokens extension.
-        let token_file_path = path.with_extension("tokens");
-        let token_file = fs::File::open(&token_file_path).unwrap();
-        let expected_matches: Vec<Match> = serde_json::from_reader(&token_file).unwrap();
+        // _tokens.json suffix.
+        let mut token_file_path = path.clone();
+        token_file_path.set_file_name(format!(
+            "{}_{}",
+            path.file_stem().unwrap().to_str().unwrap(),
+            "tokens.json"
+        ));
+        let token_file = fs::File::open(&token_file_path).unwrap_or_else(|e| {
+            panic!(
+                "Failed to open token file {} ({}): {}",
+                token_file_path.display(),
+                path.display(),
+                e
+            )
+        });
+        let expected_matches: Vec<MatchExt> = serde_json::from_reader(&token_file).unwrap();
 
         // Compare the matches
         assert_eq!(matches, expected_matches);

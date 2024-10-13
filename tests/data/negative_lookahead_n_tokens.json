@@ -1,0 +1,8 @@
+[
+  {
+    "token_type": 1,
+    "span": { "start": 5, "end": 7 },
+    "start_position": { "line": 3, "column": 1 },
+    "end_position": { "line": 3, "column": 3 }
+  }
+]
