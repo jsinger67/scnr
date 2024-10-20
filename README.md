@@ -83,10 +83,30 @@ implement this feature.
 
 ## Not supported Flex features
 
-Additional to the anchors `^` and `$`, *trailing contexts*, like in ```ab/cd```, is currently not
-supported because of the need to provide lookahead outside of the normal advance loop of the
-character iterator. Although preparations are already made, we will postpone this as long as strong
-needs arise.
+As follows from the above regex restrictions anchors `^` and `$` are currently not supported.
+
+## Lookahead
+
+As of version 0.3.4 `scnr` supports *trailing contexts*, like in Flex, e.g. ```ab/cd```.
+
+Additionally to Flex `scnr` supports not only positive lookahead but also negative lookahead.
+
+The configuration of these look ahead constraints can be done via the `Pattern` struct which now
+contains an optional member `lookahead`. The inner type of the Option is `Lookahead` that contains
+a patter string and a flag the determines whether the lookahead pattern should match (positive
+lookahead) or not match (negative lookahead).
+
+With the help of a positive lookahead you can define a semantic like
+```
+match pattern R only if it is followed by pattern S
+```
+On the other hand with a negative lookahead you can define a semantic like
+```
+match pattern R only if it is NOT followed by pattern S
+```
+
+The lookahead pattern denoted above as `S` are not considered as part of the matched string.
+
 
 ## Greediness of repetitions
 
