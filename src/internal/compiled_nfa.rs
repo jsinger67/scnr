@@ -227,6 +227,8 @@ impl std::fmt::Display for StateData {
 
 #[cfg(test)]
 mod tests {
+    use log::trace;
+
     use super::*;
     use crate::{
         internal::{character_class_registry::CharacterClassRegistry, parser::parse_regex_syntax},
