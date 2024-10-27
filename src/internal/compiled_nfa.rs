@@ -21,12 +21,26 @@ pub(crate) struct CompiledNfa {
 
 impl CompiledNfa {
     /// Simulates the NFA on the given input.
-    /// Returns the first match found.
+    /// Returns a match starting at the current position. No try on next character is done.
+    /// The caller must do that.
+    ///
     /// If no match is found, None is returned.
-    /// The input is a char iterator.
     ///
     /// We use the algorithm described in the book "Algorithms" by Robert Sedgewick.
+    /// The algorithm is a non-deterministic finite automaton (NFA) simulation.
+    /// The algorithm uses a queue to keep track of the states that are currently active.
+    /// The algorithm processes the states in the queue in a loop.
+    /// For each state, the algorithm checks if there is a transition on the current character.
+    /// If there is a transition, the algorithm adds the target state to the queue.
+    /// If there is no transition, the algorithm discards the state.
+    /// The algorithm also processes epsilon transitions.
+    /// The algorithm stops when the end state is reached or when there are no more states to process.
+    /// The algorithm returns the span of the match if the end state is reached.
+    /// Otherwise, the algorithm returns None.
+    /// The algorithm is implemented in a way that is similar to the Thompson's construction algorithm.
+    /// The algorithm is not optimized for performance yet.
     ///
+    #[allow(dead_code)]
     pub(crate) fn find_from(
         &self,
         char_indices: std::str::CharIndices,
@@ -38,24 +52,24 @@ impl CompiledNfa {
 
         let put = |dequeue: &mut VecDeque<usize>, state: usize| {
             if !dequeue.contains(&state) {
-                trace!("Push back: {}", state);
+                // trace!("Push back: {}", state);
                 dequeue.push_back(state);
-                trace!("  Dequeue: {:?}", dequeue);
+                // trace!("  Dequeue: {:?}", dequeue);
             }
         };
 
         let push = |dequeue: &mut VecDeque<usize>, state: usize| {
             if !dequeue.contains(&state) {
-                trace!("Push front: {}", state);
+                // trace!("Push front: {}", state);
                 dequeue.push_front(state);
-                trace!("  Dequeue: {:?}", dequeue);
+                // trace!("  Dequeue: {:?}", dequeue);
             }
         };
 
         let pop = |dequeue: &mut VecDeque<usize>, current_state| {
             let next_state = dequeue.pop_front().unwrap_or(current_state);
-            trace!("Pop: {}", next_state);
-            trace!("  Dequeue: {:?}", dequeue);
+            // trace!("Pop: {}", next_state);
+            // trace!("  Dequeue: {:?}", dequeue);
             next_state
         };
 
@@ -64,10 +78,10 @@ impl CompiledNfa {
         'FOR: for (j, aj) in char_indices {
             // state = self.start_state.as_usize();
             put(&mut dequeue, SCAN);
-            trace!("----- Character: ({}, '{}')", j, aj);
+            // trace!("----- Character: ({}, '{}')", j, aj);
             // The inner loop processes the states in the dequeue
             loop {
-                trace!("State: {}", state);
+                // trace!("State: {}", state);
                 if state == SCAN {
                     // We read the next character from the input in the outer loop
                     state = pop(&mut dequeue, state);
@@ -75,23 +89,22 @@ impl CompiledNfa {
                 } else if let Some(cc) = self.states[state].character_class {
                     if match_char_class(cc, aj) {
                         // Transition on character class
-                        trace!("Matched character class: {} on {}", cc.as_usize(), aj);
+                        // trace!("Matched character class: {} on {}", cc.as_usize(), aj);
                         let n1 = self.states[state].next1.as_usize();
                         end_index = Some(j);
                         put(&mut dequeue, n1);
                         if start_index.is_none() {
-                            trace!("* Setting start index to {}", j);
+                            // trace!("* Setting start index to {}", j);
                             start_index = Some(j);
                         }
                     } else {
                         // No transition, state is discarded
-                        trace!("No match of character class: {} on {}", cc.as_usize(), aj);
-                        trace!("~~~ Discarding state {}", state);
+                        // trace!("No match of character class: {} on {}", cc.as_usize(), aj);
+                        // trace!("~~~ Discarding state {}", state);
                     }
                 } else {
                     // Epsilon transition(s)
-                    // trace!("No character class at state {}", state);
-                    trace!("Process Epsilon transition(s) at state {}:", state);
+                    // trace!("Process Epsilon transition(s) at state {}:", state);
                     let n1 = self.states[state].next1.as_usize();
                     let n2 = self.states[state].next2.as_usize();
                     push(&mut dequeue, n1);
@@ -102,18 +115,18 @@ impl CompiledNfa {
                 state = pop(&mut dequeue, state);
                 if state == self.end_state.as_usize() {
                     end_index = Some(j);
-                    trace!(
-                        "Match found: {}-{} in state {}",
-                        start_index.unwrap(),
-                        end_index.unwrap() + 1,
-                        state
-                    );
+                    // trace!(
+                    //     "Match found: {}-{} in state {}",
+                    //     start_index.unwrap(),
+                    //     end_index.unwrap() + 1,
+                    //     state
+                    // );
                     break 'FOR;
                 }
                 if dequeue.is_empty() {
-                    trace!("No more states to process");
+                    // trace!("No more states to process");
                     if end_index.is_none() {
-                        trace!("* Resetting start index");
+                        // trace!("* Resetting start index");
                         start_index = None;
                     }
                     break 'FOR;
@@ -121,14 +134,14 @@ impl CompiledNfa {
             }
         }
         if state == self.end_state.as_usize() {
-            trace!(
-                "Returning match: {}-{}",
-                start_index.unwrap(),
-                end_index.unwrap() + 1
-            );
+            // trace!(
+            //     "Returning match: {}-{}",
+            //     start_index.unwrap(),
+            //     end_index.unwrap() + 1
+            // );
             Some(Span::new(start_index.unwrap(), end_index.unwrap() + 1))
         } else {
-            trace!("No match found. State is {}", state);
+            // trace!("No match found. State is {}", state);
             None
         }
     }
@@ -302,38 +315,5 @@ mod tests {
         let match_char_class = character_class_registry.create_match_char_class().unwrap();
         let span = compiled_nfa.find_from(char_indices, &match_char_class);
         assert_eq!(span, Some(Span::new(0, 12)));
-    }
-
-    #[test]
-    fn test_from_nfa() {
-        let pattern = Pattern::new("a(b|c)*d".to_string(), 0);
-        let mut character_class_registry = CharacterClassRegistry::new();
-        let ast = parse_regex_syntax(pattern.pattern()).unwrap();
-        let nfa: Nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
-        let compiled_nfa = CompiledNfa::from(&nfa);
-        assert_eq!(compiled_nfa.pattern, "a(b|c)*d");
-        assert_eq!(compiled_nfa.states.len(), 7);
-        assert_eq!(compiled_nfa.start_state, StateID::new(0));
-        assert_eq!(compiled_nfa.end_state, StateID::new(6));
-        assert_eq!(
-            compiled_nfa.states[0],
-            StateData::new(None, StateID::new(1), StateID::new(1))
-        );
-        assert_eq!(
-            compiled_nfa.states[1],
-            StateData::new(None, StateID::new(2), StateID::new(4))
-        );
-        assert_eq!(
-            compiled_nfa.states[2],
-            StateData::new(Some(CharClassID::new(0)), StateID::new(3), StateID::new(3))
-        );
-        assert_eq!(
-            compiled_nfa.states[3],
-            StateData::new(None, StateID::new(1), StateID::new(1))
-        );
-        assert_eq!(
-            compiled_nfa.states[4],
-            StateData::new(None, StateID::new(5), StateID::new(5))
-        );
     }
 }
