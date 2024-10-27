@@ -1,8 +1,5 @@
 use std::collections::VecDeque;
 
-use log::trace;
-use serde::de;
-
 use crate::{internal::nfa::Nfa, Span};
 
 use super::{CharClassID, StateID};
@@ -67,10 +64,11 @@ impl CompiledNfa {
         };
 
         let pop = |dequeue: &mut VecDeque<usize>, current_state| {
-            let next_state = dequeue.pop_front().unwrap_or(current_state);
+            dequeue.pop_front().unwrap_or(current_state)
+            // let next_state = dequeue.pop_front().unwrap_or(current_state);
             // trace!("Pop: {}", next_state);
             // trace!("  Dequeue: {:?}", dequeue);
-            next_state
+            // next_state
         };
 
         let mut start_index = None;

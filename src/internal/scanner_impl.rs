@@ -4,7 +4,7 @@ use log::{debug, trace};
 
 use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
 
-use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode, MatchFunction};
+use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode};
 
 #[derive(Clone)]
 pub(crate) struct ScannerImpl {

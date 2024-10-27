@@ -16,7 +16,7 @@ pub(crate) use compiled_lookahead::CompiledLookahead;
 
 /// Module that provides functions and types related to compiled NFA.
 pub(crate) mod compiled_nfa;
-pub(crate) use compiled_nfa::CompiledNfa;
+// pub(crate) use compiled_nfa::CompiledNfa;
 
 /// Module that provides functions and types related to compiled ScannerModes.
 pub(crate) mod compiled_scanner_mode;
