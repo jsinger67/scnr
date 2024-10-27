@@ -1,6 +1,8 @@
+use log::trace;
 use regex_syntax::ast::Ast;
 
 use super::{ids::CharClassIDBase, CharClassID, CharacterClass, ComparableAst};
+use crate::{internal::MatchFunction, Result, ScnrError};
 
 /// CharacterClassRegistry is a registry of character classes.
 #[derive(Debug, Clone, Default)]
@@ -64,5 +66,26 @@ impl CharacterClassRegistry {
     #[allow(unused)]
     pub(crate) fn is_empty(&self) -> bool {
         self.character_classes.is_empty()
+    }
+
+    pub(crate) fn create_match_char_class(
+        &self,
+    ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
+        let match_functions =
+            self.character_classes
+                .iter()
+                .try_fold(Vec::new(), |mut acc, cc| {
+                    trace!("Create match function for char class {:?}", cc);
+                    let match_function: MatchFunction = cc.ast().try_into()?;
+                    acc.push(match_function);
+                    Ok::<Vec<MatchFunction>, ScnrError>(acc)
+                })?;
+        Ok(Box::new(move |char_class, c| {
+            let res = match_functions[char_class.as_usize()].call(c);
+            if res {
+                trace!("Match char class: {:?} {:?} -> {:?}", char_class, c, res);
+            }
+            res
+        }))
     }
 }

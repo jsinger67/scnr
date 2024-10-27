@@ -95,12 +95,18 @@ impl Nfa {
             char_class,
             target_state,
         });
+        debug_assert!(
+            self.states[from].epsilon_transitions.len() + self.states[from].transitions.len() <= 2
+        );
     }
 
     pub(crate) fn add_epsilon_transition(&mut self, from: StateID, target_state: StateID) {
         self.states[from]
             .epsilon_transitions
             .push(EpsilonTransition { target_state });
+        debug_assert!(
+            self.states[from].epsilon_transitions.len() + self.states[from].transitions.len() <= 2
+        );
     }
 
     pub(crate) fn new_state(&mut self) -> StateID {
@@ -735,7 +741,7 @@ mod tests_try_from {
         expected_char_classes: usize,
     }
 
-    const TEST_DATA: [TestData; 7] = [
+    const TEST_DATA: &[TestData] = &[
         TestData {
             name: "SingleCharacter1",
             input: "a",
@@ -791,6 +797,22 @@ mod tests_try_from {
             expected_start_state: 6,
             expected_end_state: 13,
             expected_char_classes: 2,
+        },
+        TestData {
+            name: "String",
+            input: r"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}",
+            expected_states: 26,
+            expected_start_state: 0,
+            expected_end_state: 25,
+            expected_char_classes: 6,
+        },
+        TestData {
+            name: "Example1",
+            input: "(A*B|AC)D",
+            expected_states: 14,
+            expected_start_state: 10,
+            expected_end_state: 13,
+            expected_char_classes: 4,
         },
     ];
 
