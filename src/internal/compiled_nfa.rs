@@ -1,7 +1,5 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
-use log::trace;
-
 use crate::{internal::nfa::Nfa, Pattern, Result, Span};
 
 use super::{
@@ -51,7 +49,8 @@ impl CompiledNfa {
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<Span> {
         // trace!("NFA {}", self);
-        let mut current_states: Vec<StateSetID> = vec![self.start_state];
+        let mut current_states: Vec<StateSetID> = Vec::with_capacity(self.states.len());
+        current_states.push(self.start_state);
         let mut next_states: Vec<StateSetID> = Vec::with_capacity(self.states.len());
         let mut match_start = None;
         let mut match_end = None;
@@ -59,6 +58,7 @@ impl CompiledNfa {
             if match_start.is_none() {
                 match_start = Some(index);
             }
+
             // trace!("-------------------");
             // trace!("Character: {}", c);
             // trace!("Current states: {:?}", current_states);
@@ -86,6 +86,9 @@ impl CompiledNfa {
             // trace!("Next states: {:?}", next_states);
             current_states.clear();
             std::mem::swap(&mut current_states, &mut next_states);
+            if current_states.is_empty() {
+                break;
+            }
         }
         match_end.map(|match_end| Span::new(match_start.unwrap(), match_end + 1))
     }
