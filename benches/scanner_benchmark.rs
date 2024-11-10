@@ -40,7 +40,7 @@ fn builder_benchmark(c: &mut Criterion) {
 }
 
 fn nfa_builder_benchmark(c: &mut Criterion) {
-    c.bench_function("builder_benchmark", |b| {
+    c.bench_function("nfa_builder_benchmark", |b| {
         b.iter(|| {
             black_box(
                 ScannerBuilder::new()
