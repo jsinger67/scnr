@@ -1,8 +1,11 @@
-use std::{char, sync::Arc};
+use std::{char, path::Path, sync::Arc};
 
 use log::{debug, trace};
 
-use crate::{FindMatches, Match, Result, ScannerMode, ScnrError};
+use crate::{
+    scanner::ScannerImplTrait, FindMatches, Match, Result, ScannerMode, ScannerModeSwitcher,
+    ScnrError,
+};
 
 use super::{CharClassID, CharacterClassRegistry, CompiledScannerMode};
 
@@ -21,24 +24,86 @@ pub(crate) struct ScannerImpl {
 }
 
 impl ScannerImpl {
-    /// Creates a new scanner implementation from the given scanner modes.
-
-    /// Returns an iterator over all non-overlapping matches.
-    /// The iterator yields a [`Match`] value until no more matches could be found.
-    pub(crate) fn find_iter(scanner_impl: Self, input: &str) -> FindMatches<'_> {
-        FindMatches::new(scanner_impl, input)
-    }
-
     pub(crate) fn create_match_char_class(
         &self,
     ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
         self.character_classes.create_match_char_class()
     }
 
+    /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the
+    /// lowest index.
+    /// We find the pattern with the lowest start position and the longest length.
+    fn find_first_longest_match(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
+        let mut current_match: Option<Match> = None;
+        {
+            let patterns = &self.scanner_modes[self.current_mode].dfas;
+            for (dfa, tok_type) in patterns.iter() {
+                if let Some(dfa_match) = dfa.current_match() {
+                    if current_match.is_none()
+                        || dfa_match.start < current_match.unwrap().start()
+                        || (dfa_match.start == current_match.unwrap().start()
+                            && dfa_match.len() > current_match.unwrap().span().len())
+                    {
+                        if dfa.has_lookahead() {
+                            // We have to check if the lookahead pattern matches.
+                            let mut char_indices = char_indices.clone();
+                            // We advance the char_indices iterator by the length of the match.
+                            for _ in 0..dfa_match.len() {
+                                char_indices.next();
+                            }
+                            // We check if the lookahead pattern matches.
+                            if !dfa.matches_lookahead(char_indices, &*self.match_char_class) {
+                                // The lookahead pattern does not match, we continue.
+                                continue;
+                            }
+                        }
+                        // We have a match and we continue the look for a longer match.
+                        current_match = Some(Match::new(tok_type.as_usize(), dfa_match));
+                    }
+                }
+            }
+        }
+        current_match
+    }
+
+    /// Executes a possible mode switch if a transition is defined for the token type found.
+    #[inline]
+    fn execute_possible_mode_switch(&mut self, current_match: &Match) {
+        let current_mode = &self.scanner_modes[self.current_mode];
+        // We perform a scanner mode switch if a transition is defined for the token type found.
+        if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
+            self.current_mode = next_mode;
+        }
+    }
+}
+
+impl ScannerModeSwitcher for ScannerImpl {
+    fn mode_name(&self, index: usize) -> Option<&str> {
+        self.scanner_modes.get(index).map(|mode| mode.name.as_str())
+    }
+
+    #[inline]
+    fn current_mode(&self) -> usize {
+        self.current_mode
+    }
+
+    #[inline]
+    fn set_mode(&mut self, mode: usize) {
+        self.current_mode = mode;
+    }
+}
+
+impl ScannerImplTrait for ScannerImpl {
+    /// Returns an iterator over all non-overlapping matches.
+    /// The iterator yields a [`Match`] value until no more matches could be found.
+    fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
+        FindMatches::new(self.dyn_clone(), input)
+    }
+
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all DFAs are advanced in parallel by one character at a time.
-    pub(crate) fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
+    fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].dfas;
         for (dfa, _) in patterns.iter_mut() {
             dfa.reset();
@@ -98,7 +163,7 @@ impl ScannerImpl {
     /// The name `peek_from` is used to indicate that this method is used for peeking ahead.
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
-    pub(crate) fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
+    fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
         let dfas = &mut self.scanner_modes[self.current_mode].dfas;
         for (dfa, _) in dfas.iter_mut() {
             dfa.reset();
@@ -126,75 +191,18 @@ impl ScannerImpl {
         self.find_first_longest_match(cloned_char_indices)
     }
 
-    /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the
-    /// lowest index.
-    /// We find the pattern with the lowest start position and the longest length.
-    fn find_first_longest_match(&mut self, char_indices: std::str::CharIndices) -> Option<Match> {
-        let mut current_match: Option<Match> = None;
-        {
-            let patterns = &self.scanner_modes[self.current_mode].dfas;
-            for (dfa, tok_type) in patterns.iter() {
-                if let Some(dfa_match) = dfa.current_match() {
-                    if current_match.is_none()
-                        || dfa_match.start < current_match.unwrap().start()
-                        || (dfa_match.start == current_match.unwrap().start()
-                            && dfa_match.len() > current_match.unwrap().span().len())
-                    {
-                        if dfa.has_lookahead() {
-                            // We have to check if the lookahead pattern matches.
-                            let mut char_indices = char_indices.clone();
-                            // We advance the char_indices iterator by the length of the match.
-                            for _ in 0..dfa_match.len() {
-                                char_indices.next();
-                            }
-                            // We check if the lookahead pattern matches.
-                            if !dfa.matches_lookahead(char_indices, &*self.match_char_class) {
-                                // The lookahead pattern does not match, we continue.
-                                continue;
-                            }
-                        }
-                        // We have a match and we continue the look for a longer match.
-                        current_match = Some(Match::new(tok_type.as_usize(), dfa_match));
-                    }
-                }
-            }
-        }
-        current_match
-    }
-
-    /// Executes a possible mode switch if a transition is defined for the token type found.
-    #[inline]
-    fn execute_possible_mode_switch(&mut self, current_match: &Match) {
-        let current_mode = &self.scanner_modes[self.current_mode];
-        // We perform a scanner mode switch if a transition is defined for the token type found.
-        if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
-            self.current_mode = next_mode;
-        }
-    }
-
-    /// Returns the number of the next scanner mode if a transition is defined for the token type.
-    /// If no transition is defined, None returned.
-    pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
+    fn has_transition(&self, token_type: usize) -> Option<usize> {
         self.scanner_modes[self.current_mode].has_transition(token_type)
     }
 
-    /// Returns the name of the scanner mode with the given index.
-    /// If the index is out of bounds, None is returned.
-    pub(crate) fn mode_name(&self, index: usize) -> Option<&str> {
-        self.scanner_modes.get(index).map(|mode| mode.name.as_str())
-    }
-
-    /// Returns the current scanner mode. Used for tests and debugging purposes.
-    #[allow(dead_code)]
-    #[inline]
-    pub(crate) fn current_mode(&self) -> usize {
-        self.current_mode
+    fn reset(&mut self) {
+        self.current_mode = 0;
     }
 
     /// Traces the compiled DFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
-    pub(crate) fn log_compiled_dfas_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
+    fn log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
@@ -220,21 +228,18 @@ impl ScannerImpl {
     /// Generates the compiled DFAs as a Graphviz DOT files.
     /// The DOT files are written to the target folder.
     /// The file names are derived from the scanner mode names and the index of the DFA.
-    pub(crate) fn generate_compiled_dfas_as_dot<T>(
+    fn generate_compiled_automata_as_dot(
         &self,
         modes: &[ScannerMode],
-        target_folder: T,
-    ) -> Result<()>
-    where
-        T: AsRef<std::path::Path>,
-    {
+        target_folder: &Path,
+    ) -> Result<()> {
         use std::fs::File;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             for (j, (dfa, t)) in scanner_mode.dfas.iter().enumerate() {
                 let title = format!("Compiled DFA {} - {}", modes[i].name, modes[i].patterns[j]);
                 let file_name = format!(
                     "{}/{}_{}_{}.dot",
-                    target_folder.as_ref().to_str().unwrap(),
+                    target_folder.to_str().unwrap(),
                     modes[i].name,
                     j,
                     t
@@ -246,14 +251,8 @@ impl ScannerImpl {
         Ok(())
     }
 
-    /// Resets the scanner to the initial state.
-    #[inline]
-    pub(crate) fn reset(&mut self) {
-        self.current_mode = 0;
-    }
-
-    pub(crate) fn set_mode(&mut self, mode: usize) {
-        self.current_mode = mode;
+    fn dyn_clone(&self) -> Box<dyn ScannerImplTrait> {
+        Box::new(ScannerImpl::clone(self))
     }
 }
 
@@ -343,7 +342,7 @@ mod tests {
 
         // Generate the compiled DFAs as dot files.
         scanner_impl
-            .generate_compiled_dfas_as_dot(&scanner_modes, target_folder)
+            .generate_compiled_automata_as_dot(&scanner_modes, Path::new(target_folder))
             .unwrap();
 
         // Check if the dot files are generated.

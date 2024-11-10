@@ -1,8 +1,8 @@
 use log::trace;
 
 use crate::{
-    internal::{find_matches_impl::FindMatchesImpl, ScannerImpl},
-    Match, Position, PositionProvider, ScannerModeSwitcher,
+    internal::find_matches_impl::FindMatchesImpl, scanner::ScannerImplTrait, Match, Position,
+    PositionProvider, ScannerModeSwitcher,
 };
 
 /// The result of a peek operation.
@@ -34,7 +34,7 @@ pub struct FindMatches<'h> {
 
 impl<'h> FindMatches<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
+    pub(crate) fn new(scanner_impl: Box<dyn ScannerImplTrait>, input: &'h str) -> Self {
         Self {
             inner: FindMatchesImpl::new(scanner_impl, input),
         }

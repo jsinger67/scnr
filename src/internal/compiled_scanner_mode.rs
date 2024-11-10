@@ -1,6 +1,9 @@
 use crate::{Result, ScannerMode, ScnrError, ScnrErrorKind};
 
-use super::{CharacterClassRegistry, CompiledDfa, ScannerModeID, TerminalID, TerminalIDBase};
+use super::{
+    compiled_nfa::CompiledNfa, CharacterClassRegistry, CompiledDfa, ScannerModeID, TerminalID,
+    TerminalIDBase,
+};
 
 macro_rules! unsupported {
     ($feature:expr) => {
@@ -66,6 +69,79 @@ impl CompiledScannerMode {
         Ok(Self {
             name,
             dfas: patterns,
+            transitions,
+        })
+    }
+
+    /// Check if the scanner configuration has a transition on the given terminal index
+    pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
+        for (tok_type, scanner) in &self.transitions {
+            match token_type.cmp(&tok_type.as_usize()) {
+                std::cmp::Ordering::Less => return None,
+                std::cmp::Ordering::Equal => return Some(scanner.as_usize()),
+                std::cmp::Ordering::Greater => continue,
+            }
+        }
+        None
+    }
+}
+
+/// A compiled scanner mode that can be used to scan a string.
+#[derive(Debug, Clone)]
+pub(crate) struct CompiledNfaScannerMode {
+    /// The name of the scanner mode.
+    pub(crate) name: String,
+    /// The regular expressions that are valid token types in this mode, bundled with their token
+    /// type numbers.
+    /// The priorities of the patterns are determined by their order in the vector. Lower indices
+    /// have higher priority if multiple patterns match the input and have the same length.
+    pub(crate) nfas: Vec<(CompiledNfa, TerminalID)>,
+    pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
+}
+
+impl CompiledNfaScannerMode {
+    /// Create a new compiled scanner mode.
+    pub(crate) fn try_from_scanner_mode(
+        scanner_mode: ScannerMode,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let ScannerMode {
+            name,
+            patterns,
+            transitions,
+        } = scanner_mode;
+        let patterns =
+            patterns
+                .iter()
+                .enumerate()
+                .try_fold(Vec::new(), |mut acc, (index, pattern)| {
+                    let result = CompiledNfa::try_from_pattern(pattern, character_class_registry);
+                    match &result {
+                        Err(ScnrError { source }) => match &**source {
+                            ScnrErrorKind::RegexSyntaxError(r, _) => {
+                                Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
+                                    r.clone(),
+                                    format!("Error in pattern #{} '{}'", index, pattern),
+                                )))?
+                            }
+                            ScnrErrorKind::UnsupportedFeature(s) => Err(unsupported!(format!(
+                                "Error in pattern #{} '{}': {}",
+                                index, pattern, s
+                            )))?,
+                            _ => Err(result.unwrap_err())?,
+                        },
+                        _ => {
+                            acc.push((
+                                result.unwrap(),
+                                (pattern.terminal_id() as TerminalIDBase).into(),
+                            ));
+                            Ok::<Vec<(CompiledNfa, TerminalID)>, ScnrError>(acc)
+                        }
+                    }
+                })?;
+        Ok(Self {
+            name,
+            nfas: patterns,
             transitions,
         })
     }

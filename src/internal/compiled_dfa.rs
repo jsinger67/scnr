@@ -93,7 +93,7 @@ impl CompiledDfa {
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> bool {
         if let Some(lookahead) = &mut self.lookahead.clone() {
-            lookahead.matches(char_indices, match_char_class)
+            lookahead.satisfies_lookahead(char_indices, match_char_class)
         } else {
             true
         }
@@ -153,16 +153,19 @@ impl CompiledDfa {
     pub(crate) fn try_from_pattern(
         pattern: &Pattern,
         character_class_registry: &mut CharacterClassRegistry,
-    ) -> Result<CompiledDfa> {
+    ) -> Result<Self> {
         let ast = parse_regex_syntax(pattern.pattern())?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         let dfa: Dfa = Dfa::try_from_nfa(nfa, character_class_registry)?;
         let dfa = dfa.minimize()?;
         let mut compiled_dfa = CompiledDfa::try_from(dfa)?;
-        compiled_dfa.lookahead = pattern.lookahead().map(|lookahead| {
-            CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)
-                .expect("Failed to compile lookahead")
-        });
+        compiled_dfa.lookahead = match pattern.lookahead() {
+            Some(lookahead) => Some(CompiledLookahead::try_from_lookahead(
+                lookahead,
+                character_class_registry,
+            )?),
+            None => None,
+        };
         Ok(compiled_dfa)
     }
 }

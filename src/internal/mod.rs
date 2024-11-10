@@ -12,7 +12,7 @@ pub(crate) use compiled_dfa::CompiledDfa;
 
 /// Module that provides functions and types related to compiled Lookahead.
 pub(crate) mod compiled_lookahead;
-pub(crate) use compiled_lookahead::CompiledLookahead;
+pub(crate) use compiled_lookahead::{CompiledLookahead, CompiledNfaLookahead};
 
 /// Module that provides functions and types related to compiled NFA.
 pub(crate) mod compiled_nfa;
@@ -59,3 +59,7 @@ pub(crate) use parser::parse_regex_syntax;
 /// Module that provides functions and types related to scanner implementations.
 pub(crate) mod scanner_impl;
 pub(crate) use scanner_impl::ScannerImpl;
+
+/// Module that provides functions and types related to NFA scanner implementations.
+pub(crate) mod scanner_nfa_impl;
+pub(crate) use scanner_nfa_impl::ScannerNfaImpl;

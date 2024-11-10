@@ -103,6 +103,7 @@ macro_rules! impl_id {
 /// The ID type for automata states. Used in NFA and DFA.
 pub(crate) type StateIDBase = u32;
 impl_id!(StateID, StateIDBase);
+impl_id!(StateSetID, StateIDBase);
 
 /// The ID type for character classes. This is the index of the character class in the character
 /// class registry which in turn is used for all DFAs in the scanner.

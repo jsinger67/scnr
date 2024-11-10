@@ -82,9 +82,7 @@ impl CharacterClassRegistry {
                 })?;
         Ok(Box::new(move |char_class, c| {
             let res = match_functions[char_class.as_usize()].call(c);
-            if res {
-                trace!("Match char class: {:?} {:?} -> {:?}", char_class, c, res);
-            }
+            trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
             res
         }))
     }

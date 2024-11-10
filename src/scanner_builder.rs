@@ -4,6 +4,7 @@ use crate::{scanner::Scanner, scanner_mode::ScannerMode, Pattern, Result};
 #[derive(Debug, Clone, Default)]
 pub struct ScannerBuilder {
     scanner_modes: Vec<ScannerMode>,
+    use_nfa: bool,
 }
 
 impl ScannerBuilder {
@@ -11,6 +12,7 @@ impl ScannerBuilder {
     pub fn new() -> Self {
         Self {
             scanner_modes: Vec::new(),
+            use_nfa: false,
         }
     }
 
@@ -29,7 +31,7 @@ impl ScannerBuilder {
             .enumerate()
             .map(|(i, pattern)| Pattern::new(pattern.as_ref().to_string(), i))
             .collect::<Vec<_>>();
-        SimpleScannerBuilder::new(patterns)
+        SimpleScannerBuilder::new(patterns, self.use_nfa)
     }
 
     /// Adds a scanner mode to the scanner builder.
@@ -44,9 +46,15 @@ impl ScannerBuilder {
         self
     }
 
+    /// Sets the scanner to use an NFA instead of a DFA.
+    pub fn use_nfa(mut self) -> Self {
+        self.use_nfa = true;
+        self
+    }
+
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Scanner::try_new(self.scanner_modes)
+        Scanner::try_new(self.scanner_modes, self.use_nfa)
     }
 }
 
@@ -59,22 +67,30 @@ impl ScannerBuilder {
 #[derive(Debug, Clone)]
 pub struct SimpleScannerBuilder {
     scanner_mode: ScannerMode,
+    use_nfa: bool,
 }
 
 impl SimpleScannerBuilder {
     /// Creates a new simple scanner builder.
-    fn new<P>(patterns: P) -> Self
+    fn new<P>(patterns: P, use_nfa: bool) -> Self
     where
         P: IntoIterator<Item = Pattern>,
     {
         Self {
             scanner_mode: ScannerMode::new("INITIAL", patterns, vec![]),
+            use_nfa,
         }
+    }
+
+    /// Sets the scanner to use an NFA instead of a DFA.
+    pub fn use_nfa(mut self) -> Self {
+        self.use_nfa = true;
+        self
     }
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Scanner::try_new(vec![self.scanner_mode])
+        Scanner::try_new(vec![self.scanner_mode], self.use_nfa)
     }
 }
 
@@ -83,17 +99,6 @@ mod tests {
     use crate::Pattern;
 
     use super::*;
-
-    /// A macro that simplifies the rendering of a dot file for a DFA.
-    macro_rules! compiled_dfa_render_to {
-        ($dfa:expr, $label:expr, $reg:expr) => {
-            let label = format!("{} Compiled DFA", $label);
-            let mut f =
-                std::fs::File::create(format!("target/{}CompiledDfaFromScannerMode.dot", $label))
-                    .unwrap();
-            $crate::internal::dot::compiled_dfa_render($dfa, &label, &$reg, &mut f);
-        };
-    }
 
     fn init() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -114,14 +119,7 @@ mod tests {
             .add_scanner_mode(scanner_mode)
             .build()
             .unwrap();
-        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
-        let compiled_dfa = &scanner.inner.scanner_modes[0].dfas[1].0;
-
-        compiled_dfa_render_to!(
-            &compiled_dfa,
-            "LineComment",
-            scanner.inner.character_classes
-        );
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
     }
 
     #[test]
@@ -146,14 +144,7 @@ mod tests {
             .add_scanner_modes(&scanner_modes)
             .build()
             .unwrap();
-        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
-        let compiled_dfa = &scanner.inner.scanner_modes[0].dfas[1].0;
-
-        compiled_dfa_render_to!(
-            &compiled_dfa,
-            "LineComment",
-            scanner.inner.character_classes
-        );
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
     }
 
     #[test]
@@ -163,7 +154,7 @@ mod tests {
             .add_patterns(["\r\n|\r|\n", "//.*(\r\n|\r|\n)"])
             .build()
             .unwrap();
-        assert_eq!("INITIAL", scanner.inner.scanner_modes[0].name);
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
         let input = r#"
         // Line comment1
 
