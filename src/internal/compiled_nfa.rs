@@ -50,50 +50,44 @@ impl CompiledNfa {
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<Span> {
-        trace!("NFA {}", self);
+        // trace!("NFA {}", self);
         let mut current_states: Vec<StateSetID> = vec![self.start_state];
-        let mut next_states: Vec<StateSetID> = Vec::new();
+        let mut next_states: Vec<StateSetID> = Vec::with_capacity(self.states.len());
         let mut match_start = None;
         let mut match_end = None;
         for (index, c) in char_indices {
             if match_start.is_none() {
                 match_start = Some(index);
             }
-            trace!("-------------------");
-            trace!("Character: {}", c);
-            trace!("Current states: {:?}", current_states);
+            // trace!("-------------------");
+            // trace!("Character: {}", c);
+            // trace!("Current states: {:?}", current_states);
             for state in &current_states {
-                trace!("----------");
-                trace!("State: {}", state);
+                // trace!("----------");
+                // trace!("State: {}", state);
                 if match_end.is_none() && self.end_states.contains(state) {
-                    trace!("Set end index to {} in state {}", index, state);
+                    // trace!("Set end index to {} in state {}", index, state);
                     match_end = Some(index);
                 }
                 for (cc, next) in &self.states[state.as_usize()].transitions {
-                    trace!("Transition: #{} -> '{}'", cc.id(), next);
+                    // trace!("Transition: #{} -> '{}'", cc.id(), next);
                     if match_char_class(*cc, c) {
                         if !next_states.contains(next) {
-                            trace!("Push next state {}", next);
+                            // trace!("Push next state {}", next);
                             next_states.push(*next);
                         }
                         if self.end_states.contains(next) {
-                            trace!("Update end index to {} for state {}", index, next);
+                            // trace!("Update end index to {} for state {}", index, next);
                             match_end = Some(index);
                         }
                     }
                 }
             }
-            trace!("Next states: {:?}", next_states);
+            // trace!("Next states: {:?}", next_states);
             current_states.clear();
             std::mem::swap(&mut current_states, &mut next_states);
         }
-        if match_end.is_some() {
-            trace!("Match found: {:?}", (match_start, match_end));
-            Some(Span::new(match_start.unwrap(), match_end.unwrap() + 1))
-        } else {
-            trace!("No match found, current states: {:?}", current_states);
-            None
-        }
+        match_end.map(|match_end| Span::new(match_start.unwrap(), match_end + 1))
     }
 
     pub(crate) fn try_from_pattern(
