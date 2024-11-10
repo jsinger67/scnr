@@ -95,12 +95,18 @@ impl Nfa {
             char_class,
             target_state,
         });
+        debug_assert!(
+            self.states[from].epsilon_transitions.len() + self.states[from].transitions.len() <= 2
+        );
     }
 
     pub(crate) fn add_epsilon_transition(&mut self, from: StateID, target_state: StateID) {
         self.states[from]
             .epsilon_transitions
             .push(EpsilonTransition { target_state });
+        debug_assert!(
+            self.states[from].epsilon_transitions.len() + self.states[from].transitions.len() <= 2
+        );
     }
 
     pub(crate) fn new_state(&mut self) -> StateID {
@@ -357,6 +363,8 @@ impl Nfa {
             }
             i += 1;
         }
+        closure.sort_unstable();
+        closure.dedup();
         closure
     }
 
@@ -395,6 +403,21 @@ impl Nfa {
         move_set.sort_unstable();
         move_set.dedup();
         move_set
+    }
+
+    pub(crate) fn get_match_transitions(
+        &self,
+        start_state: impl Iterator<Item = StateID>,
+    ) -> Vec<(CharClassID, StateID)> {
+        let mut target_states = Vec::new();
+        for state in start_state {
+            for transition in self.states()[state].transitions() {
+                target_states.push((transition.char_class(), transition.target_state()));
+            }
+        }
+        target_states.sort_unstable();
+        target_states.dedup();
+        target_states
     }
 }
 
@@ -495,6 +518,8 @@ impl From<StateID> for EpsilonTransition {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeSet;
+
     use crate::internal::parser::parse_regex_syntax;
 
     use super::*;
@@ -707,6 +732,139 @@ mod tests {
         assert_eq!(nfa.start_state.as_usize(), 0);
         assert_eq!(nfa.end_state.as_usize(), 1);
     }
+
+    #[test]
+    fn test_clousure_of_states() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_ast(
+            // SecondLastBitIs1
+            parse_regex_syntax(r"(0|1)*1(0|1)").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        // Calculate the epsilon closure of the start state
+        let closure = nfa.epsilon_closure(nfa.start_state);
+
+        // Validate the NFA closure
+        assert_eq!(closure.len(), 7);
+        assert_eq!(BTreeSet::<StateID>::from_iter(closure.iter().cloned()), {
+            let mut set = BTreeSet::new();
+            set.insert(StateID::new(0));
+            set.insert(StateID::new(2));
+            set.insert(StateID::new(4));
+            set.insert(StateID::new(5));
+            set.insert(StateID::new(6));
+            set.insert(StateID::new(7));
+            set.insert(StateID::new(8));
+            set
+        });
+
+        // Calculate the transitions on a character classes in the closure
+        let matching_states = closure.iter().fold(BTreeSet::new(), |mut set, state| {
+            for transition in nfa.states()[*state].transitions() {
+                set.insert((transition.char_class(), transition.target_state()));
+            }
+            set
+        });
+
+        // Validate the transitions from the closure of the start state
+        assert_eq!(matching_states.len(), 3);
+        assert_eq!(matching_states, {
+            let mut set = BTreeSet::new();
+            set.insert((CharClassID::new(0), StateID::new(1)));
+            set.insert((CharClassID::new(1), StateID::new(3)));
+            set.insert((CharClassID::new(1), StateID::new(9)));
+            set
+        });
+
+        // Calculate the epsilon closure of each target state of the transitions
+        let closures = matching_states.iter().fold(
+            Vec::<(CharClassID, BTreeSet<StateID>)>::new(),
+            |mut set, (char_class, state)| {
+                let closure = nfa.epsilon_closure(*state);
+                set.push((*char_class, BTreeSet::from_iter(closure.iter().cloned())));
+                set
+            },
+        );
+
+        eprintln!("{:?}", closures);
+
+        // Validate the epsilon closures of the target states
+        assert_eq!(closures.len(), 3);
+        assert_eq!(closures, {
+            let mut vec = Vec::new();
+            vec.push((CharClassID::new(0), {
+                BTreeSet::from_iter(vec![
+                    StateID::new(0),
+                    StateID::new(1),
+                    StateID::new(2),
+                    StateID::new(4),
+                    StateID::new(5),
+                    StateID::new(7),
+                    StateID::new(8),
+                ])
+            }));
+            vec.push((CharClassID::new(1), {
+                BTreeSet::from_iter(vec![
+                    StateID::new(0),
+                    StateID::new(2),
+                    StateID::new(3),
+                    StateID::new(4),
+                    StateID::new(5),
+                    StateID::new(7),
+                    StateID::new(8),
+                ])
+            }));
+            vec.push((CharClassID::new(1), {
+                BTreeSet::from_iter(vec![
+                    StateID::new(9),
+                    StateID::new(10),
+                    StateID::new(12),
+                    StateID::new(14),
+                ])
+            }));
+            vec
+        });
+
+        // Calculate the transitions on a character classes in the closures
+        let matching_states = closures
+            .iter()
+            .fold(Vec::new(), |mut vec, (char_class, closure)| {
+                for state in closure {
+                    for transition in nfa.states()[*state].transitions() {
+                        vec.push((
+                            *char_class,
+                            transition.char_class(),
+                            transition.target_state(),
+                        ));
+                    }
+                }
+                vec
+            });
+
+        // Validate the transitions from the closures of the target states
+        assert_eq!(matching_states.len(), 8);
+        assert_eq!(
+            BTreeSet::<(CharClassID, CharClassID, StateID)>::from_iter(
+                matching_states.iter().cloned()
+            ),
+            {
+                let mut set = BTreeSet::new();
+                set.insert((CharClassID::new(0), CharClassID::new(0), StateID::new(1)));
+                set.insert((CharClassID::new(0), CharClassID::new(1), StateID::new(3)));
+                set.insert((CharClassID::new(0), CharClassID::new(1), StateID::new(9)));
+                set.insert((CharClassID::new(1), CharClassID::new(0), StateID::new(1)));
+                set.insert((CharClassID::new(1), CharClassID::new(1), StateID::new(3)));
+                set.insert((CharClassID::new(1), CharClassID::new(0), StateID::new(11)));
+                set.insert((CharClassID::new(1), CharClassID::new(1), StateID::new(9)));
+                set.insert((CharClassID::new(1), CharClassID::new(1), StateID::new(13)));
+                set
+            }
+        );
+    }
 }
 
 #[cfg(test)]
@@ -735,7 +893,7 @@ mod tests_try_from {
         expected_char_classes: usize,
     }
 
-    const TEST_DATA: [TestData; 7] = [
+    const TEST_DATA: &[TestData] = &[
         TestData {
             name: "SingleCharacter1",
             input: "a",
@@ -791,6 +949,22 @@ mod tests_try_from {
             expected_start_state: 6,
             expected_end_state: 13,
             expected_char_classes: 2,
+        },
+        TestData {
+            name: "String",
+            input: r"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}",
+            expected_states: 26,
+            expected_start_state: 0,
+            expected_end_state: 25,
+            expected_char_classes: 6,
+        },
+        TestData {
+            name: "Example1",
+            input: "(A*B|AC)D",
+            expected_states: 14,
+            expected_start_state: 10,
+            expected_end_state: 13,
+            expected_char_classes: 4,
         },
     ];
 

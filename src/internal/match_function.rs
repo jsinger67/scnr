@@ -5,7 +5,7 @@ use regex_syntax::ast::{
     ClassUnicodeKind::{Named, NamedValue, OneLetter},
     Literal,
 };
-use seshat::unicode::Ucd;
+use seshat::unicode::{props::Gc, Ucd};
 
 use crate::{Result, ScnrError};
 
@@ -154,7 +154,9 @@ impl MatchFunction {
         let match_function = match kind {
             ClassPerlKind::Digit => MatchFn::new(|ch| ch.is_numeric()),
             ClassPerlKind::Space => MatchFn::new(|ch| ch.is_whitespace()),
-            ClassPerlKind::Word => MatchFn::new(|ch| ch.is_alphanumeric()),
+            ClassPerlKind::Word => MatchFn::new(|ch| {
+                ch.is_alphanumeric() || ch.join_c() || ch.gc() == Gc::Pc || ch.gc() == Gc::Mn
+            }),
         };
         Ok(if negated {
             MatchFn::new(move |ch| !match_function.call(ch))
@@ -233,7 +235,12 @@ impl MatchFunction {
                     ClassAsciiKind::Punct => MatchFn::new(|ch| ch.is_ascii_punctuation()),
                     ClassAsciiKind::Space => MatchFn::new(|ch| ch.is_whitespace()),
                     ClassAsciiKind::Upper => MatchFn::new(|ch| ch.is_uppercase()),
-                    ClassAsciiKind::Word => MatchFn::new(|ch| ch.is_alphanumeric()),
+                    ClassAsciiKind::Word => MatchFn::new(|ch| {
+                        ch.is_alphanumeric()
+                            || ch.join_c()
+                            || ch.gc() == Gc::Pc
+                            || ch.gc() == Gc::Mn
+                    }),
                     ClassAsciiKind::Xdigit => MatchFn::new(|ch| ch.is_ascii_hexdigit()),
                 };
                 if negated {
@@ -511,5 +518,13 @@ mod tests {
         assert!(match_function.call('A'));
         assert!(match_function.call('1'));
         assert!(!match_function.call(' '));
+    }
+
+    #[test]
+    fn test_evaluate_general_category() {
+        assert_eq!('_'.gc(), Gc::Pc);
+        let ast = Parser::new().parse(r"\w").unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
+        assert!(match_function.call('_'));
     }
 }

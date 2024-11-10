@@ -6,8 +6,7 @@ use std::fs;
 use regex::Regex;
 use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
 
-#[test]
-fn e2e_test() {
+fn test_method(use_nfa: bool) {
     // Initialize the logger
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -29,6 +28,11 @@ fn e2e_test() {
             continue;
         }
 
+        // Select only the parol.json files
+        // if entry.file_name() != "parol.json" {
+        //     continue;
+        // }
+
         println!("--------------------------------------------------");
         println!("Entry: {:?}", entry.file_name());
         println!("--------------------------------------------------");
@@ -39,8 +43,9 @@ fn e2e_test() {
             .unwrap_or_else(|e| panic!("**** Failed to read json file {}: {}", path.display(), e));
 
         // Create a scanner from the scanner builder
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&scanner_modes)
+        let scanner = ScannerBuilder::new().add_scanner_modes(&scanner_modes);
+
+        let scanner = if use_nfa { scanner.use_nfa() } else { scanner }
             .build()
             .unwrap();
 
@@ -84,6 +89,16 @@ fn e2e_test() {
         let expected_matches: Vec<MatchExt> = serde_json::from_reader(&token_file).unwrap();
 
         // Compare the matches
-        assert_eq!(matches, expected_matches);
+        assert_eq!(matches, expected_matches, "Failed for {}", path.display());
     }
+}
+
+#[test]
+fn e2e_test() {
+    test_method(false);
+}
+
+#[test]
+fn e2e_test_nfa() {
+    test_method(true);
 }

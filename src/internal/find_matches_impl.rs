@@ -1,10 +1,9 @@
-use super::ScannerImpl;
-use crate::{Match, PeekResult, Position};
+use crate::{scanner::ScannerImplTrait, Match, PeekResult, Position};
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
     // The scanner used to find matches.
-    scanner_impl: ScannerImpl,
+    scanner_impl: Box<dyn ScannerImplTrait>,
     // The input haystack.
     char_indices: std::str::CharIndices<'h>,
     // The last position of the char_indices iterator.
@@ -19,7 +18,7 @@ pub(crate) struct FindMatchesImpl<'h> {
 
 impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
+    pub(crate) fn new(scanner_impl: Box<dyn ScannerImplTrait>, input: &'h str) -> Self {
         let mut me = Self {
             scanner_impl,
             char_indices: input.char_indices(),
@@ -269,8 +268,13 @@ Id1
 Id2
 "#;
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[test]
     fn test_find_matches_impl() {
+        init();
         println!("{}", serde_json::to_string(&*MODES).unwrap());
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
@@ -317,7 +321,58 @@ Id2
     }
 
     #[test]
+    fn test_find_matches_impl_nfa() {
+        init();
+        println!("{}", serde_json::to_string(&*MODES).unwrap());
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .use_nfa()
+            .build()
+            .unwrap();
+
+        eprintln!("Input: '{}'", INPUT);
+        let find_matches = scanner.find_iter(INPUT);
+        let matches: Vec<Match> = find_matches.collect();
+        // assert_eq!(matches.len(), 9);
+        assert_eq!(
+            matches,
+            vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into()),
+                Match::new(0, (4usize..5).into()),
+                Match::new(8, (5usize..6).into()),
+                Match::new(7, (6usize..15).into()),
+                Match::new(8, (15usize..16).into()),
+                Match::new(0, (16usize..17).into()),
+                Match::new(4, (17usize..20).into()),
+                Match::new(0, (20usize..21).into())
+            ]
+        );
+        assert_eq!(
+            matches
+                .iter()
+                .map(|m| {
+                    let rng = m.span().start..m.span().end;
+                    INPUT.get(rng).unwrap()
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                "\n",
+                "Id1",
+                "\n",
+                "\"",
+                "1. String",
+                "\"",
+                "\n",
+                "Id2",
+                "\n"
+            ]
+        );
+    }
+
+    #[test]
     fn test_peek_n() {
+        init();
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
             .build()
@@ -370,6 +425,7 @@ Id2
 
     #[test]
     fn test_peek_does_not_effect_the_iterator() {
+        init();
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
             .build()
@@ -395,6 +451,7 @@ Id2
 
     #[test]
     fn test_advance_to() {
+        init();
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
             .build()
@@ -426,6 +483,7 @@ Id2
     // Test the WithPositions iterator.
     #[test]
     fn test_with_positions() {
+        init();
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
             .build()
