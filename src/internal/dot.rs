@@ -41,7 +41,7 @@ pub(crate) fn nfa_render<W: Write>(nfa: &Nfa, label: &str, output: &mut W) {
             digraph
                 .edge(
                     source_id.clone(),
-                    &format!("node_{}", target_state.as_usize()),
+                    format!("node_{}", target_state.as_usize()),
                 )
                 .attributes()
                 .set_label(
@@ -55,7 +55,7 @@ pub(crate) fn nfa_render<W: Write>(nfa: &Nfa, label: &str, output: &mut W) {
             digraph
                 .edge(
                     source_id.clone(),
-                    &format!("node_{}", target_state.as_usize()),
+                    format!("node_{}", target_state.as_usize()),
                 )
                 .attributes()
                 .set_label("ε");
@@ -104,8 +104,8 @@ pub(crate) fn dfa_render<W: Write>(
             // Label the edge with the character class used to transition to the target state.
             digraph
                 .edge(
-                    &format!("node_{}", source_id.as_usize()),
-                    &format!("node_{}", target_id.as_usize()),
+                    format!("node_{}", source_id.as_usize()),
+                    format!("node_{}", target_id.as_usize()),
                 )
                 .attributes()
                 .set_label(&format!(
@@ -159,8 +159,8 @@ pub(crate) fn compiled_dfa_render<W: Write>(
             // Label the edge with the character class used to transition to the target state.
             digraph
                 .edge(
-                    &format!("node_{}", source_id),
-                    &format!("node_{}", target_id.as_usize()),
+                    format!("node_{}", source_id),
+                    format!("node_{}", target_id.as_usize()),
                 )
                 .attributes()
                 .set_label(&format!(
@@ -216,10 +216,7 @@ pub(crate) fn compiled_nfa_render<W: Write>(
         for (cc, next) in state.transitions.iter() {
             // Label the edge with the character class used to transition to the target state.
             digraph
-                .edge(
-                    &format!("node_{}", id),
-                    &format!("node_{}", next.as_usize()),
-                )
+                .edge(format!("node_{}", id), format!("node_{}", next.as_usize()))
                 .attributes()
                 .set_label(&format!(
                     "{}:#{}",
