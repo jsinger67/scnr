@@ -195,7 +195,8 @@ pub(crate) fn compiled_nfa_render<W: Write>(
     for id in 0..compiled_nfa.states.len() {
         let mut source_node = digraph.node_auto();
         source_node.set_label(&id.to_string());
-        if id == compiled_nfa.start_state.as_usize() {
+        if id == 0 {
+            // Start state of the compiled NFA
             source_node
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Blue)

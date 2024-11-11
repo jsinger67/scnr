@@ -120,10 +120,9 @@ pub struct Scanner {
 impl Scanner {
     /// Creates a new scanner.
     /// The scanner is created with the given scanner modes.
-    /// The ScannerImpl is created from the scanner modes and the current mode is shared between
-    /// the scanner and the scanner impl.
+    /// The ScannerImpl is created from the scanner modes and the use_nfa flag determines if the
+    /// scanner uses a DFAs or an NFAs for the pattern matching.
     pub fn try_new(scanner_modes: Vec<ScannerMode>, use_nfa: bool) -> Result<Self> {
-        // Share the current mode between the scanner and the scanner impl.
         Ok(Scanner {
             inner: if use_nfa {
                 Box::new(ScannerNfaImpl::try_from(scanner_modes)?)
@@ -217,6 +216,25 @@ mod tests {
     }
 
     #[test]
+    fn test_scanner_builder_nfa_with_single_mode() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
+            vec![(1, 1), (3, 1)],
+        );
+        let scanner = ScannerBuilder::new()
+            .add_scanner_mode(scanner_mode)
+            .use_nfa()
+            .build()
+            .unwrap();
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
+    }
+
+    #[test]
     // Test the correct sharing of the current mode between the scanner and the scanner impl.
     fn test_scanner_current_mode() {
         init();
@@ -230,6 +248,47 @@ mod tests {
         );
         let mut scanner = ScannerBuilder::new()
             .add_scanner_mode(scanner_mode)
+            .build()
+            .unwrap();
+        // At the beginning, the scanner mode is 0.
+        assert_eq!(0, scanner.current_mode());
+        assert_eq!(0, scanner.inner.current_mode());
+
+        scanner.set_mode(1);
+        assert_eq!(1, scanner.current_mode());
+        assert_eq!(1, scanner.inner.current_mode());
+
+        let mut find_iter = scanner.find_iter("Hello\nWorld");
+        // The creation of a find_iter sets its own scanner mode to 0.
+        assert_eq!(0, find_iter.current_mode());
+
+        assert_eq!(1, scanner.current_mode());
+        assert_eq!(1, scanner.inner.current_mode());
+        assert_eq!(1, scanner.inner.dyn_clone().current_mode());
+
+        find_iter.set_mode(1);
+        assert_eq!(1, find_iter.current_mode());
+        scanner.set_mode(0);
+        assert_eq!(0, scanner.current_mode());
+        assert_eq!(0, scanner.inner.current_mode());
+        assert_eq!(0, scanner.inner.dyn_clone().current_mode());
+    }
+
+    #[test]
+    // Test the correct sharing of the current mode between the scanner and the scanner impl.
+    fn test_scanner_nfa_current_mode() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
+            vec![(1, 1), (3, 1)],
+        );
+        let mut scanner = ScannerBuilder::new()
+            .add_scanner_mode(scanner_mode)
+            .use_nfa()
             .build()
             .unwrap();
         // At the beginning, the scanner mode is 0.

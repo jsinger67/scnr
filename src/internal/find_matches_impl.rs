@@ -424,10 +424,91 @@ Id2
     }
 
     #[test]
+    fn test_peek_n_nfa() {
+        init();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .use_nfa()
+            .build()
+            .unwrap();
+        let mut find_iter = scanner.find_iter(INPUT);
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
+        );
+        let peeked = find_iter.peek_n(4);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedModeSwitch((
+                vec![
+                    Match::new(0, (0usize..1).into()),
+                    Match::new(4, (1usize..4).into()),
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into())
+                ],
+                1,
+            ))
+        );
+        let peeked = find_iter.peek_n(5);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedModeSwitch((
+                vec![
+                    Match::new(0, (0usize..1).into()),
+                    Match::new(4, (1usize..4).into()),
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into())
+                ],
+                1,
+            ))
+        );
+        let _ = find_iter.by_ref().take(7).collect::<Vec<_>>();
+        let peeked = find_iter.peek_n(4);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedEnd(vec![
+                Match::new(4, (17usize..20).into()),
+                Match::new(0, (20usize..21).into())
+            ])
+        );
+    }
+
+    #[test]
     fn test_peek_does_not_effect_the_iterator() {
         init();
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
+        let mut find_iter = scanner.find_iter(INPUT);
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
+        );
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
+        );
+    }
+
+    #[test]
+    fn test_peek_nfa_does_not_effect_the_iterator() {
+        init();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .use_nfa()
             .build()
             .unwrap();
         let mut find_iter = scanner.find_iter(INPUT);
@@ -480,12 +561,137 @@ Id2
         );
     }
 
+    #[test]
+    fn test_nfa_advance_to() {
+        init();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .use_nfa()
+            .build()
+            .unwrap();
+        let mut find_iter = scanner.find_iter(INPUT);
+        let peeked = find_iter.peek_n(2);
+        assert_eq!(
+            peeked,
+            PeekResult::Matches(vec![
+                Match::new(0, (0usize..1).into()),
+                Match::new(4, (1usize..4).into())
+            ])
+        );
+        let new_position = find_iter.advance_to(4);
+        assert_eq!(new_position, 3);
+        let peeked = find_iter.peek_n(3);
+        assert_eq!(
+            peeked,
+            PeekResult::MatchesReachedModeSwitch((
+                vec![
+                    Match::new(0, (4usize..5).into()),
+                    Match::new(8, (5usize..6).into())
+                ],
+                1,
+            ))
+        );
+    }
+
     // Test the WithPositions iterator.
     #[test]
     fn test_with_positions() {
         init();
         let scanner = ScannerBuilder::new()
             .add_scanner_modes(&*MODES)
+            .build()
+            .unwrap();
+        let find_iter = scanner.find_iter(INPUT).with_positions();
+        let matches: Vec<MatchExt> = find_iter.collect();
+        assert_eq!(matches.len(), 9);
+        assert_eq!(
+            matches,
+            vec![
+                MatchExt::new(
+                    0,
+                    (0usize..1).into(),
+                    Position::new(1, 1),
+                    Position::new(1, 2)
+                ),
+                MatchExt::new(
+                    4,
+                    (1usize..4).into(),
+                    Position::new(2, 1),
+                    Position::new(2, 4)
+                ),
+                MatchExt::new(
+                    0,
+                    (4usize..5).into(),
+                    Position::new(2, 4),
+                    Position::new(2, 5)
+                ),
+                MatchExt::new(
+                    8,
+                    (5usize..6).into(),
+                    Position::new(3, 1),
+                    Position::new(3, 2)
+                ),
+                MatchExt::new(
+                    7,
+                    (6usize..15).into(),
+                    Position::new(3, 2),
+                    Position::new(3, 11)
+                ),
+                MatchExt::new(
+                    8,
+                    (15usize..16).into(),
+                    Position::new(3, 11),
+                    Position::new(3, 12)
+                ),
+                MatchExt::new(
+                    0,
+                    (16usize..17).into(),
+                    Position::new(3, 12),
+                    Position::new(3, 13)
+                ),
+                MatchExt::new(
+                    4,
+                    (17usize..20).into(),
+                    Position::new(4, 1),
+                    Position::new(4, 4)
+                ),
+                MatchExt::new(
+                    0,
+                    (20usize..21).into(),
+                    Position::new(4, 4),
+                    Position::new(4, 5)
+                )
+            ]
+        );
+        assert_eq!(
+            matches
+                .iter()
+                .map(|m| {
+                    let rng = m.span().start..m.span().end;
+                    INPUT.get(rng).unwrap()
+                })
+                .collect::<Vec<_>>(),
+            vec![
+                "\n",
+                "Id1",
+                "\n",
+                "\"",
+                "1. String",
+                "\"",
+                "\n",
+                "Id2",
+                "\n"
+            ]
+        );
+    }
+
+    // Test the WithPositions iterator with NFA scanner.
+    #[test]
+    fn test_nfa_with_positions() {
+        init();
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&*MODES)
+            .use_nfa()
             .build()
             .unwrap();
         let find_iter = scanner.find_iter(INPUT).with_positions();

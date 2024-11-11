@@ -17,9 +17,21 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.3.4 - Not released yet
+## 0.4.0 - Not released yet
 
 - Support for lookahead, negative and positive
+- Support for Scanners based on NFAs. These scanners can handle overlapping character classes.
+Call `use_nfa()` on the scanner builder before calling `build()`.
+
+```rust
+let scanner = ScannerBuilder::new()
+    .add_scanner_modes(&*MODES)
+    .use_nfa()
+    .build()
+    .unwrap();
+let find_iter = scanner.find_iter(INPUT).with_positions();
+let matches: Vec<MatchExt> = find_iter.collect();
+```
 
 ## 0.3.3 - 2024-10-11
 
@@ -33,10 +45,10 @@ let matches: Vec<MatchExt> = find_iter.collect();
 ```
 - Fixed handling of current scanner mode. There was a bug that scanner mode switching from the
 outside had no effect on cloned `ScannerImpl` instances. This was fixed by removing the mode from
-the `Scanner` and leaving is only on the `ScannerImpl`.
+the `Scanner` and leaving it only on the `ScannerImpl`.
 
 - We also allow now to set the scanner mode on a `FindMatches` and even on a `WithPositions` by
-implementing the new trait `ScannerModeSwitcher` for both of them
+implementing the new trait `ScannerModeSwitcher` for both of them.
 
 - Add some documentation like PlantUML overview diagram to the `doc` folder. Also moved
 `matching_state.dot` into this folder to have anything in one place. For viewing the PlantUML

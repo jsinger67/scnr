@@ -6,7 +6,7 @@ use std::fs;
 use regex::Regex;
 use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
 
-fn test_method(use_nfa: bool) {
+fn e2e_test_method(use_nfa: bool) {
     // Initialize the logger
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -95,10 +95,10 @@ fn test_method(use_nfa: bool) {
 
 #[test]
 fn e2e_test() {
-    test_method(false);
+    e2e_test_method(false);
 }
 
 #[test]
 fn e2e_test_nfa() {
-    test_method(true);
+    e2e_test_method(true);
 }

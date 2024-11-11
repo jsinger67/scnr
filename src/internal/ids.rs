@@ -100,7 +100,7 @@ macro_rules! impl_id {
     };
 }
 
-/// The ID type for automata states. Used in NFA and DFA.
+/// The ID types for automata states. Used in NFA and DFA.
 pub(crate) type StateIDBase = u32;
 impl_id!(StateID, StateIDBase);
 impl_id!(StateSetID, StateIDBase);

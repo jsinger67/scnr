@@ -54,10 +54,9 @@ fn main() {
 ## Guard rails
 
 * The scanners should be built quickly.
-* The scanners base solely on DFAs, no backtracking is implemented
-* The scanners will probably never support `u8`, i.e. patterns are of type convertible to `&str` and
-the input is of type convertible to `&str`. We concentrate on programming languages rather than byte
-sequences.
+* Scanners can be based on DFAs or on NFAs to best fit the desired behavior
+* The scanners only support `&str`, i.e. patterns are of type `&str` and the input is of type
+`&str`. `scnr` focuses on programming languages rather than byte sequences.
 
 ## Not supported regex features
 
@@ -69,8 +68,8 @@ fact that the longest match will win mitigates the need for such anchors.
 To elaborate this a bit more:
 
 Lets say you have a pattern for the keyword `if` and a pattern for an identifier
-`/[a-zA-Z_][a-zA-Z0-9_]*/`. Both could match the `if` but the keyword will win iff you have its
-pattern inserted before the pattern of the identifier. If the scanner encounters an input like,
+`/[a-zA-Z_][a-zA-Z0-9_]*/`. Both could match the `if` but the keyword will win if you have its
+pattern inserted **before** the pattern of the identifier. If the scanner encounters an input like,
 e.g. `ifi` the identifier will match because of the longest match rule. With these guaranties it is
 simply unnecessary to declare the keyword 'if' with attached word boundaries (`\b`).
 
@@ -96,6 +95,9 @@ contains an optional member `lookahead`. The inner type of the Option is `Lookah
 a patter string and a flag the determines whether the lookahead pattern should match (positive
 lookahead) or not match (negative lookahead).
 
+To configure a scanner with patterns that contain lookahead expressions you need to use 
+`add_scanner_mode` or `add_scanner_modes` of the `ScannerBuilder`.
+
 With the help of a positive lookahead you can define a semantic like
 ```
 match pattern R only if it is followed by pattern S
@@ -107,6 +109,53 @@ match pattern R only if it is NOT followed by pattern S
 
 The lookahead pattern denoted above as `S` are not considered as part of the matched string.
 
+## Scanner can use either DFAs or NFAs
+
+As of version 0.4.0 `scnr` can work in two different modes.
+
+### DFA Mode
+
+In this mode the scanner uses *minimized DFAs only* in which all repetition patterns like `*` and
+`+` are matched **non-greedily**.
+
+DFA based scanners are faster than NFA based scanners but can't handle overlapping character classes
+correctly. `scnr` doesn't have a means to build distinct character classes because of its approach
+to use match functions for character classes and because of its goal to have minimal compile time.
+
+The compile time of DFA based scanners is slightly longer than the one of NFA based scanners because
+of the more costly DFA minimization.
+
+### NFA Mode
+
+The other mode works with *compact NFAs* in which all repetition patterns like `*` and `+` are
+matches **greedily**.
+
+NFA based scanners have shorter build time than DFA based scanners but a slightly longer match time.
+
+The biggest advantage over DFAs is that NFAs can handle overlapping character classes because of
+their different matching algorithm.
+
+This mean that `/u\d{2}|[a-z][a-z0-9]+/` matches a string `u1x` completely over the second
+alternation. A DFA could miss matching this string if the first alternation is tried first and fails
+when seeing the `x` while expecting a second digit.
+The problem here is that the DFA can match the first character `u` against both alternations'
+start, `/u/` and `/[a-z]/`.
+
+To get an NFA based scanner call `use_nfa()` on the scanner builder before calling `build()`.
+
+```rust
+let scanner = ScannerBuilder::new()
+    .add_scanner_modes(&*MODES)
+    .use_nfa()
+    .build()
+    .unwrap();
+let find_iter = scanner.find_iter(INPUT).with_positions();
+let matches: Vec<MatchExt> = find_iter.collect();
+```
+
+As a rule of thumb I would recommend using NFA based scanners over DFA based ones, because they work
+mostly as you would expect. If you know what to do to avoid overlapping character classes you can
+use DFA mode and take advantage of the improved performance.
 
 ## Greediness of repetitions
 
@@ -115,14 +164,11 @@ Some words about greediness.
 The normal Lex/Flex POSIX matching is greedy. It some sort adheres to the longest match rule but
 poses some overhead during backtracking on the scanner's runtime.
 
-Since `scnr` works with minimized DFAs only (current situation, may change) it always matches
-repetitions like `*` and `+` non-greedily.
-
 ### Exit conditions on repetitions
 
-But you have to be very specific about the content of the repeated expression in that sense that
-the transition from a repeated expression to the following part of the regular expression should be
-unambiguous.
+Using DFAs you have a small performance gain but you have to be very specific about the content of
+the repeated expression in that sense that the transition from a repeated expression to the
+following part of the regular expression should be unambiguous.
 
 Lets have a look at this regex with a repeated expression of `.` in the middle.
 
@@ -177,6 +223,20 @@ other than `/`.
 This solution will do the job perfectly, because its automaton is able the return to the repetition
 if the exit condition fails.
 
+### Behavior in NFA mode
+
+The NFA is able to match comments with the first given regular expression `/\*.*\*/`, but greedily,
+because during its simulation it can be in more than one state simultaneously.
+The greediness can be explained by the fact that the NFA in this example stays in state 4 too (among
+other states in which it can be) and so it can advance behind any end comment sequence.
+
+![CppComments1NFA](./doc/CppComments1NFA.svg)
+
+For completeness only, the non-greedy version `/\*([.--*]|\*[^/])*\*/` in NFA form looks like this:
+
+![CppComments2NFA](./doc/CppComments2NFA.svg)
+
+This NFA can match *hard* strings like `/* *Comment 1* */ `, but we needed to be explicit here too.
 
 ### Scanner modes
 

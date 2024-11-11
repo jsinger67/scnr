@@ -123,6 +123,25 @@ mod tests {
     }
 
     #[test]
+    fn test_scanner_builder_nfa_with_single_mode() {
+        init();
+        let scanner_mode = ScannerMode::new(
+            "INITIAL",
+            vec![
+                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+            ],
+            vec![(1, 1), (3, 1)],
+        );
+        let scanner = ScannerBuilder::new()
+            .add_scanner_mode(scanner_mode)
+            .use_nfa()
+            .build()
+            .unwrap();
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
+    }
+
+    #[test]
     fn test_scanner_builder_with_multiple_modes() {
         init();
         let scanner_modes = vec![
@@ -148,10 +167,67 @@ mod tests {
     }
 
     #[test]
+    fn test_scanner_builder_nfa_with_multiple_modes() {
+        init();
+        let scanner_modes = vec![
+            ScannerMode::new(
+                "INITIAL",
+                vec![
+                    Pattern::new(r"\r\n|\r|\n".to_string(), 1),
+                    Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
+                ],
+                vec![(1, 1), (3, 1)],
+            ),
+            ScannerMode::new(
+                "STRING",
+                vec![Pattern::new(r#""[^"]*""#.to_string(), 2)],
+                vec![(2, 0)],
+            ),
+        ];
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&scanner_modes)
+            .use_nfa()
+            .build()
+            .unwrap();
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
+    }
+
+    #[test]
     fn test_simple_scanner_builder() {
         init();
         let scanner = ScannerBuilder::new()
             .add_patterns(["\r\n|\r|\n", "//.*(\r\n|\r|\n)"])
+            .build()
+            .unwrap();
+        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
+        let input = r#"
+        // Line comment1
+
+        // Line comment2
+        "#;
+
+        let matches: Vec<_> = scanner.find_iter(input).collect();
+        assert_eq!(matches.len(), 4);
+        assert_eq!(matches[0].token_type(), 0);
+        assert_eq!(matches[1].token_type(), 1);
+        assert_eq!(
+            &input[matches[1].span().range()].to_string().trim(),
+            &"// Line comment1"
+        );
+        assert_eq!(matches[2].token_type(), 0);
+        assert_eq!(matches[3].token_type(), 1);
+        assert_eq!(
+            &input[matches[3].span().range()].to_string().trim(),
+            &"// Line comment2"
+        );
+    }
+
+    #[test]
+    fn test_simple_scanner_builder_nfa() {
+        init();
+        let scanner = ScannerBuilder::new()
+            .add_patterns(["\r\n|\r|\n", "//.*(\r\n|\r|\n)"])
+            .use_nfa()
             .build()
             .unwrap();
         assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));

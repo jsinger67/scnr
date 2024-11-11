@@ -8,21 +8,20 @@ use crate::{
 
 use super::{compiled_scanner_mode::CompiledNfaScannerMode, CharClassID, CharacterClassRegistry};
 
+/// ScannerNfaImpl instances are always created by the Scanner::try_new method and of course by
+/// the clone method.
 #[derive(Clone)]
 pub(crate) struct ScannerNfaImpl {
     pub(crate) character_classes: CharacterClassRegistry,
     pub(crate) scanner_modes: Vec<CompiledNfaScannerMode>,
-    // The function used to match characters to character classes.
+    // The function used to match characters against character classes.
     pub(crate) match_char_class: Arc<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>,
     // The current mode is private and thereby makes the free creation of ScannerNfaImpl instances
     // impossible.
-    // ScannerNfaImpl instances are always created by the Scanner::try_new method and of course by
-    // the clone method. So the current mode is always shared between all ScannerImpl instances of
-    // the same Scanner instance.
     current_mode: usize,
 }
 impl ScannerNfaImpl {
-    /// We evaluate the matches of the DFAs in ascending order to prioritize the matches with the
+    /// We evaluate the matches of the NFAs in ascending order to prioritize the matches with the
     /// lowest index.
     /// We find the pattern with the lowest start position and the longest length.
     fn find_first_longest_match(&self, matches: Vec<Match>) -> Option<Match> {
@@ -151,7 +150,7 @@ impl ScannerImplTrait for ScannerNfaImpl {
         self.scanner_modes[self.current_mode].has_transition(token_type)
     }
 
-    /// Traces the compiled DFAs as dot format.
+    /// Traces the compiled NFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
     fn log_compiled_automata_as_dot(&self, modes: &[crate::ScannerMode]) -> crate::Result<()> {
@@ -177,6 +176,8 @@ impl ScannerImplTrait for ScannerNfaImpl {
         Ok(())
     }
 
+    /// Generates the compiled NFAs as dot files.
+    /// The dot files are written to the target folder.
     fn generate_compiled_automata_as_dot(
         &self,
         modes: &[crate::ScannerMode],
@@ -185,7 +186,7 @@ impl ScannerImplTrait for ScannerNfaImpl {
         use std::fs::File;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             for (j, (nfa, t)) in scanner_mode.nfas.iter().enumerate() {
-                let title = format!("Compiled DFA {} - {}", modes[i].name, modes[i].patterns[j]);
+                let title = format!("Compiled NFA {} - {}", modes[i].name, modes[i].patterns[j]);
                 let file_name = format!(
                     "{}/{}_{}_{}.dot",
                     target_folder.to_str().unwrap(),
@@ -200,6 +201,7 @@ impl ScannerImplTrait for ScannerNfaImpl {
         Ok(())
     }
 
+    /// Create a boxed clone of the scanner implementation.
     fn dyn_clone(&self) -> Box<dyn ScannerImplTrait> {
         Box::new(ScannerNfaImpl::clone(self))
     }
@@ -207,7 +209,7 @@ impl ScannerImplTrait for ScannerNfaImpl {
 
 impl std::fmt::Debug for ScannerNfaImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ScannerImpl")
+        f.debug_struct("ScannerNfaImpl")
             .field("character_classes", &self.character_classes)
             .field("scanner_modes", &self.scanner_modes)
             .finish()
@@ -234,5 +236,90 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
         };
         me.match_char_class = Arc::new(Self::create_match_char_class(&me)?);
         Ok(me)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Pattern, ScannerMode};
+    use std::{convert::TryInto, fs, path::Path};
+
+    #[test]
+    fn test_try_from() {
+        let scanner_modes = vec![
+            ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
+            ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
+        ];
+        let scanner_impl: ScannerNfaImpl = scanner_modes.try_into().unwrap();
+        assert_eq!(scanner_impl.character_classes.len(), 2);
+        assert_eq!(scanner_impl.scanner_modes.len(), 2);
+    }
+
+    #[test]
+    fn test_match_char_class() {
+        let scanner_modes = vec![
+            ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
+            ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
+        ];
+        let scanner_impl: ScannerNfaImpl = scanner_modes.try_into().unwrap();
+        let match_char_class = scanner_impl.create_match_char_class().unwrap();
+        assert!(match_char_class((0).into(), 'a'));
+        assert!(!match_char_class((0).into(), 'b'));
+        assert!(!match_char_class((0).into(), 'c'));
+        assert!(!match_char_class((1).into(), 'a'));
+        assert!(match_char_class((1).into(), 'b'));
+        assert!(!match_char_class((1).into(), 'c'));
+    }
+
+    #[test]
+    fn test_generate_dot_files() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/string.json");
+        let file = fs::File::open(path).unwrap();
+
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)
+            .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
+
+        let scanner_impl: ScannerNfaImpl = scanner_modes.clone().try_into().unwrap();
+        let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/string_nfas");
+
+        // Delete all previously generated dot files.
+        let _ = fs::remove_dir_all(target_folder);
+        // Create the target folder.
+        fs::create_dir_all(target_folder).unwrap();
+
+        // Generate the compiled NFAs as dot files.
+        scanner_impl
+            .generate_compiled_automata_as_dot(&scanner_modes, Path::new(target_folder))
+            .unwrap();
+
+        // Check if the dot files are generated.
+        let dot_files: Vec<_> = fs::read_dir(target_folder)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .collect();
+
+        assert_eq!(dot_files.len(), 12);
+        assert_eq!(
+            dot_files
+                .iter()
+                .filter(|p| p.extension().unwrap() == "dot")
+                .count(),
+            12
+        );
+        assert_eq!(
+            dot_files
+                .iter()
+                .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("INITIAL"))
+                .count(),
+            7
+        );
+        assert_eq!(
+            dot_files
+                .iter()
+                .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("STRING"))
+                .count(),
+            5
+        );
     }
 }

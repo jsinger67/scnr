@@ -173,6 +173,15 @@ mod tests {
         };
     }
 
+    /// A macro that simplifies the rendering of a dot file for a NFA.
+    macro_rules! compiled_nfa_render_to {
+        ($nfa:expr, $label:expr, $reg:ident) => {
+            let label = format!("{}Dfa", $label);
+            let mut f = std::fs::File::create(format!("target/{}CompiledNfa.dot", $label)).unwrap();
+            $crate::internal::dot::compiled_nfa_render($nfa, &label, &$reg, &mut f);
+        };
+    }
+
     #[test]
     fn test_compile_to_dfa() {
         let mut character_class_registry = CharacterClassRegistry::new();
@@ -180,6 +189,16 @@ mod tests {
         let compiled_dfa =
             CompiledDfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
         compiled_dfa_render_to!(&compiled_dfa, "LineComment_", character_class_registry);
+        // assert_eq!(compiled_dfa.accepting_states.len(), 1);
+    }
+
+    #[test]
+    fn test_compile_to_nfa() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let pattern = Pattern::new("(//.*(\r\n|\r|\n))".to_string(), 0);
+        let compiled_nfa =
+            CompiledNfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
+        compiled_nfa_render_to!(&compiled_nfa, "LineComment_", character_class_registry);
         // assert_eq!(compiled_dfa.accepting_states.len(), 1);
     }
 
@@ -200,6 +219,24 @@ mod tests {
     }
 
     #[test]
+    fn test_compiled_nfa_scanner_mode() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let scanner_mode = ScannerMode {
+            name: "test".to_string(),
+            patterns: vec![Pattern::new("a".to_string(), 0)],
+            transitions: vec![(0.into(), 1.into())],
+        };
+        let compiled_scanner_mode = CompiledNfaScannerMode::try_from_scanner_mode(
+            scanner_mode,
+            &mut character_class_registry,
+        )
+        .unwrap();
+        assert_eq!(compiled_scanner_mode.name, "test");
+        assert_eq!(compiled_scanner_mode.nfas.len(), 1);
+        assert_eq!(compiled_scanner_mode.transitions.len(), 1);
+    }
+
+    #[test]
     fn test_compiled_scanner_mode_error() {
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
@@ -209,6 +246,21 @@ mod tests {
         };
         let compiled_scanner_mode =
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry);
+        assert!(compiled_scanner_mode.is_err());
+    }
+
+    #[test]
+    fn test_compiled_nfa_scanner_mode_error() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let scanner_mode = ScannerMode {
+            name: "test".to_string(),
+            patterns: vec![Pattern::new("[".to_string(), 0)],
+            transitions: vec![(0.into(), 1.into())],
+        };
+        let compiled_scanner_mode = CompiledNfaScannerMode::try_from_scanner_mode(
+            scanner_mode,
+            &mut character_class_registry,
+        );
         assert!(compiled_scanner_mode.is_err());
     }
 
@@ -223,6 +275,25 @@ mod tests {
         let compiled_scanner_mode =
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)
                 .unwrap();
+        assert_eq!(compiled_scanner_mode.has_transition(0), Some(1));
+        assert_eq!(compiled_scanner_mode.has_transition(1), Some(2));
+        assert_eq!(compiled_scanner_mode.has_transition(2), None);
+        assert_eq!(compiled_scanner_mode.has_transition(3), None);
+    }
+
+    #[test]
+    fn test_compiled_nfa_scanner_mode_transition() {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let scanner_mode = ScannerMode {
+            name: "test".to_string(),
+            patterns: vec![Pattern::new("a".to_string(), 0)],
+            transitions: vec![(0.into(), 1.into()), (1.into(), 2.into())],
+        };
+        let compiled_scanner_mode = CompiledNfaScannerMode::try_from_scanner_mode(
+            scanner_mode,
+            &mut character_class_registry,
+        )
+        .unwrap();
         assert_eq!(compiled_scanner_mode.has_transition(0), Some(1));
         assert_eq!(compiled_scanner_mode.has_transition(1), Some(2));
         assert_eq!(compiled_scanner_mode.has_transition(2), None);

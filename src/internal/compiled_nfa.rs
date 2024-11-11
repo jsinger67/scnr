@@ -9,12 +9,11 @@ use super::{
 
 /// A compiled NFA.
 /// It is used to represent the NFA in a way that is optimized for matching.
+/// The start state is by design always 0.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompiledNfa {
     pub(crate) pattern: String,
     pub(crate) states: Vec<StateData>,
-    // Used during NFA construction
-    pub(crate) start_state: StateSetID,
     // Used during NFA construction
     pub(crate) end_states: Vec<StateSetID>,
     // An optional lookahead that is used to check if the NFA should match the input.
@@ -50,7 +49,8 @@ impl CompiledNfa {
     ) -> Option<Span> {
         // trace!("NFA {}", self);
         let mut current_states: Vec<StateSetID> = Vec::with_capacity(self.states.len());
-        current_states.push(self.start_state);
+        // Push the start state to the current states.
+        current_states.push(StateSetID::new(0));
         let mut next_states: Vec<StateSetID> = Vec::with_capacity(self.states.len());
         let mut match_start = None;
         let mut match_end = None;
@@ -124,12 +124,8 @@ impl From<Nfa> for CompiledNfa {
         let mut epsilon_closure: BTreeSet<StateID> =
             BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
 
-        // Preserve the start state for creation of Self.
-        // It's value is always 0.
-        let start_state = StateSetID::new(state_map.len() as StateIDBase);
-
-        // The current state id.
-        let current_state = StateSetID::new(start_state.id());
+        // The current state id is always 0.
+        let current_state = StateSetID::new(StateSetID::new(0).id());
 
         // Add the start state to the state map.
         state_map.insert(BTreeSet::from_iter(epsilon_closure.clone()), current_state);
@@ -192,7 +188,6 @@ impl From<Nfa> for CompiledNfa {
         Self {
             pattern: nfa.pattern.clone(),
             states,
-            start_state,
             end_states,
             lookahead: None,
         }
@@ -202,7 +197,7 @@ impl From<Nfa> for CompiledNfa {
 impl std::fmt::Display for CompiledNfa {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Pattern: {}", self.pattern)?;
-        writeln!(f, "Start state: {}", self.start_state)?;
+        writeln!(f, "Start state: 0")?;
         writeln!(f, "End states: {:?}", self.end_states)?;
         for (i, state) in self.states.iter().enumerate() {
             writeln!(f, "State {}: {}", i, state)?;

@@ -52,7 +52,7 @@ impl std::fmt::Display for Lookahead {
 /// A pattern that is used to match the input.
 /// The pattern is represented by a regular expression and a token type number.
 /// The token type number is used to identify the pattern in the scanner.
-/// The pattern also have an optional lookahead.
+/// The pattern also has an optional lookahead.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pattern {
     pattern: String,
