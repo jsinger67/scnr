@@ -17,9 +17,9 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.4.0 - Not released yet
+## 0.4.0 - 2024-11-12
 
-- Support for lookahead, negative and positive
+- Support for lookahead, negative and positive. Please see README.md for details.
 - Support for Scanners based on NFAs. These scanners can handle overlapping character classes.
 Call `use_nfa()` on the scanner builder before calling `build()`.
 

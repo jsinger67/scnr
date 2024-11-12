@@ -86,7 +86,7 @@ As follows from the above regex restrictions anchors `^` and `$` are currently n
 
 ## Lookahead
 
-As of version 0.3.4 `scnr` supports *trailing contexts*, like in Flex, e.g. ```ab/cd```.
+As of version 0.4.0 `scnr` supports *trailing contexts*, like in Flex, e.g. ```ab/cd```.
 
 Additionally to Flex `scnr` supports not only positive lookahead but also negative lookahead.
 
@@ -95,7 +95,7 @@ contains an optional member `lookahead`. The inner type of the Option is `Lookah
 a patter string and a flag the determines whether the lookahead pattern should match (positive
 lookahead) or not match (negative lookahead).
 
-To configure a scanner with patterns that contain lookahead expressions you need to use 
+To configure a scanner with patterns that contain lookahead expressions you have to use 
 `add_scanner_mode` or `add_scanner_modes` of the `ScannerBuilder`.
 
 With the help of a positive lookahead you can define a semantic like
@@ -107,7 +107,7 @@ On the other hand with a negative lookahead you can define a semantic like
 match pattern R only if it is NOT followed by pattern S
 ```
 
-The lookahead pattern denoted above as `S` are not considered as part of the matched string.
+The lookahead patterns denoted above as `S` are not considered as part of the matched string.
 
 ## Scanner can use either DFAs or NFAs
 
@@ -115,8 +115,8 @@ As of version 0.4.0 `scnr` can work in two different modes.
 
 ### DFA Mode
 
-In this mode the scanner uses *minimized DFAs only* in which all repetition patterns like `*` and
-`+` are matched **non-greedily**.
+In this mode the scanner uses *minimized DFAs* in which all repetition patterns like `*` and `+` are
+matched **non-greedily**.
 
 DFA based scanners are faster than NFA based scanners but can't handle overlapping character classes
 correctly. `scnr` doesn't have a means to build distinct character classes because of its approach
@@ -146,16 +146,16 @@ To get an NFA based scanner call `use_nfa()` on the scanner builder before calli
 ```rust
 let scanner = ScannerBuilder::new()
     .add_scanner_modes(&*MODES)
-    .use_nfa()
+    .use_nfa()  // <==
     .build()
     .unwrap();
 let find_iter = scanner.find_iter(INPUT).with_positions();
 let matches: Vec<MatchExt> = find_iter.collect();
 ```
 
-As a rule of thumb I would recommend using NFA based scanners over DFA based ones, because they work
-mostly as you would expect. If you know what to do to avoid overlapping character classes you can
-use DFA mode and take advantage of the improved performance.
+As a rule of thumb I would recommend to use NFA based scanners over DFA based ones, because they
+work mostly as you would expect. If you know what to do to avoid overlapping character classes you
+can use DFA mode and take advantage of the improved performance.
 
 ## Greediness of repetitions
 
@@ -237,6 +237,7 @@ For completeness only, the non-greedy version `/\*([.--*]|\*[^/])*\*/` in NFA fo
 ![CppComments2NFA](./doc/CppComments2NFA.svg)
 
 This NFA can match *hard* strings like `/* *Comment 1* */ `, but we needed to be explicit here too.
+Perhaps, in the future `scnr` will provide non-greedy repetitions as well.
 
 ### Scanner modes
 
@@ -251,14 +252,16 @@ The scanner modes can be defined for instance in json:
 [
   {
     "name": "INITIAL",
-    "patterns": [["/\\*", 1]],
+    "patterns": [
+      { "pattern": "/\\*", "token_type": 1}
+    ],
     "transitions": [[1, 1]]
   },
   {
     "name": "COMMENT",
     "patterns": [
-      ["\\*/", 2],
-      ["[.\\r\\n]", 3]
+      { "pattern": "\\*/", "token_type": 2},
+      { "pattern": "[.\r\n]", "token_type": 3}
     ],
     "transitions": [[2, 0]]
   }
