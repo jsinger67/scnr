@@ -10,7 +10,8 @@ use crate::{
 /// A trait to switch between scanner modes.
 ///
 /// This trait is used to switch between different scanner modes from a parser's perspective.
-/// The parser can set the current scanner mode to switch to a different set of DFAs.
+/// The parser can set the current scanner mode to switch to a different set of DFAs resp. NFAs, for
+/// short called Finite State Machines, FSMs.
 /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
 /// in the active scanner mode.
 ///
@@ -100,18 +101,19 @@ pub(crate) trait ScannerImplTrait: ScannerModeSwitcher + Debug + Send + Sync {
 }
 
 /// A Scanner.
-/// It consists of multiple DFAs that are used to search for matches.
+/// It consists of multiple DFAs resp. NFAs that are used to search for matches.
 ///
-/// Each DFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
-/// The DFAs are advanced in parallel to search for matches.
+/// Each DFA/NFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
+/// All these FSMs are advanced in parallel to search for matches.
 /// It further constists of at least one scanner mode. Scanners support multiple scanner modes.
 /// This feature is known from Flex as *Start conditions* and provides more
 /// flexibility by defining several scanners for several parts of your grammar.
 /// See <https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html#SEC11>
 /// for more information.
 ///
-/// To create a scanner, you can use the `ScannerBuilder` to add scanner mode data.
-/// At least one scanner mode must be added to the scanner. This is usually the mode named `INITIAL`.
+/// To create a scanner, you should use the `ScannerBuilder` to add scanner mode data.
+/// At least one scanner mode must be added to the scanner. This single mode is usually named
+/// `INITIAL`.
 #[derive(Debug)]
 pub struct Scanner {
     pub(crate) inner: Box<dyn ScannerImplTrait>,
@@ -121,7 +123,7 @@ impl Scanner {
     /// Creates a new scanner.
     /// The scanner is created with the given scanner modes.
     /// The ScannerImpl is created from the scanner modes and the use_nfa flag determines if the
-    /// scanner uses a DFAs or an NFAs for the pattern matching.
+    /// scanner uses DFAs or NFAs for the pattern matching.
     pub fn try_new(scanner_modes: Vec<ScannerMode>, use_nfa: bool) -> Result<Self> {
         Ok(Scanner {
             inner: if use_nfa {
@@ -138,16 +140,16 @@ impl Scanner {
         self.inner.find_iter(input)
     }
 
-    /// Logs the compiled DFAs as a Graphviz DOT file with the help of the `log` crate.
-    /// To enable debug output compliled DFA as dot file set the environment variable `RUST_LOG` to
+    /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
+    /// To enable debug output compliled FSMs as dot file set the environment variable `RUST_LOG` to
     /// `scnr::internal::scanner_impl=debug`.
     pub fn log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
         self.inner.log_compiled_automata_as_dot(modes)
     }
 
-    /// Generates the compiled DFAs as a Graphviz DOT files.
+    /// Generates the compiled FSMs as a Graphviz DOT files.
     /// The DOT files are written to the target folder.
-    /// The file names are derived from the scanner mode names and the index of the DFA.
+    /// The file names are derived from the scanner mode names and the index of the regarding FSM.
     pub fn generate_compiled_automata_as_dot(
         &self,
         modes: &[ScannerMode],
@@ -166,7 +168,7 @@ impl ScannerModeSwitcher for Scanner {
 
     /// Sets the current scanner mode.
     ///
-    /// A parser can explicitly set the scanner mode to switch to a different set of DFAs.
+    /// A parser can explicitly set the scanner mode to switch to a different set of FSMs.
     /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
     /// in the active scanner mode.
     fn set_mode(&mut self, mode: usize) {
