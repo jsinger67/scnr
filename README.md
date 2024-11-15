@@ -92,7 +92,7 @@ Additionally to Flex `scnr` supports not only positive lookahead but also negati
 
 The configuration of these look ahead constraints can be done via the `Pattern` struct which now
 contains an optional member `lookahead`. The inner type of the Option is `Lookahead` that contains
-a patter string and a flag the determines whether the lookahead pattern should match (positive
+a patter string and a flag that determines whether the lookahead pattern should match (positive
 lookahead) or not match (negative lookahead).
 
 To configure a scanner with patterns that contain lookahead expressions you have to use 
@@ -237,7 +237,7 @@ For completeness only, the non-greedy version `/\*([.--*]|\*[^/])*\*/` in NFA fo
 ![CppComments2NFA](./doc/CppComments2NFA.svg)
 
 This NFA can match *hard* strings like `/* *Comment 1* */ `, but we needed to be explicit here too.
-Perhaps, in the future `scnr` will provide non-greedy repetitions as well.
+Perhaps, in the future `scnr` will provide non-greedy repetitions in NFA mode as well.
 
 ### Scanner modes
 
