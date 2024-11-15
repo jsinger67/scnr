@@ -191,6 +191,8 @@ impl ScannerModeSwitcher for Scanner {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use crate::{Pattern, ScannerBuilder};
 
     use super::*;
@@ -317,6 +319,12 @@ mod tests {
         assert_eq!(0, scanner.inner.dyn_clone().current_mode());
     }
 
+    #[derive(Debug, PartialEq)]
+    enum ApplicableFor {
+        Nfa,
+        Both,
+    }
+
     // A test that checks the behavoir of the scanner when so called 'pathological regular expressions'
     // are used. These are regular expressions that are very slow to match.
     // The test checks if the scanner is able to handle these cases and does not hang.
@@ -324,6 +332,7 @@ mod tests {
         pattern: &'static str,
         input: &'static str,
         expected_match: Option<&'static str>,
+        applicable_for: ApplicableFor,
     }
 
     const TEST_DATA: &[TestData] = &[
@@ -331,56 +340,95 @@ mod tests {
             pattern: r"((a*)*b)",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a+)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a+)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaa",
             expected_match: None,
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a|aa)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a|a?)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"((a|aa|aaa|aaaa|aaaaa)*)*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"((a*a*a*a*a*a*)*)*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"a{3}{3}*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaab"),
+            applicable_for: ApplicableFor::Both,
+        },
+        // The following test case is only applicable for the NFA.
+        // The DFA would hang about 5 minutes in the phase of the DFA minimization because the DFA
+        // has more than 15000 states.
+        // The NFA is able to handle this case but needs a view seconds to compile the automaton.
+        TestData {
+            pattern: r"a{5}{5}{5}{5}{5}{5}*b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("b"),
+            applicable_for: ApplicableFor::Nfa,
         },
     ];
 
     #[test]
-    fn test_pathological_regular_expressions() {
+    fn test_pathological_regular_expressions_dfa() {
         init();
-        for test in TEST_DATA {
+
+        for (index, test) in TEST_DATA.iter().enumerate() {
+            let target_folder = format!(
+                "{}_{}",
+                concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/target/test_pathological_regular_expressions_dfa"
+                ),
+                index
+            );
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(target_folder.clone());
+            // Create the target folder.
+            fs::create_dir_all(target_folder.clone()).unwrap();
+
+            if test.applicable_for != ApplicableFor::Both {
+                continue;
+            }
             let scanner_mode = ScannerMode::new(
                 "INITIAL",
                 vec![Pattern::new(test.pattern.to_string(), 1)],
                 vec![],
             );
             let scanner = ScannerBuilder::new()
-                .add_scanner_mode(scanner_mode)
+                .add_scanner_mode(scanner_mode.clone())
                 .build()
+                .unwrap();
+
+            scanner
+                .generate_compiled_automata_as_dot(&[scanner_mode], Path::new(&target_folder))
                 .unwrap();
 
             let mut find_iter = scanner.find_iter(test.input);
@@ -395,16 +443,39 @@ mod tests {
     #[test]
     fn test_pathological_regular_expressions_nfa() {
         init();
-        for test in TEST_DATA {
+        for (index, test) in TEST_DATA.iter().enumerate() {
+            if test.applicable_for != ApplicableFor::Both
+                && test.applicable_for != ApplicableFor::Nfa
+            {
+                continue;
+            }
+
+            let target_folder = format!(
+                "{}_{}",
+                concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/target/test_pathological_regular_expressions_nfa"
+                ),
+                index
+            );
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(target_folder.clone());
+            // Create the target folder.
+            fs::create_dir_all(target_folder.clone()).unwrap();
+
             let scanner_mode = ScannerMode::new(
                 "INITIAL",
                 vec![Pattern::new(test.pattern.to_string(), 1)],
                 vec![],
             );
             let scanner = ScannerBuilder::new()
-                .add_scanner_mode(scanner_mode)
+                .add_scanner_mode(scanner_mode.clone())
                 .use_nfa()
                 .build()
+                .unwrap();
+
+            scanner
+                .generate_compiled_automata_as_dot(&[scanner_mode], Path::new(&target_folder))
                 .unwrap();
 
             let mut find_iter = scanner.find_iter(test.input);
