@@ -316,4 +316,103 @@ mod tests {
         assert_eq!(0, scanner.inner.current_mode());
         assert_eq!(0, scanner.inner.dyn_clone().current_mode());
     }
+
+    // A test that checks the behavoir of the scanner when so called 'pathological regular expressions'
+    // are used. These are regular expressions that are very slow to match.
+    // The test checks if the scanner is able to handle these cases and does not hang.
+    struct TestData {
+        pattern: &'static str,
+        input: &'static str,
+        expected_match: Option<&'static str>,
+    }
+
+    const TEST_DATA: &[TestData] = &[
+        TestData {
+            pattern: r"((a*)*b)",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+        TestData {
+            pattern: r"(a+)+b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+        TestData {
+            pattern: r"(a+)+b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaa",
+            expected_match: None,
+        },
+        TestData {
+            pattern: r"(a|aa)+b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+        TestData {
+            pattern: r"(a|a?)+b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+        TestData {
+            pattern: r"((a|aa|aaa|aaaa|aaaaa)*)*b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+        TestData {
+            pattern: r"((a*a*a*a*a*a*)*)*b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+        TestData {
+            pattern: r"a{3}{3}*b",
+            input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
+            expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaab"),
+        },
+    ];
+
+    #[test]
+    fn test_pathological_regular_expressions() {
+        init();
+        for test in TEST_DATA {
+            let scanner_mode = ScannerMode::new(
+                "INITIAL",
+                vec![Pattern::new(test.pattern.to_string(), 1)],
+                vec![],
+            );
+            let scanner = ScannerBuilder::new()
+                .add_scanner_mode(scanner_mode)
+                .build()
+                .unwrap();
+
+            let mut find_iter = scanner.find_iter(test.input);
+            let match1 = find_iter.next();
+            assert_eq!(
+                test.expected_match,
+                match1.map(|m| test.input.get(m.start()..m.end()).unwrap())
+            );
+        }
+    }
+
+    #[test]
+    fn test_pathological_regular_expressions_nfa() {
+        init();
+        for test in TEST_DATA {
+            let scanner_mode = ScannerMode::new(
+                "INITIAL",
+                vec![Pattern::new(test.pattern.to_string(), 1)],
+                vec![],
+            );
+            let scanner = ScannerBuilder::new()
+                .add_scanner_mode(scanner_mode)
+                .use_nfa()
+                .build()
+                .unwrap();
+
+            let mut find_iter = scanner.find_iter(test.input);
+            let match1 = find_iter.next();
+            assert_eq!(
+                test.expected_match,
+                match1.map(|m| test.input.get(m.start()..m.end()).unwrap())
+            );
+        }
+    }
 }
