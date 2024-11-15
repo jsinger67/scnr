@@ -39,10 +39,6 @@ pub enum ScnrErrorKind {
     /// Used regex features that are not supported (yet).
     #[error("Unsupported regex feature: {0}")]
     UnsupportedFeature(String),
-
-    /// An error occurred during construction of the DFA.
-    #[error(transparent)]
-    DfaError(DfaError),
 }
 
 impl From<regex_syntax::ast::Error> for ScnrError {
@@ -55,16 +51,4 @@ impl From<std::io::Error> for ScnrError {
     fn from(error: std::io::Error) -> Self {
         ScnrError::new(ScnrErrorKind::IoError(error))
     }
-}
-
-/// An error type for the DFA.
-#[derive(Error, Debug)]
-pub enum DfaError {
-    /// An error occurred during the construction of the DFA.
-    #[error("DFA construction error: {0}")]
-    ConstructionError(String),
-
-    /// An error occurred during the construction of a single-pattern DFA.
-    #[error("Single-pattern DFA construction error: {0}")]
-    SinglePatternDfaError(String),
 }
