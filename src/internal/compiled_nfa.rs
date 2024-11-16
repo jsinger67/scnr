@@ -9,6 +9,11 @@ use super::{
 
 /// A compiled NFA.
 /// It is used to represent the NFA in a way that is optimized for matching.
+///
+/// The data is actually equivalent to the one of a not optimized DFA, but the transitions are
+/// regarded as non-deterministic according to the fact that transitions comprise overlapping
+/// character classes.
+///
 /// The start state is by design always 0.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct CompiledNfa {
@@ -32,14 +37,15 @@ impl CompiledNfa {
     /// The algorithm is as follows:
     /// 1. Add the start state to the queue.
     /// 2. Take the next character from the input.
-    /// 3. For each state in the queue, check if it is an end state.
+    /// 3. If the queue is empty, stop and return the current match, if any.
+    /// 4. For each state in the queue, check if it is an end state.
     ///     If it is, remember the current match.
-    /// 4. For each state in the queue, check if there is a transition that matches the current
+    /// 5. For each state in the queue, check if there is a transition that matches the current
     ///    character.
-    ///    If there is, add the target state to a seconde queue that will be used for the next
+    ///    If there is, add the target state to a second queue that will be used for the next
     ///    character.
-    /// 5. Replace the queue with the second queue.
-    /// 6. If there are more characters in the input, go to step 2.
+    /// 6. Replace the queue with the second queue.
+    /// 7. If there are more characters in the input, go to step 2.
     ///
     #[allow(dead_code)]
     pub(crate) fn find_from(
@@ -110,7 +116,12 @@ impl CompiledNfa {
 }
 
 impl From<Nfa> for CompiledNfa {
-    // Create a dense representation of the NFA in form of match transitions between states sets.
+    /// Create a dense representation of the NFA in form of match transitions between states sets.
+    /// This is an equivalent algorithm to the subset construction for DFAs.
+    /// Compare to [crate::internal::dfa::Dfa::try_from_nfa].
+    ///
+    /// Note that the lookahead is not set in the resulting CompiledNfa. This must be done
+    /// separately. See [CompiledNfa::try_from_pattern].
     fn from(nfa: Nfa) -> Self {
         // A temporary map to store the state ids of the sets of states.
         let mut state_map: BTreeMap<BTreeSet<StateID>, StateSetID> = BTreeMap::new();
