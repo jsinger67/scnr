@@ -53,7 +53,6 @@ impl CompiledNfa {
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<Span> {
-        // trace!("NFA {}", self);
         let mut current_states: Vec<StateSetID> = Vec::with_capacity(self.states.len());
         // Push the start state to the current states.
         current_states.push(StateSetID::new(0));
@@ -65,31 +64,21 @@ impl CompiledNfa {
                 match_start = Some(index);
             }
 
-            // trace!("-------------------");
-            // trace!("Character: {}", c);
-            // trace!("Current states: {:?}", current_states);
             for state in &current_states {
-                // trace!("----------");
-                // trace!("State: {}", state);
                 if match_end.is_none() && self.end_states.contains(state) {
-                    // trace!("Set end index to {} in state {}", index, state);
                     match_end = Some(index);
                 }
                 for (cc, next) in &self.states[state.as_usize()].transitions {
-                    // trace!("Transition: #{} -> '{}'", cc.id(), next);
                     if match_char_class(*cc, c) {
                         if !next_states.contains(next) {
-                            // trace!("Push next state {}", next);
                             next_states.push(*next);
                         }
                         if self.end_states.contains(next) {
-                            // trace!("Update end index to {} for state {}", index, next);
                             match_end = Some(index);
                         }
                     }
                 }
             }
-            // trace!("Next states: {:?}", next_states);
             current_states.clear();
             std::mem::swap(&mut current_states, &mut next_states);
             if current_states.is_empty() {
@@ -130,14 +119,11 @@ impl From<Nfa> for CompiledNfa {
         let mut transitions: BTreeSet<(StateSetID, CharClassID, StateSetID)> = BTreeSet::new();
         // The end states of the CompiledNfa.
         let mut end_states: Vec<StateSetID> = Vec::new();
-
         // Calculate the epsilon closure of the start state.
         let mut epsilon_closure: BTreeSet<StateID> =
             BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
-
         // The current state id is always 0.
         let current_state = StateSetID::new(StateSetID::new(0).id());
-
         // Add the start state to the state map.
         state_map.insert(BTreeSet::from_iter(epsilon_closure.clone()), current_state);
 
@@ -154,16 +140,9 @@ impl From<Nfa> for CompiledNfa {
                 .clone();
             let target_states = nfa.get_match_transitions(epsilon_closure.clone().into_iter());
             let old_state_id = current_state;
-            // trace!(
-            //     "Current state {}: Target states of {:?} => {:?}",
-            //     old_state_id,
-            //     epsilon_closure,
-            //     target_states
-            // );
             // Transform the target states to a set of state ids by calculating their epsilon closure.
             for (cc, target_state) in target_states {
                 epsilon_closure = BTreeSet::from_iter(nfa.epsilon_closure(target_state));
-                // trace!("Epsilon closure of {}: {:?}", target_state, epsilon_closure);
                 let mut new_state_id_candidate = StateSetID::new(state_map.len() as StateIDBase);
                 if !state_map.contains_key(&epsilon_closure) {
                     state_map.insert(epsilon_closure.clone(), new_state_id_candidate);
@@ -173,19 +152,13 @@ impl From<Nfa> for CompiledNfa {
                     new_state_id_candidate = *state_map.get(&epsilon_closure).unwrap();
                 }
                 let current_state = new_state_id_candidate;
-                // trace!("has state id: {}", current_state);
                 if epsilon_closure.contains(&nfa.end_state) && !end_states.contains(&current_state)
                 {
-                    // trace!("End state: {:?}", current_state);
                     end_states.push(current_state);
                 }
                 transitions.insert((old_state_id, cc, current_state));
             }
         }
-
-        // trace!("State map: {:?}", state_map);
-        // trace!("Transitions: {:?}", transitions);
-        // trace!("End states: {:?}", end_states);
 
         // The transitions of the CompiledNfa.
         let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
