@@ -1,13 +1,14 @@
 //! Module with the pattern types and their methods.
 use serde::{Deserialize, Serialize};
 
-/// A lookahead that is used to match the input.
-/// The lookahead is a regular expression that must match after the pattern for the pattern to be
-/// considered a match.
+/// A lookahead is used to restrict a match in the input.
+/// The lookahead is a regular expression whose condition must be met after the pattern itself for
+/// it to be considered a match.
 /// The lookahead can be positive or negative.
+///
 /// If the lookahead is positive, it must match for the pattern to be considered a match.
 /// If the lookahead is negative, it must not match for the pattern to be considered a match.
-/// The lookahead is optional.
+/// The lookahead is an optional member of the [crate::Pattern] struct.
 /// The characters read by the lookahead are not included in the match.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Lookahead {

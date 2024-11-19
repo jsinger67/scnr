@@ -1,4 +1,4 @@
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 use crate::Position;
 
@@ -62,7 +62,7 @@ impl Match {
     }
 }
 
-/// A match with start and end positions.
+/// A match with line and column information for start and end positions.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct MatchExt {
     /// The token type number associated with the match.
@@ -81,7 +81,7 @@ impl MatchExt {
         token_type: usize,
         span: Span,
         start_position: Position,
-        end_position: Position
+        end_position: Position,
     ) -> Self {
         Self {
             token_type,

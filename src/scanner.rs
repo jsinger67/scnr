@@ -24,17 +24,16 @@ use crate::{
 ///
 /// For example, an LL parser is able to handle scanner mode switches in the grammar because it
 /// always 'knows' the next production to parse. If the production contains a scanner mode switch,
-/// the parser can switch the scanner mode before parsing the next token.
+/// the parser can switch the scanner mode before scanning the next token.
 ///
 /// A LR parser is not able to handle mode changes in the grammar because it does not know the next
 /// production to parse. The parser has to decide which production to parse based on the lookahead
 /// tokens. If the lookahead tokens contain a token that needed a scanner mode switch, the parser
-/// is not able to switch the scanner mode before reading the next token. This can lead to
-/// unexpected behavior.
+/// is not able to switch the scanner mode before reading the next token.
 ///
-/// An example of a parser induced mode change is the `parol` parser generator. It is able to handle
-/// mode changes in the grammar because it generates LL parsers. The parser is able to switch the
-/// scanner mode before parsing the next token.
+/// An example of a parser induced mode changes is the `parol` parser generator. It is able to
+/// handle mode changes in the grammar because it generates LL parsers. The parser is able to switch
+/// the scanner mode before scanning the next token.
 /// `parol` is also able to handle scanner induced mode changes stored as transitions in the scanner
 /// modes. The scanner mode changes are then no part of the grammar but instead part of the scanner.
 ///
@@ -42,7 +41,8 @@ use crate::{
 /// part of the grammar but instead part of the scanner. `parol` will prevent the LR grammar from
 /// containing scanner mode changes.
 ///
-/// See https://github.com/jsinger67/parol for more informationon about the `parol` parser generator.
+/// See <https://github.com/jsinger67/parol> for more informationon about the `parol` parser
+/// generator.
 pub trait ScannerModeSwitcher {
     /// Sets the current scanner mode.
     fn set_mode(&mut self, mode: usize);
@@ -52,7 +52,7 @@ pub trait ScannerModeSwitcher {
     fn mode_name(&self, index: usize) -> Option<&str>;
 }
 
-/// A internal trait for scanner implemenations.
+/// Internal trait for scanner implemenations.
 pub(crate) trait ScannerImplTrait: ScannerModeSwitcher + Debug + Send + Sync {
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
@@ -63,10 +63,11 @@ pub(crate) trait ScannerImplTrait: ScannerModeSwitcher + Debug + Send + Sync {
 
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
-    /// During the search, all DFAs are advanced in parallel by one character at a time.
+    /// During the search, all DFAs or NFAs of the current scanner mode are tested in parallel
+    /// and the longest token with the lowest index is chosen
     fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>;
 
-    /// This function is used by [super::find_matches_impl::FindMatchesImpl::peek_n].
+    /// This function is used by [crate::internal::find_matches_impl::FindMatchesImpl::peek_n].
     ///
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.

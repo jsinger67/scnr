@@ -169,9 +169,17 @@ impl<'h> FindMatchesImpl<'h> {
 
     /// Returns the line and column numbers of the given offset.
     /// The line number is the index of the line offset in the vector plus one.
-    /// The column number is the offset minus the line offset.
+    /// The column number is actually the number of characters found from the line offset to the
+    /// offset plus one. See note below for more about the inaccuracy of the column number.
     /// If the offset is greater than the length of the haystack, the function returns the last
     /// recorded line and the column number is calculated from the last recorded position.
+    ///
+    /// *Note:*
+    ///
+    /// This function simply calculates the column number by subtracting the last recorded line
+    /// offset from the given offset. This is not always the correct column number, especially when
+    /// the line contains characters with more then one byte length.
+    /// This inaccuracy is accepted in favor of performance.
     pub(crate) fn position(&self, offset: usize) -> Position {
         match self.line_offsets.binary_search_by(|&x| x.cmp(&offset)) {
             Ok(i) => Position::new(i + 1, offset.saturating_sub(self.line_offsets[i]) + 1),

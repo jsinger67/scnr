@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use serde::{ Deserialize, Serialize };
+use serde::{Deserialize, Serialize};
 
 /// A position in the haystack.
 /// The position is represented by a line and column number.
@@ -43,7 +43,7 @@ impl fmt::Display for Position {
     }
 }
 
-/// A trait for providing the position of an offset.
+/// A trait for providing the line and column information of a given byte offset in the haystack.
 pub trait PositionProvider {
     /// Returns the position of the given offset.
     fn position(&self, offset: usize) -> Position;

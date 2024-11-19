@@ -23,7 +23,7 @@ pub(crate) struct ScannerNfaImpl {
 impl ScannerNfaImpl {
     /// We evaluate the matches of the NFAs in ascending order to prioritize the matches with the
     /// lowest index.
-    /// We find the pattern with the lowest start position and the longest length.
+    /// We find the longest match with the lowest index in the given *matches* vector.
     fn find_first_longest_match(&self, matches: Vec<Match>) -> Option<Match> {
         let mut current_match: Option<Match> = None;
         for m in matches {

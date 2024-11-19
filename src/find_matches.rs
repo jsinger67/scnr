@@ -26,7 +26,7 @@ pub enum PeekResult {
 ///
 /// * `'h` represents the lifetime of the haystack being searched.
 ///
-/// This iterator can be created with the [`Scanner::find_iter`] method.
+/// This iterator can be created with the [`crate::Scanner::find_iter`] method.
 #[derive(Debug)]
 pub struct FindMatches<'h> {
     inner: FindMatchesImpl<'h>,

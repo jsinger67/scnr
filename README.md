@@ -153,16 +153,16 @@ let find_iter = scanner.find_iter(INPUT).with_positions();
 let matches: Vec<MatchExt> = find_iter.collect();
 ```
 
-As a rule of thumb I would recommend to use NFA based scanners over DFA based ones, because they
-work mostly as you would expect. If you know what to do to avoid overlapping character classes you
-can use DFA mode and take advantage of the improved performance.
+As a rule of thumb, I would recommend preferring NFA-based scanners over DFA-based scanners as they
+mostly work as expected. If you know what to do to avoid overlapping character classes you can use
+DFA mode and take advantage of the improved performance.
 
 ## Greediness of repetitions
 
 Some words about greediness.
 
-The normal Lex/Flex POSIX matching is greedy. It some sort adheres to the longest match rule but
-poses some overhead during backtracking on the scanner's runtime.
+The normal Lex/Flex POSIX matching is greedy. It somewhat follows the longest match rule, but causes
+some backtracking overhead during scanner runtime.
 
 ### Exit conditions on repetitions
 
@@ -182,9 +182,9 @@ The DFA for this looks like this:
 
 The point is the state 3 where it depends on the input whether to continue the repetition or to
 proceed with the following part, here state 1.
-But the `.` matches `*` too which introduces an ambiguity that contradicts the common notion of
+But the `.` matches `*` too which leads to an ambiguity that contradicts the general notion of
 deterministic finite automata. How this is resolved depends on the implementation of the scanner
-runtime. This should clearly be avoided.
+runtime. This should be avoided at all costs.
 
 So, the first thing we can do is to be more precise about the content of the repeated expression.
 We can remove the `*` from the `.`:
@@ -261,7 +261,7 @@ The scanner modes can be defined for instance in json:
     "name": "COMMENT",
     "patterns": [
       { "pattern": "\\*/", "token_type": 2},
-      { "pattern": "[.\r\n]", "token_type": 3}
+      { "pattern": "[.\\r\\n]", "token_type": 3}
     ],
     "transitions": [[2, 0]]
   }
