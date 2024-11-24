@@ -118,8 +118,6 @@ package internal {
     }
     struct NfaState {
         - state: StateID,
-        - epsilon_transitions: Vec<EpsilonTransition>,
-        - transitions: Vec<NfaTransition>,
     }
     struct NfaTransition {
         - ast: ComparableAst,
@@ -144,6 +142,9 @@ package internal {
         ~ start_state: StateID,
         ~ end_state: StateID,
     }
+    struct EpsilonTransition {
+        ~ target_state: StateID,
+    }
 
 
     FindMatchesImpl *--> ScannerImpl: - scanner_impl
@@ -158,6 +159,9 @@ package internal {
     ComparableAst *--> Ast: ~ ast
 
     Nfa *--> "*" NfaState: ~ states
+
+    NfaState *--> "*" NfaTransition: ~ transitions
+    NfaState *--> "*" EpsilonTransition: ~ epsilon_transitions
 
     CompiledNfa *--> "*" StateData: ~ states
 
