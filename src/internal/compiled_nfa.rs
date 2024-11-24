@@ -1,7 +1,4 @@
-use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::{Arc, Mutex},
-};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use crate::{internal::nfa::Nfa, Pattern, Result, Span};
 
@@ -11,7 +8,7 @@ use super::{
 };
 
 /// A compiled NFA.
-/// It is used to represent the NFA in a way that is optimized for matching.
+/// It represents the NFA in a way that is optimized for matching.
 ///
 /// The data is actually equivalent to the one of a not optimized DFA, but the transitions are
 /// regarded as non-deterministic according to the fact that transitions comprise overlapping
@@ -20,15 +17,20 @@ use super::{
 /// The start state is by design always 0.
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledNfa {
+    /// The pattern of the NFA. Used for debugging purposes.
     pub(crate) pattern: String,
+    /// The states of the NFA.
     pub(crate) states: Vec<StateData>,
-    // Used during NFA construction
+    /// The end states of the NFA.
     pub(crate) end_states: Vec<StateSetID>,
-    // An optional lookahead that is used to check if the NFA should match the input.
+    /// An optional lookahead that is used to check if the NFA should match the input.
     pub(crate) lookahead: Option<CompiledNfaLookahead>,
-    // The current states of the NFA. It is used during the simulation of the NFA.
-    pub(crate) current_states: Arc<Mutex<Vec<StateSetID>>>,
-    pub(crate) next_states: Arc<Mutex<Vec<StateSetID>>>,
+
+    /// Current and next states of the NFA. They are used during the simulation of the NFA.
+    /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
+    /// drop them again during the simulation.
+    current_states: Vec<StateSetID>,
+    next_states: Vec<StateSetID>,
 }
 
 impl CompiledNfa {
@@ -55,14 +57,14 @@ impl CompiledNfa {
     ///
     #[allow(dead_code)]
     pub(crate) fn find_from(
-        &self,
+        &mut self,
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> Option<Span> {
-        self.current_states.lock().unwrap().clear();
+        self.current_states.clear();
         // Push the start state to the current states.
-        self.current_states.lock().unwrap().push(StateSetID::new(0));
-        self.next_states.lock().unwrap().clear();
+        self.current_states.push(StateSetID::new(0));
+        self.next_states.clear();
         let mut match_start = None;
         let mut match_end = None;
         for (index, c) in char_indices {
@@ -70,14 +72,14 @@ impl CompiledNfa {
                 match_start = Some(index);
             }
 
-            for state in self.current_states.lock().unwrap().iter() {
+            for state in self.current_states.iter() {
                 if match_end.is_none() && self.end_states.contains(state) {
                     match_end = Some(index);
                 }
                 for (cc, next) in &self.states[state.as_usize()].transitions {
                     if match_char_class(*cc, c) {
-                        if !self.next_states.lock().unwrap().contains(next) {
-                            self.next_states.lock().unwrap().push(*next);
+                        if !self.next_states.contains(next) {
+                            self.next_states.push(*next);
                         }
                         if self.end_states.contains(next) {
                             match_end = Some(index);
@@ -85,12 +87,9 @@ impl CompiledNfa {
                     }
                 }
             }
-            self.current_states.lock().unwrap().clear();
-            std::mem::swap(
-                &mut self.current_states.lock().unwrap(),
-                &mut self.next_states.lock().unwrap(),
-            );
-            if self.current_states.lock().unwrap().is_empty() {
+            self.current_states.clear();
+            std::mem::swap(&mut self.current_states, &mut self.next_states);
+            if self.current_states.is_empty() {
                 break;
             }
         }
@@ -178,8 +177,8 @@ impl From<Nfa> for CompiledNfa {
             states[from.as_usize()].transitions.push((cc, to));
         }
 
-        let current_states = Arc::new(Mutex::new(Vec::with_capacity(states.len())));
-        let next_states = Arc::new(Mutex::new(Vec::with_capacity(states.len())));
+        let current_states = Vec::with_capacity(states.len());
+        let next_states = Vec::with_capacity(states.len());
 
         Self {
             pattern: nfa.pattern.clone(),
@@ -325,7 +324,7 @@ mod tests {
             let ast = parse_regex_syntax(pattern.pattern()).unwrap();
             let nfa: Nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
             nfa_render_to!(&nfa, test.name);
-            let compiled_nfa = CompiledNfa::from(nfa);
+            let mut compiled_nfa = CompiledNfa::from(nfa);
             assert_eq!(
                 compiled_nfa.end_states, test.end_states,
                 "Test '{}', End states",
