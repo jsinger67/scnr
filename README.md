@@ -135,7 +135,7 @@ comment known from languages like C++ a.s.o. The regex would normally look like 
 /\*.*?\*/
 ```
 
-You would simple make the repetition non-greedy by adding a question mark to the repetition operator.
+You would simply make the repetition non-greedy by adding a question mark to the repetition operator.
 In `scnr` you would instead create a second scanner mode, here named `COMMENT`.
 
 This mode is entered on the **comment start** `/\\*`, then handles all tokens inside a comment and
