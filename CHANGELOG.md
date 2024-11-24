@@ -17,6 +17,14 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
+## 0.5.0 - Not released yet
+
+- Cleanup of the library
+- Removed DFA scanner variant and making NFA implementation the default, hence `use_nfa()` on
+`ScannerBuilder` is no more needed and was removed
+- Update of documentation
+- Performance optimization of scanner phase of compiled NFA
+
 ## 0.4.0 - 2024-11-12
 
 - Support for lookahead, negative and positive. Please see README.md for details.

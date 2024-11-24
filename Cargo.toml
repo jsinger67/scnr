@@ -1,6 +1,6 @@
 [package]
 name = "scnr"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["Jörg Singer <singer.joerg@gmx.de>"]
 description = "Scanner/Lexer with regex patterns and multiple modes"
@@ -15,8 +15,8 @@ license = "MIT/Apache-2.0"
 dot-writer = "0.1.4"
 log = "0.4.22"
 regex-syntax = "0.8.5"
-serde = { version = "1.0.214", features = ["derive"] }
-serde_json = "1.0.132"
+serde = { version = "1.0.215", features = ["derive"] }
+serde_json = "1.0.133"
 seshat-unicode = "0.3.1"
 thiserror = "2"
 

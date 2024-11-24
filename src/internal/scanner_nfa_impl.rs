@@ -6,14 +6,14 @@ use crate::{
     scanner::ScannerImplTrait, FindMatches, Match, Result, ScannerMode, ScannerModeSwitcher,
 };
 
-use super::{compiled_scanner_mode::CompiledNfaScannerMode, CharClassID, CharacterClassRegistry};
+use super::{compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry};
 
 /// ScannerNfaImpl instances are always created by the Scanner::try_new method and of course by
 /// the clone method.
 #[derive(Clone)]
 pub(crate) struct ScannerNfaImpl {
     pub(crate) character_classes: CharacterClassRegistry,
-    pub(crate) scanner_modes: Vec<CompiledNfaScannerMode>,
+    pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     // The function used to match characters against character classes.
     pub(crate) match_char_class: Arc<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>,
     // The current mode is private and thereby makes the free creation of ScannerNfaImpl instances
@@ -222,7 +222,7 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
         let mut character_class_registry = CharacterClassRegistry::new();
         let mut compiled_scanner_modes = Vec::with_capacity(scanner_modes.len());
         for scanner_mode in scanner_modes {
-            let compiled_scanner_mode = CompiledNfaScannerMode::try_from_scanner_mode(
+            let compiled_scanner_mode = CompiledScannerMode::try_from_scanner_mode(
                 scanner_mode,
                 &mut character_class_registry,
             )?;

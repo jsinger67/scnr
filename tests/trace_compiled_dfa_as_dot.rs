@@ -1,4 +1,4 @@
-// Outputs the compiled DFA as in dot format for all the modes files in the data directory.
+// Outputs the compiled automata as in dot format for all the modes files in the data directory.
 // Run with `cargo test -- --nocapture trace_compiled_dfa_as_dot`
 
 use std::fs;
@@ -50,6 +50,6 @@ fn trace_compiled_dfa_as_dot() {
 
         scanner
             .log_compiled_automata_as_dot(&scanner_modes)
-            .expect("Failed to trace compiled DFA as dot");
+            .expect("Failed to trace compiled automata as dot");
     }
 }

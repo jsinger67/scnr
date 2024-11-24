@@ -6,7 +6,8 @@ use std::fs;
 use regex::Regex;
 use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
 
-fn e2e_test_method(use_nfa: bool) {
+#[test]
+fn e2e_test() {
     // Initialize the logger
     let _ = env_logger::builder().is_test(true).try_init();
 
@@ -43,9 +44,8 @@ fn e2e_test_method(use_nfa: bool) {
             .unwrap_or_else(|e| panic!("**** Failed to read json file {}: {}", path.display(), e));
 
         // Create a scanner from the scanner builder
-        let scanner = ScannerBuilder::new().add_scanner_modes(&scanner_modes);
-
-        let scanner = if use_nfa { scanner.use_nfa() } else { scanner }
+        let scanner = ScannerBuilder::new()
+            .add_scanner_modes(&scanner_modes)
             .build()
             .unwrap();
 
@@ -91,14 +91,4 @@ fn e2e_test_method(use_nfa: bool) {
         // Compare the matches
         assert_eq!(matches, expected_matches, "Failed for {}", path.display());
     }
-}
-
-#[test]
-fn e2e_test() {
-    e2e_test_method(false);
-}
-
-#[test]
-fn e2e_test_nfa() {
-    e2e_test_method(true);
 }

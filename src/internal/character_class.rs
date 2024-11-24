@@ -18,11 +18,6 @@ impl CharacterClass {
     }
 
     #[inline]
-    pub(crate) fn id(&self) -> CharClassID {
-        self.id
-    }
-
-    #[inline]
     pub(crate) fn ast(&self) -> &Ast {
         &self.ast.0
     }

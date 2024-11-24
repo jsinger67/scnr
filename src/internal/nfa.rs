@@ -1,6 +1,5 @@
 //! This module contains the NFA (Non-deterministic Finite Automaton) implementation.
 //! The NFA is used to represent the regex syntax as a finite automaton.
-//! The NFA is later converted to a DFA (Deterministic Finite Automaton) for matching strings.
 
 use std::vec;
 
@@ -366,43 +365,6 @@ impl Nfa {
         closure.sort_unstable();
         closure.dedup();
         closure
-    }
-
-    /// Calculate the epsilon closure of a set of states and return the unique states.
-    pub(crate) fn epsilon_closure_set<I>(&self, states: I) -> Vec<StateID>
-    where
-        I: IntoIterator<Item = StateID>,
-    {
-        let mut closure: Vec<StateID> = states.into_iter().collect();
-        let mut i = 0;
-        while i < closure.len() {
-            let current_state = closure[i];
-            for epsilon_transition in self.states[current_state].epsilon_transitions() {
-                if !closure.contains(&epsilon_transition.target_state()) {
-                    closure.push(epsilon_transition.target_state());
-                }
-            }
-            i += 1;
-        }
-        closure.sort_unstable();
-        closure.dedup();
-        closure
-    }
-
-    /// Calculate move(T, a) for a set of states T and a character class a.
-    /// This is the set of states that can be reached from T by matching a.
-    pub(crate) fn move_set(&self, states: &[StateID], char_class: CharClassID) -> Vec<StateID> {
-        let mut move_set = Vec::new();
-        for state in states {
-            for transition in self.states()[*state].transitions() {
-                if transition.char_class() == char_class {
-                    move_set.push(transition.target_state());
-                }
-            }
-        }
-        move_set.sort_unstable();
-        move_set.dedup();
-        move_set
     }
 
     pub(crate) fn get_match_transitions(

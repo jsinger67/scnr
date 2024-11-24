@@ -116,37 +116,35 @@ package internal {
     }
     struct ComparableAst {
     }
+    struct NfaState {
+        - state: StateID,
+        - epsilon_transitions: Vec<EpsilonTransition>,
+        - transitions: Vec<NfaTransition>,
+    }
+    struct NfaTransition {
+        - ast: ComparableAst,
+        - target_state: StateID,
+        - char_class: CharClassID,
+    }
     struct CompiledScannerMode {
         ~ name: String
-        ~ dfas: Vec<(CompiledDfa, TerminalID)>
+        ~ nfas: Vec<(CompiledNfa, TerminalID)>
         ~ transitions: Vec<(TerminalID, ScannerModeID)>
     }
-    struct CompiledDfa {
-        - accepting_states: Vec<StateID>
-        {field} - state_ranges: Vec<(usize, usize)>
-        transitions: Vec<(CharClassID, StateID)>
+    struct CompiledNfa {
+        {field} - pattern: String
+        {field} - end_states: Vec<StateSetID>
+        {field} - lookahead: Option<CompiledLookahead>
     }
-    struct MatchingState<S> {
-        current_state: S
-        start_position: Option<usize>
-        end_position: Option<usize>
+    struct StateData {
+        ~ transitions: Vec<(CharClassID, StateSetID)>,
     }
-    enum InnerMatchingState {
-        None
-        Start
-        Accepting
-        Longest
+    struct Nfa {
+        ~ pattern: String,
+        ~ start_state: StateID,
+        ~ end_state: StateID,
     }
-    struct DfaState {
-        id: StateID
-        nfa_states: Vec<StateID>
-        marked: bool
-    }
-    struct Dfa {
-        ~ pattern: String
-        ~ accepting_states: BTreeSet<StateID>
-        ~ transitions: BTreeMap<StateID, BTreeMap<CharClassID, StateID>>
-    }
+
 
     FindMatchesImpl *--> ScannerImpl: - scanner_impl
 
@@ -159,11 +157,10 @@ package internal {
 
     ComparableAst *--> Ast: ~ ast
 
-    CompiledScannerMode *--> MatchingState: - matching_state
+    Nfa *--> "*" NfaState: ~ states
 
-    MatchingState *--> InnerMatchingState: - state
+    CompiledNfa *--> "*" StateData: ~ states
 
-    Dfa *--> "*" DfaState: ~ states
 }
 
 

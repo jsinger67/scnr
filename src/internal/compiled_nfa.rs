@@ -3,7 +3,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use crate::{internal::nfa::Nfa, Pattern, Result, Span};
 
 use super::{
-    ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledNfaLookahead,
+    ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledLookahead,
     StateID, StateIDBase,
 };
 
@@ -24,7 +24,7 @@ pub(crate) struct CompiledNfa {
     /// The end states of the NFA.
     pub(crate) end_states: Vec<StateSetID>,
     /// An optional lookahead that is used to check if the NFA should match the input.
-    pub(crate) lookahead: Option<CompiledNfaLookahead>,
+    pub(crate) lookahead: Option<CompiledLookahead>,
 
     /// Current and next states of the NFA. They are used during the simulation of the NFA.
     /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
@@ -105,7 +105,7 @@ impl CompiledNfa {
         let mut nfa: CompiledNfa = nfa.into();
         if let Some(lookahead) = pattern.lookahead() {
             let lookahead =
-                CompiledNfaLookahead::try_from_lookahead(lookahead, character_class_registry)?;
+                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
             nfa.lookahead = Some(lookahead);
         }
         Ok(nfa)
@@ -115,7 +115,6 @@ impl CompiledNfa {
 impl From<Nfa> for CompiledNfa {
     /// Create a dense representation of the NFA in form of match transitions between states sets.
     /// This is an equivalent algorithm to the subset construction for DFAs.
-    /// Compare to [crate::internal::dfa::Dfa::try_from_nfa].
     ///
     /// Note that the lookahead is not set in the resulting CompiledNfa. This must be done
     /// separately. See [CompiledNfa::try_from_pattern].

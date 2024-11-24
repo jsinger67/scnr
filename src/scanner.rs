@@ -2,10 +2,7 @@ use std::{fmt::Debug, path::Path};
 
 use log::trace;
 
-use crate::{
-    internal::{ScannerImpl, ScannerNfaImpl},
-    FindMatches, Match, Result, ScannerMode,
-};
+use crate::{internal::ScannerNfaImpl, FindMatches, Match, Result, ScannerMode};
 
 /// A trait to switch between scanner modes.
 ///
@@ -104,7 +101,7 @@ pub(crate) trait ScannerImplTrait: ScannerModeSwitcher + Debug + Send + Sync {
 /// A Scanner.
 /// It consists of multiple DFAs resp. NFAs that are used to search for matches.
 ///
-/// Each DFA/NFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
+/// Each NFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
 /// All these FSMs are advanced in parallel to search for matches.
 /// It further constists of at least one scanner mode. Scanners support multiple scanner modes.
 /// This feature is known from Flex as *Start conditions* and provides more
@@ -123,15 +120,10 @@ pub struct Scanner {
 impl Scanner {
     /// Creates a new scanner.
     /// The scanner is created with the given scanner modes.
-    /// The ScannerImpl is created from the scanner modes and the use_nfa flag determines if the
-    /// scanner uses DFAs or NFAs for the pattern matching.
-    pub fn try_new(scanner_modes: Vec<ScannerMode>, use_nfa: bool) -> Result<Self> {
+    /// The ScannerImpl is created from the scanner modes.
+    pub fn try_new(scanner_modes: Vec<ScannerMode>) -> Result<Self> {
         Ok(Scanner {
-            inner: if use_nfa {
-                Box::new(ScannerNfaImpl::try_from(scanner_modes)?)
-            } else {
-                Box::new(ScannerImpl::try_from(scanner_modes)?)
-            },
+            inner: Box::new(ScannerNfaImpl::try_from(scanner_modes)?),
         })
     }
 
@@ -221,25 +213,6 @@ mod tests {
     }
 
     #[test]
-    fn test_scanner_builder_nfa_with_single_mode() {
-        init();
-        let scanner_mode = ScannerMode::new(
-            "INITIAL",
-            vec![
-                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
-                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
-            ],
-            vec![(1, 1), (3, 1)],
-        );
-        let scanner = ScannerBuilder::new()
-            .add_scanner_mode(scanner_mode)
-            .use_nfa()
-            .build()
-            .unwrap();
-        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
-    }
-
-    #[test]
     // Test the correct sharing of the current mode between the scanner and the scanner impl.
     fn test_scanner_current_mode() {
         init();
@@ -279,53 +252,6 @@ mod tests {
         assert_eq!(0, scanner.inner.dyn_clone().current_mode());
     }
 
-    #[test]
-    // Test the correct sharing of the current mode between the scanner and the scanner impl.
-    fn test_scanner_nfa_current_mode() {
-        init();
-        let scanner_mode = ScannerMode::new(
-            "INITIAL",
-            vec![
-                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
-                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
-            ],
-            vec![(1, 1), (3, 1)],
-        );
-        let mut scanner = ScannerBuilder::new()
-            .add_scanner_mode(scanner_mode)
-            .use_nfa()
-            .build()
-            .unwrap();
-        // At the beginning, the scanner mode is 0.
-        assert_eq!(0, scanner.current_mode());
-        assert_eq!(0, scanner.inner.current_mode());
-
-        scanner.set_mode(1);
-        assert_eq!(1, scanner.current_mode());
-        assert_eq!(1, scanner.inner.current_mode());
-
-        let mut find_iter = scanner.find_iter("Hello\nWorld");
-        // The creation of a find_iter sets its own scanner mode to 0.
-        assert_eq!(0, find_iter.current_mode());
-
-        assert_eq!(1, scanner.current_mode());
-        assert_eq!(1, scanner.inner.current_mode());
-        assert_eq!(1, scanner.inner.dyn_clone().current_mode());
-
-        find_iter.set_mode(1);
-        assert_eq!(1, find_iter.current_mode());
-        scanner.set_mode(0);
-        assert_eq!(0, scanner.current_mode());
-        assert_eq!(0, scanner.inner.current_mode());
-        assert_eq!(0, scanner.inner.dyn_clone().current_mode());
-    }
-
-    #[derive(Debug, PartialEq)]
-    enum ApplicableFor {
-        Nfa,
-        Both,
-    }
-
     // A test that checks the behavoir of the scanner when so called 'pathological regular expressions'
     // are used. These are regular expressions that are very slow to match.
     // The test checks if the scanner is able to handle these cases and does not hang.
@@ -333,7 +259,6 @@ mod tests {
         pattern: &'static str,
         input: &'static str,
         expected_match: Option<&'static str>,
-        applicable_for: ApplicableFor,
     }
 
     const TEST_DATA: &[TestData] = &[
@@ -341,59 +266,48 @@ mod tests {
             pattern: r"((a*)*b)",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a+)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a+)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaa",
             expected_match: None,
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a|aa)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"(a|a?)+b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"((a|aa|aaa|aaaa|aaaaa)*)*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"((a*a*a*a*a*a*)*)*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         TestData {
             pattern: r"a{3}{3}*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaab"),
-            applicable_for: ApplicableFor::Both,
         },
         // The following test case is only applicable for the NFA.
-        // The DFA would hang about 5 minutes in the phase of the DFA minimization because the DFA
-        // has more than 15000 states.
         // The NFA is able to handle this case but needs a view seconds to compile the automaton.
         TestData {
             pattern: r"a{5}{5}{5}{5}{5}{5}*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("b"),
-            applicable_for: ApplicableFor::Nfa,
         },
     ];
 
@@ -415,9 +329,6 @@ mod tests {
             // Create the target folder.
             fs::create_dir_all(target_folder.clone()).unwrap();
 
-            if test.applicable_for != ApplicableFor::Both {
-                continue;
-            }
             let scanner_mode = ScannerMode::new(
                 "INITIAL",
                 vec![Pattern::new(test.pattern.to_string(), 1)],
@@ -425,53 +336,6 @@ mod tests {
             );
             let scanner = ScannerBuilder::new()
                 .add_scanner_mode(scanner_mode.clone())
-                .build()
-                .unwrap();
-
-            scanner
-                .generate_compiled_automata_as_dot(&[scanner_mode], Path::new(&target_folder))
-                .unwrap();
-
-            let mut find_iter = scanner.find_iter(test.input);
-            let match1 = find_iter.next();
-            assert_eq!(
-                test.expected_match,
-                match1.map(|m| test.input.get(m.start()..m.end()).unwrap())
-            );
-        }
-    }
-
-    #[test]
-    fn test_pathological_regular_expressions_nfa() {
-        init();
-        for (index, test) in TEST_DATA.iter().enumerate() {
-            if test.applicable_for != ApplicableFor::Both
-                && test.applicable_for != ApplicableFor::Nfa
-            {
-                continue;
-            }
-
-            let target_folder = format!(
-                "{}_{}",
-                concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/target/test_pathological_regular_expressions_nfa"
-                ),
-                index
-            );
-            // Delete all previously generated dot files.
-            let _ = fs::remove_dir_all(target_folder.clone());
-            // Create the target folder.
-            fs::create_dir_all(target_folder.clone()).unwrap();
-
-            let scanner_mode = ScannerMode::new(
-                "INITIAL",
-                vec![Pattern::new(test.pattern.to_string(), 1)],
-                vec![],
-            );
-            let scanner = ScannerBuilder::new()
-                .add_scanner_mode(scanner_mode.clone())
-                .use_nfa()
                 .build()
                 .unwrap();
 

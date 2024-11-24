@@ -18,11 +18,6 @@ impl CharacterClassRegistry {
         }
     }
 
-    /// Returns an iterator over all character classes in the registry.
-    pub(crate) fn iter(&self) -> impl Iterator<Item = &CharacterClass> {
-        self.character_classes.iter()
-    }
-
     /// Returns a slice of the character classes in the registry.
     /// It is used for debugging purposes.
     #[allow(unused)]

@@ -4,7 +4,6 @@ use crate::{scanner::Scanner, scanner_mode::ScannerMode, Pattern, Result};
 #[derive(Debug, Clone, Default)]
 pub struct ScannerBuilder {
     scanner_modes: Vec<ScannerMode>,
-    use_nfa: bool,
 }
 
 impl ScannerBuilder {
@@ -12,7 +11,6 @@ impl ScannerBuilder {
     pub fn new() -> Self {
         Self {
             scanner_modes: Vec::new(),
-            use_nfa: false,
         }
     }
 
@@ -31,7 +29,7 @@ impl ScannerBuilder {
             .enumerate()
             .map(|(i, pattern)| Pattern::new(pattern.as_ref().to_string(), i))
             .collect::<Vec<_>>();
-        SimpleScannerBuilder::new(patterns, self.use_nfa)
+        SimpleScannerBuilder::new(patterns)
     }
 
     /// Adds a scanner mode to the scanner builder.
@@ -46,15 +44,9 @@ impl ScannerBuilder {
         self
     }
 
-    /// Sets the scanner to use an NFA instead of a DFA.
-    pub fn use_nfa(mut self) -> Self {
-        self.use_nfa = true;
-        self
-    }
-
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Scanner::try_new(self.scanner_modes, self.use_nfa)
+        Scanner::try_new(self.scanner_modes)
     }
 }
 
@@ -67,30 +59,22 @@ impl ScannerBuilder {
 #[derive(Debug, Clone)]
 pub struct SimpleScannerBuilder {
     scanner_mode: ScannerMode,
-    use_nfa: bool,
 }
 
 impl SimpleScannerBuilder {
     /// Creates a new simple scanner builder.
-    fn new<P>(patterns: P, use_nfa: bool) -> Self
+    fn new<P>(patterns: P) -> Self
     where
         P: IntoIterator<Item = Pattern>,
     {
         Self {
             scanner_mode: ScannerMode::new("INITIAL", patterns, vec![]),
-            use_nfa,
         }
-    }
-
-    /// Sets the scanner to use an NFA instead of a DFA.
-    pub fn use_nfa(mut self) -> Self {
-        self.use_nfa = true;
-        self
     }
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Scanner::try_new(vec![self.scanner_mode], self.use_nfa)
+        Scanner::try_new(vec![self.scanner_mode])
     }
 }
 
@@ -123,25 +107,6 @@ mod tests {
     }
 
     #[test]
-    fn test_scanner_builder_nfa_with_single_mode() {
-        init();
-        let scanner_mode = ScannerMode::new(
-            "INITIAL",
-            vec![
-                Pattern::new(r"\r\n|\r|\n".to_string(), 1),
-                Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
-            ],
-            vec![(1, 1), (3, 1)],
-        );
-        let scanner = ScannerBuilder::new()
-            .add_scanner_mode(scanner_mode)
-            .use_nfa()
-            .build()
-            .unwrap();
-        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
-    }
-
-    #[test]
     fn test_scanner_builder_with_multiple_modes() {
         init();
         let scanner_modes = vec![
@@ -167,67 +132,10 @@ mod tests {
     }
 
     #[test]
-    fn test_scanner_builder_nfa_with_multiple_modes() {
-        init();
-        let scanner_modes = vec![
-            ScannerMode::new(
-                "INITIAL",
-                vec![
-                    Pattern::new(r"\r\n|\r|\n".to_string(), 1),
-                    Pattern::new(r"(//.*(\r\n|\r|\n))".to_string(), 3),
-                ],
-                vec![(1, 1), (3, 1)],
-            ),
-            ScannerMode::new(
-                "STRING",
-                vec![Pattern::new(r#""[^"]*""#.to_string(), 2)],
-                vec![(2, 0)],
-            ),
-        ];
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&scanner_modes)
-            .use_nfa()
-            .build()
-            .unwrap();
-        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
-    }
-
-    #[test]
     fn test_simple_scanner_builder() {
         init();
         let scanner = ScannerBuilder::new()
             .add_patterns(["\r\n|\r|\n", "//.*(\r\n|\r|\n)"])
-            .build()
-            .unwrap();
-        assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
-        let input = r#"
-        // Line comment1
-
-        // Line comment2
-        "#;
-
-        let matches: Vec<_> = scanner.find_iter(input).collect();
-        assert_eq!(matches.len(), 4);
-        assert_eq!(matches[0].token_type(), 0);
-        assert_eq!(matches[1].token_type(), 1);
-        assert_eq!(
-            &input[matches[1].span().range()].to_string().trim(),
-            &"// Line comment1"
-        );
-        assert_eq!(matches[2].token_type(), 0);
-        assert_eq!(matches[3].token_type(), 1);
-        assert_eq!(
-            &input[matches[3].span().range()].to_string().trim(),
-            &"// Line comment2"
-        );
-    }
-
-    #[test]
-    fn test_simple_scanner_builder_nfa() {
-        init();
-        let scanner = ScannerBuilder::new()
-            .add_patterns(["\r\n|\r|\n", "//.*(\r\n|\r|\n)"])
-            .use_nfa()
             .build()
             .unwrap();
         assert_eq!(Some("INITIAL"), scanner.inner.mode_name(0));
