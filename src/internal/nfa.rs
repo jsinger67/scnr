@@ -286,6 +286,10 @@ impl Nfa {
             }
             Ast::Repetition(ref r) => {
                 let mut nfa2: Nfa = Self::try_from_ast((*r.ast).clone(), char_class_registry)?;
+                if !r.greedy {
+                    Err(unsupported!(
+                        format!("{:?}: Non-greedy repetionions. Consider using different scanner modes instead.", ast)))?;
+                }
                 match &r.op.kind {
                     RepetitionKind::ZeroOrOne => {
                         nfa2.zero_or_one();
