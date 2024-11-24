@@ -67,7 +67,7 @@ impl CompiledLookahead {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub(crate) struct CompiledNfaLookahead {
     /// The compiled NFA for the lookahead.
     /// We need a box to break the cycle between CompiledNfa and CompiledLookahead.

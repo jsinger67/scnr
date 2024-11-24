@@ -183,10 +183,7 @@ impl<'h> FindMatchesImpl<'h> {
     pub(crate) fn position(&self, offset: usize) -> Position {
         match self.line_offsets.binary_search_by(|&x| x.cmp(&offset)) {
             Ok(i) => Position::new(i + 1, offset.saturating_sub(self.line_offsets[i]) + 1),
-            Err(_) => Position::new(
-                self.line_offsets.len() - 1 + 1,
-                offset.saturating_sub(*self.line_offsets.last().unwrap()) + 1,
-            ),
+            Err(i) => Position::new(i, offset.saturating_sub(self.line_offsets[i - 1]) + 1),
         }
     }
 
