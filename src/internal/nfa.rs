@@ -831,6 +831,28 @@ mod tests {
             }
         );
     }
+
+    // Test error on greedy repetition
+    #[test]
+    fn test_nfa_repetition_non_greedy() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let result =
+            Nfa::try_from_ast(parse_regex_syntax("a*?").unwrap(), &mut char_class_registry);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Non-greedy"));
+
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let result =
+            Nfa::try_from_ast(parse_regex_syntax("a+?").unwrap(), &mut char_class_registry);
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Non-greedy"));
+    }
 }
 
 #[cfg(test)]
