@@ -1,4 +1,3 @@
-use log::trace;
 use regex_syntax::ast::Ast;
 
 use super::{ids::CharClassIDBase, CharClassID, CharacterClass, ComparableAst};
@@ -70,15 +69,14 @@ impl CharacterClassRegistry {
             self.character_classes
                 .iter()
                 .try_fold(Vec::new(), |mut acc, cc| {
-                    trace!("Create match function for char class {:?}", cc);
+                    // trace!("Create match function for char class {:?}", cc);
                     let match_function: MatchFunction = cc.ast().try_into()?;
                     acc.push(match_function);
                     Ok::<Vec<MatchFunction>, ScnrError>(acc)
                 })?;
         Ok(Box::new(move |char_class, c| {
-            let res = match_functions[char_class.as_usize()].call(c);
-            trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
-            res
+            // trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
+            match_functions[char_class.as_usize()].call(c)
         }))
     }
 }
