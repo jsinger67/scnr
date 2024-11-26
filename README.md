@@ -95,7 +95,7 @@ Additionally to Flex `scnr` supports not only positive lookahead but also negati
 
 The configuration of these look ahead constraints can be done via the `Pattern` struct which now
 contains an optional member `lookahead`. The inner type of the Option is `Lookahead` that contains
-a patter string and a flag that determines whether the lookahead pattern should match (positive
+a pattern string and a flag that determines whether the lookahead pattern should match (positive
 lookahead) or not match (negative lookahead).
 
 To configure a scanner with patterns that contain lookahead expressions you have to use 
