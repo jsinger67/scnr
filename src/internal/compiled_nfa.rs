@@ -21,8 +21,11 @@ pub(crate) struct CompiledNfa {
     pub(crate) pattern: String,
     /// The states of the NFA.
     pub(crate) states: Vec<StateData>,
-    /// The end states of the NFA.
-    pub(crate) end_states: Vec<StateSetID>,
+    /// The accepting states of the NFA are reprsented by a vector of booleans.
+    /// The index of the vector is the state id.
+    /// If the value is true, the state is an accepting state.
+    /// This is an optimization to avoid the need to search the end states during the simulation.
+    pub(crate) end_states: Vec<bool>,
     /// An optional lookahead that is used to check if the NFA should match the input.
     pub(crate) lookahead: Option<CompiledLookahead>,
 
@@ -73,7 +76,7 @@ impl CompiledNfa {
             }
 
             for state in self.current_states.iter() {
-                if match_end.is_none() && self.end_states.contains(state) {
+                if match_end.is_none() && self.end_states[state.as_usize()] {
                     match_end = Some(index);
                 }
                 for (cc, next) in &self.states[state.as_usize()].transitions {
@@ -81,7 +84,7 @@ impl CompiledNfa {
                         if !self.next_states.contains(next) {
                             self.next_states.push(*next);
                         }
-                        if self.end_states.contains(next) {
+                        if self.end_states[next.as_usize()] {
                             match_end = Some(index);
                         }
                     }
@@ -125,7 +128,7 @@ impl From<Nfa> for CompiledNfa {
         // The state ids are numbers of sets of states.
         let mut transitions: BTreeSet<(StateSetID, CharClassID, StateSetID)> = BTreeSet::new();
         // The end states of the CompiledNfa.
-        let mut end_states: Vec<StateSetID> = Vec::new();
+        let mut accepting_states: Vec<StateSetID> = Vec::new();
         // Calculate the epsilon closure of the start state.
         let mut epsilon_closure: BTreeSet<StateID> =
             BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
@@ -159,9 +162,10 @@ impl From<Nfa> for CompiledNfa {
                     new_state_id_candidate = *state_map.get(&epsilon_closure).unwrap();
                 }
                 let current_state = new_state_id_candidate;
-                if epsilon_closure.contains(&nfa.end_state) && !end_states.contains(&current_state)
+                if epsilon_closure.contains(&nfa.end_state)
+                    && !accepting_states.contains(&current_state)
                 {
-                    end_states.push(current_state);
+                    accepting_states.push(current_state);
                 }
                 transitions.insert((old_state_id, cc, current_state));
             }
@@ -178,6 +182,10 @@ impl From<Nfa> for CompiledNfa {
 
         let current_states = Vec::with_capacity(states.len());
         let next_states = Vec::with_capacity(states.len());
+        let mut end_states = vec![false; states.len()];
+        for state in accepting_states {
+            end_states[state.as_usize()] = true;
+        }
 
         Self {
             pattern: nfa.pattern.clone(),
@@ -256,7 +264,7 @@ mod tests {
     struct TestData {
         pattern: &'static str,
         name: &'static str,
-        end_states: &'static [StateSetID],
+        end_states: &'static [bool],
         match_data: &'static [(&'static str, Option<(usize, usize)>)],
     }
 
@@ -264,7 +272,7 @@ mod tests {
         TestData {
             pattern: "(A*B|AC)D",
             name: "Sedgewick",
-            end_states: &[StateSetID::new(5)],
+            end_states: &[false, false, false, false, false, true],
             match_data: &[
                 ("AAABD", Some((0, 5))),
                 ("ACD", Some((0, 3))),
@@ -275,7 +283,9 @@ mod tests {
         TestData {
             pattern: r#"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}"#,
             name: "JsonString",
-            end_states: &[StateSetID::new(2)],
+            end_states: &[
+                false, false, true, false, false, false, false, false, false, false, false,
+            ],
             match_data: &[
                 (r#""autumn""#, Some((0, 8))),
                 (r#""au0075tumn""#, Some((0, 12))),
@@ -285,7 +295,7 @@ mod tests {
         TestData {
             pattern: r"[a-zA-Z_]\w*",
             name: "Identifier",
-            end_states: &[StateSetID::new(1), StateSetID::new(2)],
+            end_states: &[false, true, true],
             match_data: &[
                 ("_a", Some((0, 2))),
                 ("a", Some((0, 1))),
@@ -298,7 +308,7 @@ mod tests {
         TestData {
             pattern: r"(0|1)*1(0|1)",
             name: "SecondLastBitIs1",
-            end_states: &[StateSetID::new(4), StateSetID::new(5)],
+            end_states: &[false, false, false, false, true, true],
             match_data: &[
                 ("11010", Some((0, 5))),
                 ("11011", Some((0, 5))),

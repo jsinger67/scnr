@@ -5,9 +5,9 @@ use std::io::Write;
 
 use dot_writer::{Attributes, DotWriter, RankDirection};
 
-use crate::internal::{compiled_nfa::CompiledNfa, StateIDBase};
+use crate::internal::compiled_nfa::CompiledNfa;
 
-use super::{ids::StateSetID, nfa::Nfa, CharacterClassRegistry};
+use super::{nfa::Nfa, CharacterClassRegistry};
 
 /// Render the NFA to a graphviz dot format.
 #[allow(dead_code)]
@@ -87,10 +87,7 @@ pub(crate) fn compiled_nfa_render<W: Write>(
                 .set_color(dot_writer::Color::Blue)
                 .set_pen_width(3.0);
         }
-        if compiled_nfa
-            .end_states
-            .contains(&StateSetID::new(id as StateIDBase))
-        {
+        if compiled_nfa.end_states[id] {
             source_node
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Red)
