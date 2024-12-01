@@ -1,6 +1,6 @@
 @startuml
 
-title Scnr version 0.3.3
+title Scnr version 0.6.0pre
 
 struct ScnrError {
 }
@@ -9,8 +9,6 @@ enum ScnrErrorKind {
     RegexSyntaxError
     IoError
     UnsupportedFeature
-    DfaError
-
 }
 
 interface PositionProvider<<trait>> {
@@ -54,8 +52,6 @@ struct Span {
 
 struct ScannerMode {
     ~ name: str
-    {field} ~ patterns: Vec<(String, TerminalID)>
-    {field} ~ transitions: Vec<(TerminalID, ScannerModeID)>
     name() -> str
 }
 
@@ -64,9 +60,30 @@ struct ScannerBuilder {
 }
 
 interface ScannerModeSwitcher<<trait>> {
-    + set_mode(&mut self, mode: usize);
-    + current_mode(&self) -> usize;
+    + set_mode(&mut self, mode: usize)
+    + current_mode(&self) -> usize
     + mode_name(&self, index: usize) -> Option<&str>
+}
+
+struct ScannerModeTransition<<tuple>> {
+    ~ terminal: TerminalID,
+    ~ target_state: ScannerModeID,
+}
+
+struct PatternWithTerminal<<tuple>> {
+    ~ pattern: String
+    ~ terminal: TerminalID
+}
+
+interface ScannerImplTrait<<trait>> {
+    + find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>
+    + reset(&mut self)
+    + find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
+    + peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
+    + has_transition(&self, token_type: usize) -> Option<usize>
+    + log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()>
+    + generate_compiled_automata_as_dot(&self, modes: &[ScannerMode], target_folder: &Path, ) -> Result<()>
+    + dyn_clone(&self) -> Box<dyn ScannerImplTrait>
 }
 
 struct Scanner {
@@ -126,13 +143,11 @@ package internal {
     }
     struct CompiledScannerMode {
         ~ name: String
-        ~ nfas: Vec<(CompiledNfa, TerminalID)>
-        ~ transitions: Vec<(TerminalID, ScannerModeID)>
     }
     struct CompiledNfa {
-        {field} - pattern: String
-        {field} - end_states: Vec<StateSetID>
-        {field} - lookahead: Option<CompiledLookahead>
+        - pattern: String
+        - end_states: Vec<StateSetID>
+        - lookahead: Option<CompiledLookahead>
     }
     struct StateData {
         ~ transitions: Vec<(CharClassID, StateSetID)>,
@@ -145,7 +160,10 @@ package internal {
     struct EpsilonTransition {
         ~ target_state: StateID,
     }
-
+    struct NfaWithTerminal<<tuple>> {
+        ~ nfa: Nfa,
+        ~ terminal: TerminalID,
+    }
 
     FindMatchesImpl *--> ScannerImpl: - scanner_impl
 
@@ -162,6 +180,9 @@ package internal {
 
     NfaState *--> "*" NfaTransition: ~ transitions
     NfaState *--> "*" EpsilonTransition: ~ epsilon_transitions
+
+    CompiledScannerMode *--> "*" NfaWithTerminal: ~ nfas
+    CompiledScannerMode *--> "*" ScannerModeTransition: ~ transitions
 
     CompiledNfa *--> "*" StateData: ~ states
 
@@ -184,6 +205,9 @@ ScannerBuilder *--> "1*" ScannerMode: - scanner_modes
 Scanner *--> internal.ScannerImpl: - inner
 Scanner -|> ScannerModeSwitcher: implements
 Scanner ..> FindMatches: create
+
+ScannerMode *--> "*" ScannerModeTransition: - transitions
+ScannerMode *--> "*" PatternWithTerminal: - patterns
 
 WithPositions "for I: ScannerModeSwitcher" --|> ScannerModeSwitcher: implements
 
