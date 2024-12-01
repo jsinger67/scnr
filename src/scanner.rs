@@ -2,7 +2,7 @@ use std::{fmt::Debug, path::Path};
 
 use log::trace;
 
-use crate::{internal::ScannerNfaImpl, FindMatches, Match, Result, ScannerMode};
+use crate::{internal::ScannerNfaImpl, FindMatches, Result, ScannerMode};
 
 /// A trait to switch between scanner modes.
 ///
@@ -49,55 +49,6 @@ pub trait ScannerModeSwitcher {
     fn mode_name(&self, index: usize) -> Option<&str>;
 }
 
-/// Internal trait for scanner implemenations.
-pub(crate) trait ScannerImplTrait: ScannerModeSwitcher + Debug + Send + Sync {
-    /// Returns an iterator over all non-overlapping matches.
-    /// The iterator yields a [`Match`] value until no more matches could be found.
-    fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>;
-
-    /// Resets the scanner to the initial state.
-    fn reset(&mut self);
-
-    /// Executes a leftmost search and returns the first match that is found, if one exists.
-    /// It starts the search at the position of the given CharIndices iterator.
-    /// During the search, all DFAs or NFAs of the current scanner mode are tested in parallel
-    /// and the longest token with the lowest index is chosen
-    fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>;
-
-    /// This function is used by [crate::internal::find_matches_impl::FindMatchesImpl::peek_n].
-    ///
-    /// Executes a leftmost search and returns the first match that is found, if one exists.
-    /// It starts the search at the position of the given CharIndices iterator.
-    /// In contrast to `find_from`, this method does not execute a mode switch if a transition is
-    /// defined for the token type found.
-    ///
-    /// The name `peek_from` is used to indicate that this method is used for peeking ahead.
-    /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
-    /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
-    fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>;
-
-    /// Returns the number of the next scanner mode if a transition is defined for the token type.
-    /// If no transition is defined, None returned.
-    fn has_transition(&self, token_type: usize) -> Option<usize>;
-
-    /// Logs the compiled DFAs or NFAs as a Graphviz DOT file with the help of the `log` crate.
-    /// To enable debug output compliled automaton as dot file set the environment variable
-    /// `RUST_LOG` to `scnr::internal::scanner_impl=debug`.
-    fn log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()>;
-
-    /// Generates the compiled DFAs or NFAs as a Graphviz DOT files.
-    /// The DOT files are written to the target folder.
-    /// The file names are derived from the scanner mode names and the index of the automaton.
-    fn generate_compiled_automata_as_dot(
-        &self,
-        modes: &[ScannerMode],
-        target_folder: &Path,
-    ) -> Result<()>;
-
-    /// Clones the scanner implementation.
-    fn dyn_clone(&self) -> Box<dyn ScannerImplTrait>;
-}
-
 /// A Scanner.
 /// It consists of multiple DFAs resp. NFAs that are used to search for matches.
 ///
@@ -114,7 +65,7 @@ pub(crate) trait ScannerImplTrait: ScannerModeSwitcher + Debug + Send + Sync {
 /// `INITIAL`.
 #[derive(Debug)]
 pub struct Scanner {
-    pub(crate) inner: Box<dyn ScannerImplTrait>,
+    pub(crate) inner: ScannerNfaImpl,
 }
 
 impl Scanner {
@@ -123,7 +74,7 @@ impl Scanner {
     /// The ScannerImpl is created from the scanner modes.
     pub fn try_new(scanner_modes: Vec<ScannerMode>) -> Result<Self> {
         Ok(Scanner {
-            inner: Box::new(ScannerNfaImpl::try_from(scanner_modes)?),
+            inner: ScannerNfaImpl::try_from(scanner_modes)?,
         })
     }
 
@@ -242,14 +193,14 @@ mod tests {
 
         assert_eq!(1, scanner.current_mode());
         assert_eq!(1, scanner.inner.current_mode());
-        assert_eq!(1, scanner.inner.dyn_clone().current_mode());
+        assert_eq!(1, scanner.inner.clone().current_mode());
 
         find_iter.set_mode(1);
         assert_eq!(1, find_iter.current_mode());
         scanner.set_mode(0);
         assert_eq!(0, scanner.current_mode());
         assert_eq!(0, scanner.inner.current_mode());
-        assert_eq!(0, scanner.inner.dyn_clone().current_mode());
+        assert_eq!(0, scanner.inner.clone().current_mode());
     }
 
     // A test that checks the behavoir of the scanner when so called 'pathological regular expressions'

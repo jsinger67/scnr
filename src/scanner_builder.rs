@@ -80,7 +80,7 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::Pattern;
+    use crate::{Pattern, ScannerModeSwitcher};
 
     use super::*;
 

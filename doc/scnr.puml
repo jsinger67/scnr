@@ -1,6 +1,6 @@
 @startuml
 
-title Scnr version 0.6.0pre
+title Scnr version 0.6.0
 
 struct ScnrError {
 }
@@ -22,6 +22,15 @@ struct FindMatches {
     + peek_n(&mut self, n: usize) -> PeekResult
     + advance_to(&mut self, position: usize) -> usize
 }
+note top of FindMatches
+    An iterator over all non-overlapping matches.
+    The iterator yields a `Match` value until no
+    more matches could be found. This iterator can
+    be created with the `Scanner::find_iter` method.
+    It's scanner mode can be changed by the scanner
+    which created it, because it shares the current
+    mode with the scanner.
+end note
 
 enum PeekResult {
     {field} Matches(Vec<Match>)
@@ -75,17 +84,6 @@ struct PatternWithTerminal<<tuple>> {
     ~ terminal: TerminalID
 }
 
-interface ScannerImplTrait<<trait>> {
-    + find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>
-    + reset(&mut self)
-    + find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
-    + peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
-    + has_transition(&self, token_type: usize) -> Option<usize>
-    + log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()>
-    + generate_compiled_automata_as_dot(&self, modes: &[ScannerMode], target_folder: &Path, ) -> Result<()>
-    + dyn_clone(&self) -> Box<dyn ScannerImplTrait>
-}
-
 struct Scanner {
     find_iter(input: &str) -> FindMatches
     set_mode(mode: usize)
@@ -98,9 +96,31 @@ struct WithPositions<I> {
     next() -> Option<MatchExt>
 }
 
+note top of WithPositions
+    An iterator over all non-overlapping
+    matches with positions.
+end note
+
+struct Lookahead {
+    + is_positive: bool,
+    + pattern: String,
+}
+
+struct Pattern {
+    - pattern: String,
+    - token_type: usize,
+}
+
 interface MatchIteratorExt<<trait>> {
     with_positions() -> WithPositions<Self>
 }
+
+note top of MatchIteratorExt
+    An extension trait for all types that implement
+    Iterator<Item = Match> + PositionProvider + Sized
+    In this crate this trait is implemented for
+    `FindMatches` to provide the `with_positions` method.
+end note
 
 package internal {
     struct FindMatchesImpl {
@@ -121,10 +141,17 @@ package internal {
         - advance_char_indices_beyond_match(char_indices: &mut CharIndices, matched: Match)
 
     }
-    struct ScannerImpl {
+    struct ScannerNfaImpl {
         - current_mode: Arc<Mutex<usize>>
         ~ match_char_class(char_class_id: CharClassID, c: char) -> bool
         ~ mode_name(&self, index: usize) -> Option<&str>
+        + find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>
+        + reset(&mut self)
+        + find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
+        + peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
+        + has_transition(&self, token_type: usize) -> Option<usize>
+        + log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()>
+        + generate_compiled_automata_as_dot(&self, modes: &[ScannerMode], target_folder: &Path, ) -> Result<()>
     }
     struct CharacterClassRegistry {
     }
@@ -138,8 +165,10 @@ package internal {
     }
     struct NfaTransition {
         - ast: ComparableAst,
-        - target_state: StateID,
-        - char_class: CharClassID,
+    }
+    struct CharacterTransition<<tuple>> {
+        ~ char_class: CharClassID,
+        ~ target_state: StateID,
     }
     struct CompiledScannerMode {
         ~ name: String
@@ -147,7 +176,6 @@ package internal {
     struct CompiledNfa {
         - pattern: String
         - end_states: Vec<StateSetID>
-        - lookahead: Option<CompiledLookahead>
     }
     struct StateData {
         ~ transitions: Vec<(CharClassID, StateSetID)>,
@@ -165,10 +193,10 @@ package internal {
         ~ terminal: TerminalID,
     }
 
-    FindMatchesImpl *--> ScannerImpl: - scanner_impl
+    FindMatchesImpl *--> ScannerNfaImpl: - scanner_impl
 
-    ScannerImpl *--> CharacterClassRegistry: ~ character_classes
-    ScannerImpl *--> "*" CompiledScannerMode: ~ scanner_modes
+    ScannerNfaImpl *--> CharacterClassRegistry: ~ character_classes
+    ScannerNfaImpl *--> "*" CompiledScannerMode: ~ scanner_modes
 
     CharacterClassRegistry *--> "*" CharacterClass: - character_classes
 
@@ -178,6 +206,8 @@ package internal {
 
     Nfa *--> "*" NfaState: ~ states
 
+    NfaTransition *--> CharacterTransition: ~ transition
+
     NfaState *--> "*" NfaTransition: ~ transitions
     NfaState *--> "*" EpsilonTransition: ~ epsilon_transitions
 
@@ -185,6 +215,7 @@ package internal {
     CompiledScannerMode *--> "*" ScannerModeTransition: ~ transitions
 
     CompiledNfa *--> "*" StateData: ~ states
+    CompiledNfa "Option" *--> CompiledLookahead: ~ lookahead
 
 }
 
@@ -202,35 +233,15 @@ MatchExt *--> Span: - span
 ScannerBuilder ..> Scanner: create
 ScannerBuilder *--> "1*" ScannerMode: - scanner_modes
 
-Scanner *--> internal.ScannerImpl: - inner
+Scanner *--> internal.ScannerNfaImpl: - inner
 Scanner -|> ScannerModeSwitcher: implements
-Scanner ..> FindMatches: create
+' internal.ScannerNfaImpl ..> FindMatches: create
 
 ScannerMode *--> "*" ScannerModeTransition: - transitions
 ScannerMode *--> "*" PatternWithTerminal: - patterns
 
 WithPositions "for I: ScannerModeSwitcher" --|> ScannerModeSwitcher: implements
 
-note top of FindMatches
-    An iterator over all non-overlapping matches.
-    The iterator yields a `Match` value until no
-    more matches could be found. This iterator can
-    be created with the `Scanner::find_iter` method.
-    It's scanner mode can be changed by the scanner
-    which created it, because it shares the current
-    mode with the scanner.
-end note
-
-note top of WithPositions
-    An iterator over all non-overlapping
-    matches with positions.
-end note
-
-note top of MatchIteratorExt
-    An extension trait for all types that implement
-    Iterator<Item = Match> + PositionProvider + Sized
-    In this crate this trait is implemented for
-    `FindMatches` to provide the `with_positions` method.
-end note
+Pattern "Option" *--> Lookahead: - lookahead
 
 @enduml

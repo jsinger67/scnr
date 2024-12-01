@@ -2,9 +2,7 @@ use std::sync::Arc;
 
 use log::{debug, trace};
 
-use crate::{
-    scanner::ScannerImplTrait, FindMatches, Match, Result, ScannerMode, ScannerModeSwitcher,
-};
+use crate::{FindMatches, Match, Result, ScannerMode, ScannerModeSwitcher};
 
 use super::{compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry};
 
@@ -54,37 +52,22 @@ impl ScannerNfaImpl {
     ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
         self.character_classes.create_match_char_class()
     }
-}
 
-impl ScannerModeSwitcher for ScannerNfaImpl {
-    fn mode_name(&self, index: usize) -> Option<&str> {
-        self.scanner_modes.get(index).map(|mode| mode.name.as_str())
+    pub(crate) fn find_iter<'h>(&self, input: &'h str) -> crate::FindMatches<'h> {
+        FindMatches::new(self.clone(), input)
     }
 
-    #[inline]
-    fn current_mode(&self) -> usize {
-        self.current_mode
-    }
-
-    #[inline]
-    fn set_mode(&mut self, mode: usize) {
-        self.current_mode = mode;
-    }
-}
-
-impl ScannerImplTrait for ScannerNfaImpl {
-    fn find_iter<'h>(&self, input: &'h str) -> crate::FindMatches<'h> {
-        FindMatches::new(self.dyn_clone(), input)
-    }
-
-    fn reset(&mut self) {
+    pub(crate) fn reset(&mut self) {
         self.current_mode = 0;
     }
 
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
     /// During the search, all NFAs are tested in parallel.
-    fn find_from(&mut self, char_indices: std::str::CharIndices) -> Option<crate::Match> {
+    pub(crate) fn find_from(
+        &mut self,
+        char_indices: std::str::CharIndices,
+    ) -> Option<crate::Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].nfas;
 
         let cloned_char_indices = char_indices.clone();
@@ -123,7 +106,10 @@ impl ScannerImplTrait for ScannerNfaImpl {
     /// The name `peek_from` is used to indicate that this method is used for peeking ahead.
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
-    fn peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<crate::Match> {
+    pub(crate) fn peek_from(
+        &mut self,
+        char_indices: std::str::CharIndices,
+    ) -> Option<crate::Match> {
         let patterns = &mut self.scanner_modes[self.current_mode].nfas;
 
         let cloned_char_indices = char_indices.clone();
@@ -146,14 +132,17 @@ impl ScannerImplTrait for ScannerNfaImpl {
         self.find_first_longest_match(matches)
     }
 
-    fn has_transition(&self, token_type: usize) -> Option<usize> {
+    pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
         self.scanner_modes[self.current_mode].has_transition(token_type)
     }
 
     /// Traces the compiled NFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
-    fn log_compiled_automata_as_dot(&self, modes: &[crate::ScannerMode]) -> crate::Result<()> {
+    pub(crate) fn log_compiled_automata_as_dot(
+        &self,
+        modes: &[crate::ScannerMode],
+    ) -> crate::Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             for (j, (dfa, t)) in scanner_mode.nfas.iter().enumerate() {
@@ -178,7 +167,7 @@ impl ScannerImplTrait for ScannerNfaImpl {
 
     /// Generates the compiled NFAs as dot files.
     /// The dot files are written to the target folder.
-    fn generate_compiled_automata_as_dot(
+    pub(crate) fn generate_compiled_automata_as_dot(
         &self,
         modes: &[crate::ScannerMode],
         target_folder: &std::path::Path,
@@ -200,10 +189,21 @@ impl ScannerImplTrait for ScannerNfaImpl {
         }
         Ok(())
     }
+}
 
-    /// Create a boxed clone of the scanner implementation.
-    fn dyn_clone(&self) -> Box<dyn ScannerImplTrait> {
-        Box::new(ScannerNfaImpl::clone(self))
+impl ScannerModeSwitcher for ScannerNfaImpl {
+    fn mode_name(&self, index: usize) -> Option<&str> {
+        self.scanner_modes.get(index).map(|mode| mode.name.as_str())
+    }
+
+    #[inline]
+    fn current_mode(&self) -> usize {
+        self.current_mode
+    }
+
+    #[inline]
+    fn set_mode(&mut self, mode: usize) {
+        self.current_mode = mode;
     }
 }
 

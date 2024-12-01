@@ -1,9 +1,11 @@
-use crate::{scanner::ScannerImplTrait, Match, PeekResult, Position};
+use crate::{Match, PeekResult, Position, ScannerModeSwitcher};
+
+use super::ScannerNfaImpl;
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
     // The scanner used to find matches.
-    scanner_impl: Box<dyn ScannerImplTrait>,
+    scanner_impl: ScannerNfaImpl,
     // The input haystack.
     char_indices: std::str::CharIndices<'h>,
     // The last position of the char_indices iterator.
@@ -18,7 +20,7 @@ pub(crate) struct FindMatchesImpl<'h> {
 
 impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: Box<dyn ScannerImplTrait>, input: &'h str) -> Self {
+    pub(crate) fn new(scanner_impl: ScannerNfaImpl, input: &'h str) -> Self {
         let mut me = Self {
             scanner_impl,
             char_indices: input.char_indices(),

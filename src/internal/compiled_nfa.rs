@@ -106,11 +106,12 @@ impl CompiledNfa {
         let ast = parse_regex_syntax(pattern.pattern())?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         let mut nfa: CompiledNfa = nfa.into();
-        if let Some(lookahead) = pattern.lookahead() {
-            let lookahead =
-                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
-            nfa.lookahead = Some(lookahead);
-        }
+        nfa.lookahead = pattern
+            .lookahead()
+            .map(|lookahead| {
+                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)
+            })
+            .transpose()?;
         Ok(nfa)
     }
 }
