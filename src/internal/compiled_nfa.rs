@@ -85,7 +85,7 @@ impl CompiledNfa {
                             self.next_states.push(*next);
                         }
                         if self.end_states[next.as_usize()] {
-                            match_end = Some(index);
+                            match_end = Some(index + c.len_utf8());
                         }
                     }
                 }
@@ -96,7 +96,7 @@ impl CompiledNfa {
                 break;
             }
         }
-        match_end.map(|match_end| Span::new(match_start.unwrap(), match_end + 1))
+        match_end.map(|match_end| Span::new(match_start.unwrap(), match_end))
     }
 
     pub(crate) fn try_from_pattern(

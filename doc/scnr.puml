@@ -2,6 +2,10 @@
 
 title Scnr version 0.6.0
 
+interface std::iter::Iterator<<trait>> {
+    + next(&mut self) -> Option<Self::Item>
+}
+
 struct ScnrError {
 }
 
@@ -142,7 +146,7 @@ package internal {
 
     }
     struct ScannerNfaImpl {
-        - current_mode: Arc<Mutex<usize>>
+        - current_mode: usize
         ~ match_char_class(char_class_id: CharClassID, c: char) -> bool
         ~ mode_name(&self, index: usize) -> Option<&str>
         + find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>
@@ -224,7 +228,8 @@ ScnrError *--> ScnrErrorKind: + source
 
 FindMatches *--> internal.FindMatchesImpl: - inner
 FindMatches --|> PositionProvider: implements
-FindMatches -|> ScannerModeSwitcher: implements
+FindMatches --|> ScannerModeSwitcher: implements
+FindMatches --|> std::iter::Iterator: implements
 
 Match *--> Span: - span
 

@@ -1,4 +1,4 @@
-use crate::{scanner::ScannerModeSwitcher, Match, MatchExt, PositionProvider};
+use crate::{scanner::ScannerModeSwitcher, Match, MatchExt, Position, PositionProvider};
 
 /// An iterator over all non-overlapping matches with positions.
 #[derive(Debug)]
@@ -58,3 +58,16 @@ pub trait MatchExtIterator: Iterator<Item = Match> + PositionProvider + Sized {
 
 // Implement the trait for all types that implement the required traits.
 impl<I: Iterator<Item = Match> + PositionProvider + Sized> MatchExtIterator for I {}
+
+impl<I> PositionProvider for WithPositions<I>
+where
+    I: Iterator<Item = Match> + PositionProvider,
+{
+    fn position(&self, offset: usize) -> Position {
+        self.iter.position(offset)
+    }
+
+    fn set_offset(&mut self, offset: usize) {
+        self.iter.set_offset(offset);
+    }
+}

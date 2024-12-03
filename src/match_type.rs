@@ -60,6 +60,13 @@ impl Match {
     pub fn token_type(&self) -> usize {
         self.token_type
     }
+
+    /// Add an offset to the match.
+    /// This is used to adjust the match position after the scanner has been reset.
+    pub fn add_offset(&mut self, offset: usize) {
+        self.span.start += offset;
+        self.span.end += offset;
+    }
 }
 
 /// A match with line and column information for start and end positions.

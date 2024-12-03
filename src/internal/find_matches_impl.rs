@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::{Match, PeekResult, Position, ScannerModeSwitcher};
 
 use super::ScannerNfaImpl;
@@ -7,6 +9,8 @@ pub(crate) struct FindMatchesImpl<'h> {
     // The scanner used to find matches.
     scanner_impl: ScannerNfaImpl,
     // The input haystack.
+    input: &'h str,
+    // The char_indices iterator of the input haystack.
     char_indices: std::str::CharIndices<'h>,
     // The last position of the char_indices iterator.
     last_position: usize,
@@ -16,6 +20,9 @@ pub(crate) struct FindMatchesImpl<'h> {
     // It is used to calculate line and column numbers of offsets.
     // The line number is the index of the line offset in the vector plus one.
     line_offsets: Vec<usize>,
+    // The offset of the char_indices iterator in bytes.
+    // It is used to calculate the start position of each match.
+    offset: usize,
 }
 
 impl<'h> FindMatchesImpl<'h> {
@@ -23,25 +30,47 @@ impl<'h> FindMatchesImpl<'h> {
     pub(crate) fn new(scanner_impl: ScannerNfaImpl, input: &'h str) -> Self {
         let mut me = Self {
             scanner_impl,
+            input,
             char_indices: input.char_indices(),
             last_position: 0,
             last_char: '\0',
             line_offsets: vec![0],
+            offset: 0,
         };
         me.scanner_impl.reset();
         me
     }
 
-    pub(crate) fn with_offset(self, offset: usize) -> Self {
-        let mut me = Self {
+    /// Sets an offset to the current position of the scanner. This offset is added to the start
+    /// position of each match.
+    pub(crate) fn with_offset(mut self, offset: usize) -> Self {
+        // Split the input a byte position `offset` and create a new char_indices iterator.
+        self.char_indices = self.input[offset..].char_indices();
+
+        Self {
             scanner_impl: self.scanner_impl,
+            input: self.input,
             char_indices: self.char_indices,
             last_position: self.last_position,
             last_char: self.last_char,
-            line_offsets: self.line_offsets,
-        };
-        me.advance_to(offset);
-        me
+            line_offsets: self.line_offsets, // The line offsets are not affected by the offset because they are based on the original input.
+            offset,
+        }
+    }
+
+    /// Set the offset of the char indices iterator to the given position on the current instance.
+    /// The function is used to set the position of the char_indices iterator to the given position.
+    pub(crate) fn set_offset(&mut self, position: usize) {
+        trace!("Set offset to {}", position);
+        if position <= self.input.len() {
+            self.char_indices = self.input[position..].char_indices();
+        } else {
+            // The position is greater than the length of the haystack.
+            // Take an empty slice after the haystack to create an empty char_indices iterator.
+            self.char_indices = self.input[self.input.len()..self.input.len()].char_indices();
+        }
+        self.last_position = 0;
+        self.offset = position;
     }
 
     /// Returns the next match in the haystack.
@@ -55,13 +84,15 @@ impl<'h> FindMatchesImpl<'h> {
     #[inline]
     pub(crate) fn next_match(&mut self) -> Option<Match> {
         let mut result;
+        trace!("Find next match from offset {}", self.offset);
         loop {
             result = self.scanner_impl.find_from(self.char_indices.clone());
-            if let Some(matched) = result {
+            if let Some(mut matched) = result {
                 self.advance_beyond_match(matched);
-                break;
+                matched.add_offset(self.offset);
+                return Some(matched);
             } else if let Some((i, c)) = self.char_indices.next() {
-                self.record_line_offset(i, c);
+                self.record_line_offset(i + self.offset, c);
             } else {
                 break;
             }
@@ -83,10 +114,12 @@ impl<'h> FindMatchesImpl<'h> {
         let mut new_mode = 0;
         for _ in 0..n {
             let result = self.scanner_impl.peek_from(char_indices.clone());
-            if let Some(matched) = result {
-                matches.push(matched);
+            if let Some(mut matched) = result {
+                let token_type = matched.token_type();
                 Self::advance_char_indices_beyond_match(&mut char_indices, matched);
-                if let Some(mode) = self.scanner_impl.has_transition(matched.token_type()) {
+                matched.add_offset(self.offset);
+                matches.push(matched);
+                if let Some(mode) = self.scanner_impl.has_transition(token_type) {
                     mode_switch = true;
                     new_mode = mode;
                     break;
@@ -139,18 +172,18 @@ impl<'h> FindMatchesImpl<'h> {
     /// If the new position is less than the current position of the char_indices iterator, the
     /// function returns the current position of the char_indices iterator.
     pub(crate) fn advance_to(&mut self, position: usize) -> usize {
-        let mut new_position = 0;
         if position < self.last_position {
             // The new position is less than the current position of the char_indices iterator.
             // The iterator is advanced by one character and the next character is not returned by
             // the iterator.
             return self.last_position;
         }
+        let mut new_position = 0;
         let mut line_start_offsets = vec![];
         let mut last_char = self.last_char;
         for (i, c) in self.char_indices.by_ref() {
             if last_char == '\n' {
-                line_start_offsets.push(i);
+                line_start_offsets.push(i + self.offset);
             }
             last_char = c;
             new_position = i;
@@ -158,7 +191,12 @@ impl<'h> FindMatchesImpl<'h> {
                 break;
             }
         }
-        self.line_offsets.append(&mut line_start_offsets);
+        if !line_start_offsets.is_empty() {
+            // Merge the line start offsets with the current line start offsets.
+            // We need to merge them because the lines could be read multiple times due to
+            // possible resets of the char_indices iterator (see `with_offset`).
+            self.merge_line_offsets(line_start_offsets);
+        }
         self.last_char = last_char;
         self.last_position = new_position;
         new_position
@@ -166,7 +204,7 @@ impl<'h> FindMatchesImpl<'h> {
 
     /// Retrieve the total offset of the char indices iterator in bytes.
     pub(crate) fn offset(&self) -> usize {
-        self.last_position
+        self.last_position + self.offset
     }
 
     /// Returns the line and column numbers of the given offset.
@@ -192,7 +230,7 @@ impl<'h> FindMatchesImpl<'h> {
     /// Records the offset of a line in the haystack.
     fn record_line_offset(&mut self, i: usize, c: char) {
         if self.last_char == '\n' {
-            self.line_offsets.push(i);
+            self.merge_line_offsets(vec![i]);
         }
         self.last_char = c;
     }
@@ -211,19 +249,29 @@ impl<'h> FindMatchesImpl<'h> {
     pub(crate) fn mode_name(&self, index: usize) -> Option<&str> {
         self.scanner_impl.mode_name(index)
     }
+
+    /// Merges the given line start offsets with the current line start offsets.
+    /// The function is used to merge the given line start offsets.
+    /// Already existing line start offsets are not added to the vector.
+    /// New line start offsets are added to the vector while maintainng the ascending order.
+    fn merge_line_offsets(&mut self, line_start_offsets: Vec<usize>) {
+        // The line offsets are always sorted in ascending order.
+        debug_assert!(self.line_offsets.windows(2).all(|w| w[0] < w[1]));
+        for offset in line_start_offsets {
+            match self.line_offsets.binary_search(&offset) {
+                Ok(_) => {}
+                Err(i) => {
+                    trace!("Insert line offset at index {}: {}", i, offset);
+                    self.line_offsets.insert(i, offset)
+                }
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for FindMatchesImpl<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FindMatchesImpl").finish()
-    }
-}
-
-impl Iterator for FindMatchesImpl<'_> {
-    type Item = Match;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next_match()
     }
 }
 

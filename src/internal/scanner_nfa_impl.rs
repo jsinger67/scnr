@@ -86,6 +86,16 @@ impl ScannerNfaImpl {
                         continue;
                     }
                 }
+                if span.is_empty() {
+                    panic!(
+                        r#"
+    An empty token was matched. This leads to an infinite loop.
+    Avoid regexes that match empty tokens.
+    Please, check regex {} for token type {}"#,
+                        nfa.pattern.escape_default(),
+                        terminal_id
+                    );
+                }
                 matches.push(Match::new(terminal_id.as_usize(), span));
             }
         }

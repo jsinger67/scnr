@@ -50,6 +50,12 @@ impl<'h> FindMatches<'h> {
         }
     }
 
+    /// Set the offset of the char indices iterator to the given position.
+    /// The function is used to set the position of the char_indices iterator to the given position.
+    pub fn set_offset(&mut self, position: usize) {
+        self.inner.set_offset(position);
+    }
+
     /// Retrieve the byte offset of the char indices iterator from the start of the haystack.
     #[inline]
     pub fn offset(&self) -> usize {
@@ -112,6 +118,11 @@ impl PositionProvider for FindMatches<'_> {
     /// recorded line and the column number is calculated from the last recorded position.
     fn position(&self, offset: usize) -> Position {
         self.inner.position(offset)
+    }
+
+    /// Sets the offset of the char indices iterator to the given position.
+    fn set_offset(&mut self, offset: usize) {
+        self.inner.set_offset(offset);
     }
 }
 

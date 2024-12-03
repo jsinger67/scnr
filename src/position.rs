@@ -44,9 +44,14 @@ impl fmt::Display for Position {
 }
 
 /// A trait for providing the line and column information of a given byte offset in the haystack.
+/// It also provides a method to set the offset of the char indices iterator.
 pub trait PositionProvider {
     /// Returns the position of the given offset.
     fn position(&self, offset: usize) -> Position;
+
+    /// Set the position of the char indices iterator to the given offset. Use this to let the
+    /// iterator start at a specific offset.
+    fn set_offset(&mut self, offset: usize);
 }
 
 #[cfg(test)]

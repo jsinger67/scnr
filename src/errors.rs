@@ -39,6 +39,11 @@ pub enum ScnrErrorKind {
     /// Used regex features that are not supported (yet).
     #[error("Unsupported regex feature: {0}")]
     UnsupportedFeature(String),
+
+    /// An empty tokens is matched. This leads to an infinite loop. Avoid regexes that match empty
+    /// tokens.
+    #[error("Empty tokens are not allowed.")]
+    EmptyToken,
 }
 
 impl From<regex_syntax::ast::Error> for ScnrError {
