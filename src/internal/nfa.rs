@@ -3,7 +3,7 @@
 
 use std::vec;
 
-use regex_syntax::ast::{Ast, RepetitionKind, RepetitionRange};
+use regex_syntax::ast::{Ast, FlagsItemKind, GroupKind, RepetitionKind, RepetitionRange};
 
 use crate::{Result, ScnrError};
 
@@ -251,7 +251,7 @@ impl Nfa {
         nfa.set_pattern(&ast.to_string());
         match ast {
             Ast::Empty(_) => Ok(nfa),
-            Ast::Flags(_) => Err(unsupported!(format!("{:?}", ast))),
+            Ast::Flags(ref f) => Err(unsupported!(format!("{:?}", f.flags.items))),
             Ast::Literal(ref l) => {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
@@ -288,7 +288,7 @@ impl Nfa {
                 let mut nfa2: Nfa = Self::try_from_ast((*r.ast).clone(), char_class_registry)?;
                 if !r.greedy {
                     Err(unsupported!(
-                        format!("{:?}: Non-greedy repetionions. Consider using different scanner modes instead.", ast)))?;
+                        format!("{}: Non-greedy repetionions. Consider using different scanner modes instead.", ast)))?;
                 }
                 match &r.op.kind {
                     RepetitionKind::ZeroOrOne => {
@@ -332,6 +332,18 @@ impl Nfa {
                 Ok(nfa)
             }
             Ast::Group(ref g) => {
+                if let GroupKind::NonCapturing(flags) = &g.kind {
+                    if flags
+                        .items
+                        .iter()
+                        .any(|f| matches!(f.kind, FlagsItemKind::Flag(_)))
+                    {
+                        Err(unsupported!(format!(
+                            "{:?}: Flags in non-capturing group",
+                            flags.items
+                        )))?;
+                    }
+                }
                 nfa = Self::try_from_ast((*g.ast).clone(), char_class_registry)?;
                 Ok(nfa)
             }

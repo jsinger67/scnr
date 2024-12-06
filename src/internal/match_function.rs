@@ -78,7 +78,7 @@ impl MatchFunction {
                     'P' => MatchFn::new(|ch| ch.term()),
                     // Unicode class for Control characters
                     'C' => MatchFn::new(|ch| ch.is_control()),
-                    _ => return Err(unsupported!(format!("{:#?}", unicode))),
+                    _ => return Err(unsupported!(format!("Unicode class {}", ch))),
                 }
             }
             Named(name) => match name.as_str() {
@@ -136,10 +136,10 @@ impl MatchFunction {
                 "White_Space" => MatchFn::new(|ch| ch.wspace()),
                 "XID_Continue" => MatchFn::new(|ch| ch.xidc()),
                 "XID_Start" => MatchFn::new(|ch| ch.xids()),
-                _ => return Err(unsupported!(format!("{:#?}", unicode))),
+                _ => return Err(unsupported!(format!("Unicode named class {}", name))),
             },
-            NamedValue { .. } => {
-                return Err(unsupported!(format!("{:#?}", unicode)));
+            NamedValue { name, value, .. } => {
+                return Err(unsupported!(format!("Named value {}={}", name, value)));
             }
         };
         Ok(if unicode.is_negated() {
