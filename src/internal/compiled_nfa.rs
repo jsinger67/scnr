@@ -10,8 +10,9 @@ use super::{
 /// A compiled NFA.
 /// It represents the NFA in a way that is optimized for matching.
 ///
-/// The data is actually equivalent to the one of a not optimized DFA, but the transitions are
-/// regarded as non-deterministic according to the fact that transitions comprise overlapping
+/// The data is the same as that of a non-optimized DFA, but the transitions are considered
+/// non-deterministic because they involve overlapping character classes. This allows a transition
+/// to multiple states when reading a single character if that character belongs to multiple
 /// character classes.
 ///
 /// The start state is by design always 0.
@@ -21,7 +22,7 @@ pub(crate) struct CompiledNfa {
     pub(crate) pattern: String,
     /// The states of the NFA.
     pub(crate) states: Vec<StateData>,
-    /// The accepting states of the NFA are reprsented by a vector of booleans.
+    /// The accepting states of the NFA are represented by a vector of booleans.
     /// The index of the vector is the state id.
     /// If the value is true, the state is an accepting state.
     /// This is an optimization to avoid the need to search the end states during the simulation.

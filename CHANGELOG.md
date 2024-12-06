@@ -23,6 +23,7 @@ new minor version numbers. Please note that this is no version handling covered 
 - doc: Update UML diagram
 - Simplify internal structure and use the fact that only one implementation of `ScannerImplTrait`
 exists. The trait has lost its purpose.
+- test: Add hundreds of match tests in integration test `match_test`.
 
 ## 0.5.0 - 2024-11-24
 
