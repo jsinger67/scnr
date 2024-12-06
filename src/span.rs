@@ -58,6 +58,24 @@ where
     }
 }
 
+impl<T> From<Span> for std::ops::Range<T>
+where
+    T: From<usize>,
+{
+    fn from(span: Span) -> Self {
+        span.start.into()..span.end.into()
+    }
+}
+
+impl<T> From<Span> for std::ops::RangeInclusive<T>
+where
+    T: From<usize> + Copy,
+{
+    fn from(span: Span) -> Self {
+        span.start.into()..=span.end.into()
+    }
+}
+
 impl std::fmt::Display for Span {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}..{}", self.start, self.end)
