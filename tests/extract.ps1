@@ -10,6 +10,7 @@ Get-Content $Path |
 Where-Object { $_ -match "^\s*x2\("
 } |
 ForEach-Object {
+    $line = $_
     # x2("<pattern>", "<input>", <match_start>, <match_end>);
     $matched = $_ -match 'x2\("(?<pattern>.*)",\s*"(?<input_string>.*)",\s*(?<span_start>\d+),\s*(?<span_end>\d+)\s*\);'
     if ($matched) {
@@ -36,6 +37,8 @@ ForEach-Object {
         }
         catch {
             # Write-Error "Error: $_"
+            $line = $line.Trim()
+            Write-Output "// $line"
         }
     }
 }
