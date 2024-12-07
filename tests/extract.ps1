@@ -3,18 +3,24 @@
 #>
 #[CmdLetBinding()]
 param(
-    [string]$Path = "C:\Users\joerg\Downloads\test_utf8.c"
+    [Parameter(Position = 0, Mandatory = $true, ValueFromPipeline = $true)]
+    [ValidateScript({ Test-Path $_ -PathType Leaf })]
+    [string] $Path
 )
 
 Get-Content $Path |
 Where-Object { $_ -match "^\s*x2\("
 } |
-ForEach-Object {
+ForEach-Object -Begin {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('UseDeclaredVarsMoreThanAssignments', '',
+        Justification = 'Is actually used in the Process block')]
+    $Count = 0
+} -Process {
     $line = $_
     # x2("<pattern>", "<input>", <match_start>, <match_end>);
     $matched = $_ -match 'x2\("(?<pattern>.*)",\s*"(?<input_string>.*)",\s*(?<span_start>\d+),\s*(?<span_end>\d+)\s*\);'
     if ($matched) {
-        Write-Host "Matched: $_"
+        # Write-Host "Matched: $_"
         $pattern = $matches['pattern']
         if ($pattern -eq $null) {
             $pattern = ""
@@ -33,12 +39,17 @@ ForEach-Object {
                 # ("", 0, 0) is the value for no match
                 $expected_match = ""
             }
-            Write-Output "// td!(r`#`"$pattern`"`#, `"$input_string`", &[$expected_match]),"
+            # Output the converted td! macro commented out, it has to be manually revised and
+            # uncommented to be used
+            Write-Output "// td!(r`#`"$pattern`"`#, `"$input_string`", &[$expected_match]), // $Count"
         }
         catch {
-            # Write-Error "Error: $_"
+            # Error handling: Output the original line commented out
             $line = $line.Trim()
-            Write-Output "// $line"
+            Write-Output "// $line // $Count"
         }
+        $Count += 1
     }
+} -End {
+    Write-Output "Converted $Count x2 macros to td! macros."
 }
