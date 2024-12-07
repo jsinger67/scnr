@@ -46,7 +46,7 @@ impl ScannerBuilder {
 
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Scanner::try_new(self.scanner_modes)
+        self.scanner_modes.try_into()
     }
 }
 
@@ -74,7 +74,7 @@ impl SimpleScannerBuilder {
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        Scanner::try_new(vec![self.scanner_mode])
+        vec![self.scanner_mode].try_into()
     }
 }
 

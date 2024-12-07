@@ -149,7 +149,6 @@ package internal {
         - current_mode: usize
         ~ match_char_class(char_class_id: CharClassID, c: char) -> bool
         ~ mode_name(&self, index: usize) -> Option<&str>
-        + find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>
         + reset(&mut self)
         + find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
         + peek_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
@@ -235,12 +234,12 @@ Match *--> Span: - span
 
 MatchExt *--> Span: - span
 
-ScannerBuilder ..> Scanner: create
 ScannerBuilder *--> "1*" ScannerMode: - scanner_modes
+ScannerBuilder .> Scanner: build()
 
 Scanner *--> internal.ScannerNfaImpl: - inner
 Scanner -|> ScannerModeSwitcher: implements
-' internal.ScannerNfaImpl ..> FindMatches: create
+Scanner .> FindMatches: find_iter()
 
 ScannerMode *--> "*" ScannerModeTransition: - transitions
 ScannerMode *--> "*" PatternWithTerminal: - patterns

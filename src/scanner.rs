@@ -69,19 +69,10 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    /// Creates a new scanner.
-    /// The scanner is created with the given scanner modes.
-    /// The ScannerImpl is created from the scanner modes.
-    pub fn try_new(scanner_modes: Vec<ScannerMode>) -> Result<Self> {
-        Ok(Scanner {
-            inner: ScannerNfaImpl::try_from(scanner_modes)?,
-        })
-    }
-
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`Match`] value until no more matches could be found.
     pub fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
-        self.inner.find_iter(input)
+        FindMatches::new(self.inner.clone(), input)
     }
 
     /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
@@ -127,11 +118,16 @@ impl ScannerModeSwitcher for Scanner {
     }
 }
 
-// impl Debug for Scanner {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "Scanner")
-//     }
-// }
+/// A scanner can be created from a vector of scanner modes.
+impl TryFrom<Vec<ScannerMode>> for Scanner {
+    type Error = crate::ScnrError;
+
+    fn try_from(scanner_modes: Vec<ScannerMode>) -> Result<Self> {
+        Ok(Scanner {
+            inner: scanner_modes.try_into()?,
+        })
+    }
+}
 
 #[cfg(test)]
 mod tests {
