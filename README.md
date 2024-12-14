@@ -132,7 +132,7 @@ different mode.
 As an example for a possible realization of a non-greedy behavior we take the simple case of a block
 comment known from languages like C++ a.s.o. The regex would normally look like this.
 ```regex
-/\*.*?\*/
+/\*[.\r\n]*?\*/
 ```
 
 You would simply make the repetition non-greedy by adding a question mark to the repetition operator.
