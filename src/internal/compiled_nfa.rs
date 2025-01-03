@@ -60,6 +60,7 @@ impl CompiledNfa {
     /// 7. If there are more characters in the input, go to step 2.
     ///
     #[allow(dead_code)]
+    #[inline(always)]
     pub(crate) fn find_from(
         &mut self,
         char_indices: std::str::CharIndices,
