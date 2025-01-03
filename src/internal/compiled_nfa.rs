@@ -132,44 +132,42 @@ impl From<Nfa> for CompiledNfa {
         // The end states of the CompiledNfa.
         let mut accepting_states: Vec<StateSetID> = Vec::new();
         // Calculate the epsilon closure of the start state.
-        let mut epsilon_closure: BTreeSet<StateID> =
+        let epsilon_closure: BTreeSet<StateID> =
             BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
         // The current state id is always 0.
-        let current_state = StateSetID::new(StateSetID::new(0).id());
+        let current_state = StateSetID::new(0);
         // Add the start state to the state map.
-        state_map.insert(BTreeSet::from_iter(epsilon_closure.clone()), current_state);
+        state_map.insert(epsilon_closure.clone(), current_state);
 
         // The list of target states not yet processed.
         let mut queue: VecDeque<StateSetID> = VecDeque::new();
         queue.push_back(current_state);
 
         while let Some(current_state) = queue.pop_front() {
-            epsilon_closure = state_map
+            let epsilon_closure = state_map
                 .iter()
                 .find(|(_, v)| **v == current_state)
                 .unwrap()
                 .0
                 .clone();
-            let target_states = nfa.get_match_transitions(epsilon_closure.clone().into_iter());
+            let target_states = nfa.get_match_transitions(epsilon_closure.iter().cloned());
             let old_state_id = current_state;
             // Transform the target states to a set of state ids by calculating their epsilon closure.
             for (cc, target_state) in target_states {
-                epsilon_closure = BTreeSet::from_iter(nfa.epsilon_closure(target_state));
-                let mut new_state_id_candidate = StateSetID::new(state_map.len() as StateIDBase);
-                if !state_map.contains_key(&epsilon_closure) {
-                    state_map.insert(epsilon_closure.clone(), new_state_id_candidate);
+                let epsilon_closure = BTreeSet::from_iter(nfa.epsilon_closure(target_state));
+                let new_state_id_candidate = state_map.len() as StateIDBase;
+                let new_state_id = *state_map.entry(epsilon_closure.clone()).or_insert_with(|| {
+                    let new_state_id = StateSetID::new(new_state_id_candidate);
                     // Add the new state to the queue.
-                    queue.push_back(new_state_id_candidate);
-                } else {
-                    new_state_id_candidate = *state_map.get(&epsilon_closure).unwrap();
-                }
-                let current_state = new_state_id_candidate;
+                    queue.push_back(new_state_id);
+                    new_state_id
+                });
                 if epsilon_closure.contains(&nfa.end_state)
-                    && !accepting_states.contains(&current_state)
+                    && !accepting_states.contains(&new_state_id)
                 {
-                    accepting_states.push(current_state);
+                    accepting_states.push(new_state_id);
                 }
-                transitions.insert((old_state_id, cc, current_state));
+                transitions.insert((old_state_id, cc, new_state_id));
             }
         }
 
