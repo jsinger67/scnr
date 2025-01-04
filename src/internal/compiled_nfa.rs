@@ -51,7 +51,7 @@ impl CompiledNfa {
     /// 2. Take the next character from the input.
     /// 3. If the queue is empty, stop and return the current match, if any.
     /// 4. For each state in the queue, check if it is an end state.
-    ///     If it is, remember the current match.
+    ///    If it is, remember the current match.
     /// 5. For each state in the queue, check if there is a transition that matches the current
     ///    character.
     ///    If there is, add the target state to a second queue that will be used for the next
@@ -59,7 +59,6 @@ impl CompiledNfa {
     /// 6. Replace the queue with the second queue.
     /// 7. If there are more characters in the input, go to step 2.
     ///
-    #[allow(dead_code)]
     #[inline(always)]
     pub(crate) fn find_from(
         &mut self,
