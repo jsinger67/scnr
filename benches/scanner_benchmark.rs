@@ -1,6 +1,6 @@
 use std::{fs, sync::LazyLock, time::Duration};
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
 use scnr::{Scanner, ScannerBuilder, ScannerMode};
 
 const SCANNER_INPUT: &str = include_str!("./input_1.par");
@@ -32,7 +32,9 @@ fn builder_benchmark(c: &mut Criterion) {
 }
 
 fn scanner_benchmark(c: &mut Criterion) {
-    c.bench_function("scanner_benchmark", |b| {
+    let mut group = c.benchmark_group("scanner_benchmark");
+    group.throughput(Throughput::Bytes(SCANNER_INPUT.len() as u64));
+    group.bench_function("throughput", |b| {
         b.iter(|| {
             // Create a matches iterator
             let find_iter = SCANNER.find_iter(SCANNER_INPUT);
