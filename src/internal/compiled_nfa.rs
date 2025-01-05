@@ -1,10 +1,12 @@
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeSet, VecDeque};
 
-use crate::{internal::nfa::Nfa, Pattern, Result, Span};
+use rustc_hash::{FxHashMap, FxHashSet};
+
+use crate::{internal::nfa::Nfa, Match, Pattern, Result, Span};
 
 use super::{
     ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledLookahead,
-    StateID, StateIDBase,
+    StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
 /// A compiled NFA.
@@ -18,17 +20,17 @@ use super::{
 /// The start state is by design always 0.
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledNfa {
-    /// The pattern of the NFA. Used for debugging purposes.
-    pub(crate) pattern: String,
+    /// The pattern(s) of the NFA. Used for debugging purposes.
+    pub(crate) patterns: Vec<String>,
     /// The states of the NFA.
     pub(crate) states: Vec<StateData>,
-    /// The accepting states of the NFA are represented by a vector of booleans.
+    /// The accepting states of the NFA are represented by a vector of booleans and terminal ids.
     /// The index of the vector is the state id.
     /// If the value is true, the state is an accepting state.
     /// This is an optimization to avoid the need to search the end states during the simulation.
-    pub(crate) end_states: Vec<bool>,
+    pub(crate) end_states: Vec<(bool, TerminalID)>,
     /// An optional lookahead that is used to check if the NFA should match the input.
-    pub(crate) lookahead: Option<CompiledLookahead>,
+    pub(crate) lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
 
     /// Current and next states of the NFA. They are used during the simulation of the NFA.
     /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
@@ -64,20 +66,21 @@ impl CompiledNfa {
         &mut self,
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
-    ) -> Option<Span> {
+    ) -> Option<Match> {
         self.current_states.clear();
         // Push the start state to the current states.
         self.current_states.push(StateSetID::new(0));
         self.next_states.clear();
         let mut match_start = None;
         let mut match_end = None;
+        let mut match_terminal_id = None;
         for (index, c) in char_indices {
             if match_start.is_none() {
                 match_start = Some(index);
             }
 
             for state in self.current_states.iter() {
-                if match_end.is_none() && self.end_states[state.as_usize()] {
+                if match_end.is_none() && self.end_states[state.as_usize()].0 {
                     match_end = Some(index);
                 }
                 for (cc, next) in &self.states[state.as_usize()].transitions {
@@ -85,8 +88,9 @@ impl CompiledNfa {
                         if !self.next_states.contains(next) {
                             self.next_states.push(*next);
                         }
-                        if self.end_states[next.as_usize()] {
+                        if self.end_states[next.as_usize()].0 {
                             match_end = Some(index + c.len_utf8());
+                            match_terminal_id = Some(self.end_states[next.as_usize()].1);
                         }
                     }
                 }
@@ -97,7 +101,12 @@ impl CompiledNfa {
                 break;
             }
         }
-        match_end.map(|match_end| Span::new(match_start.unwrap(), match_end))
+        match_end.map(|match_end| {
+            Match::new(
+                match_terminal_id.unwrap().as_usize(),
+                Span::new(match_start.unwrap(), match_end),
+            )
+        })
     }
 
     pub(crate) fn try_from_pattern(
@@ -107,13 +116,27 @@ impl CompiledNfa {
         let ast = parse_regex_syntax(pattern.pattern())?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         let mut nfa: CompiledNfa = nfa.into();
-        nfa.lookahead = pattern
-            .lookahead()
-            .map(|lookahead| {
-                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)
-            })
-            .transpose()?;
+        nfa.lookaheads = FxHashMap::default();
+        if let Some(lookahead) = pattern.lookahead() {
+            let lookahead =
+                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
+            nfa.lookaheads
+                .insert((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
+        }
         Ok(nfa)
+    }
+
+    /// Returns the lookahead for the given terminal id, if any.
+    pub(crate) fn lookahead_mut(
+        &mut self,
+        terminal_id: TerminalID,
+    ) -> Option<&mut CompiledLookahead> {
+        self.lookaheads.get_mut(&terminal_id)
+    }
+
+    /// Returns the pattern for the given terminal id.
+    pub(crate) fn pattern(&self, terminal_id: TerminalID) -> &str {
+        &self.patterns[terminal_id.as_usize()]
     }
 }
 
@@ -125,12 +148,13 @@ impl From<Nfa> for CompiledNfa {
     /// separately. See [CompiledNfa::try_from_pattern].
     fn from(nfa: Nfa) -> Self {
         // A temporary map to store the state ids of the sets of states.
-        let mut state_map: BTreeMap<BTreeSet<StateID>, StateSetID> = BTreeMap::new();
+        let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
         // A temporary set to store the transitions of the CompiledNfa.
         // The state ids are numbers of sets of states.
-        let mut transitions: BTreeSet<(StateSetID, CharClassID, StateSetID)> = BTreeSet::new();
-        // The end states of the CompiledNfa.
-        let mut accepting_states: Vec<StateSetID> = Vec::new();
+        let mut transitions: FxHashSet<(StateSetID, CharClassID, StateSetID)> =
+            FxHashSet::default();
+        // The end states of the CompiledNfa are a vector of state ids and terminal ids.
+        let mut accepting_states: Vec<(StateSetID, usize)> = Vec::new();
         // Calculate the epsilon closure of the start state.
         let epsilon_closure: BTreeSet<StateID> =
             BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
@@ -163,9 +187,9 @@ impl From<Nfa> for CompiledNfa {
                     new_state_id
                 });
                 if epsilon_closure.contains(&nfa.end_state)
-                    && !accepting_states.contains(&new_state_id)
+                    && !accepting_states.contains(&(new_state_id, nfa.pattern.terminal_id()))
                 {
-                    accepting_states.push(new_state_id);
+                    accepting_states.push((new_state_id, nfa.pattern.terminal_id()));
                 }
                 transitions.insert((old_state_id, cc, new_state_id));
             }
@@ -182,16 +206,16 @@ impl From<Nfa> for CompiledNfa {
 
         let current_states = Vec::with_capacity(states.len());
         let next_states = Vec::with_capacity(states.len());
-        let mut end_states = vec![false; states.len()];
-        for state in accepting_states {
-            end_states[state.as_usize()] = true;
+        let mut end_states = vec![(false, TerminalID::new(0)); states.len()];
+        for (state, term) in accepting_states {
+            end_states[state.as_usize()] = (true, TerminalID::new(term as TerminalIDBase));
         }
 
         Self {
-            pattern: nfa.pattern.clone(),
+            patterns: vec![nfa.pattern.pattern().to_string()],
             states,
             end_states,
-            lookahead: None,
+            lookaheads: FxHashMap::default(),
             current_states,
             next_states,
         }
@@ -200,7 +224,7 @@ impl From<Nfa> for CompiledNfa {
 
 impl std::fmt::Display for CompiledNfa {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "Pattern: {}", self.pattern)?;
+        writeln!(f, "Pattern: {}", self.patterns.join("|"))?;
         writeln!(f, "Start state: 0")?;
         writeln!(f, "End states: {:?}", self.end_states)?;
         for (i, state) in self.states.iter().enumerate() {
@@ -228,6 +252,8 @@ impl std::fmt::Display for StateData {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::LazyLock;
+
     use log::trace;
 
     use super::*;
@@ -264,70 +290,96 @@ mod tests {
     struct TestData {
         pattern: &'static str,
         name: &'static str,
-        end_states: &'static [bool],
-        match_data: &'static [(&'static str, Option<(usize, usize)>)],
+        end_states: Vec<(bool, TerminalID)>,
+        match_data: Vec<(&'static str, Option<(usize, usize)>)>,
     }
 
-    const TEST_DATA: &[TestData] = &[
-        TestData {
-            pattern: "(A*B|AC)D",
-            name: "Sedgewick",
-            end_states: &[false, false, false, false, false, true],
-            match_data: &[
-                ("AAABD", Some((0, 5))),
-                ("ACD", Some((0, 3))),
-                ("CDAABCAAABD", None),
-                ("CDAABC", None),
-            ],
-        },
-        TestData {
-            pattern: r#"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}"#,
-            name: "JsonString",
-            end_states: &[
-                false, false, true, false, false, false, false, false, false, false, false,
-            ],
-            match_data: &[
-                (r#""autumn""#, Some((0, 8))),
-                (r#""au0075tumn""#, Some((0, 12))),
-                (r#""au007xtumn""#, Some((0, 12))),
-            ],
-        },
-        TestData {
-            pattern: r"[a-zA-Z_]\w*",
-            name: "Identifier",
-            end_states: &[false, true, true],
-            match_data: &[
-                ("_a", Some((0, 2))),
-                ("a", Some((0, 1))),
-                ("a0", Some((0, 2))),
-                ("a0_", Some((0, 3))),
-                ("0a", None),
-                ("0", None),
-            ],
-        },
-        TestData {
-            pattern: r"(0|1)*1(0|1)",
-            name: "SecondLastBitIs1",
-            end_states: &[false, false, false, false, true, true],
-            match_data: &[
-                ("11010", Some((0, 5))),
-                ("11011", Some((0, 5))),
-                ("110", Some((0, 3))),
-                ("111", Some((0, 3))),
-                ("10", Some((0, 2))),
-                ("11", Some((0, 2))),
-                ("1101", Some((0, 3))),
-                ("1100", Some((0, 3))),
-                ("1", None),
-                ("0", None),
-            ],
-        },
-    ];
+    static TEST_DATA: LazyLock<Vec<TestData>> = LazyLock::new(|| {
+        vec![
+            TestData {
+                pattern: "(A*B|AC)D",
+                name: "Sedgewick",
+                end_states: vec![
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (true, 1.into()),
+                ],
+                match_data: vec![
+                    ("AAABD", Some((0, 5))),
+                    ("ACD", Some((0, 3))),
+                    ("CDAABCAAABD", None),
+                    ("CDAABC", None),
+                ],
+            },
+            TestData {
+                pattern: r#"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}"#,
+                name: "JsonString",
+                end_states: vec![
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (true, 1.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                ],
+                match_data: vec![
+                    (r#""autumn""#, Some((0, 8))),
+                    (r#""au0075tumn""#, Some((0, 12))),
+                    (r#""au007xtumn""#, Some((0, 12))),
+                ],
+            },
+            TestData {
+                pattern: r"[a-zA-Z_]\w*",
+                name: "Identifier",
+                end_states: vec![(false, 0.into()), (true, 1.into()), (true, 1.into())],
+                match_data: vec![
+                    ("_a", Some((0, 2))),
+                    ("a", Some((0, 1))),
+                    ("a0", Some((0, 2))),
+                    ("a0_", Some((0, 3))),
+                    ("0a", None),
+                    ("0", None),
+                ],
+            },
+            TestData {
+                pattern: r"(0|1)*1(0|1)",
+                name: "SecondLastBitIs1",
+                end_states: vec![
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (true, 1.into()),
+                    (true, 1.into()),
+                ],
+                match_data: vec![
+                    ("11010", Some((0, 5))),
+                    ("11011", Some((0, 5))),
+                    ("110", Some((0, 3))),
+                    ("111", Some((0, 3))),
+                    ("10", Some((0, 2))),
+                    ("11", Some((0, 2))),
+                    ("1101", Some((0, 3))),
+                    ("1100", Some((0, 3))),
+                    ("1", None),
+                    ("0", None),
+                ],
+            },
+        ]
+    });
 
     #[test]
     fn test_find_from() {
         init();
-        for test in TEST_DATA {
+        for test in &*TEST_DATA {
             let pattern = Pattern::new(test.pattern.to_string(), 0);
             let mut character_class_registry = CharacterClassRegistry::new();
             let ast = parse_regex_syntax(pattern.pattern()).unwrap();
@@ -349,7 +401,7 @@ mod tests {
                 let span = compiled_nfa.find_from(char_indices, &match_char_class);
                 assert_eq!(
                     span,
-                    expected.map(|(start, end)| Span::new(start, end)),
+                    expected.map(|(start, end)| Match::new(1, Span::new(start, end))),
                     "Test '{}', Match data #{}, input '{}'",
                     test.name,
                     id,

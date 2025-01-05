@@ -54,7 +54,7 @@ impl std::fmt::Display for Lookahead {
 /// The pattern is represented by a regular expression and a token type number.
 /// The token type number is used to identify the pattern in the scanner.
 /// The pattern also has an optional lookahead.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pattern {
     pattern: String,
     token_type: usize,
@@ -70,6 +70,11 @@ impl Pattern {
             token_type,
             lookahead: None,
         }
+    }
+
+    /// Set the token type of the pattern.
+    pub fn set_token_type(&mut self, token_type: usize) {
+        self.token_type = token_type;
     }
 
     /// Create a new pattern with lookahead.

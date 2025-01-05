@@ -21,7 +21,7 @@ pub(crate) struct CompiledScannerMode {
     /// type numbers.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
-    pub(crate) nfas: Vec<(CompiledNfa, TerminalID)>,
+    pub(crate) nfas: Vec<CompiledNfa>,
     pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
 }
 
@@ -57,11 +57,8 @@ impl CompiledScannerMode {
                             _ => Err(result.unwrap_err())?,
                         },
                         _ => {
-                            acc.push((
-                                result.unwrap(),
-                                (pattern.terminal_id() as TerminalIDBase).into(),
-                            ));
-                            Ok::<Vec<(CompiledNfa, TerminalID)>, ScnrError>(acc)
+                            acc.push(result.unwrap());
+                            Ok::<Vec<CompiledNfa>, ScnrError>(acc)
                         }
                     }
                 })?;
