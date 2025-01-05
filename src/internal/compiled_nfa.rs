@@ -2,11 +2,11 @@ use std::collections::{BTreeSet, VecDeque};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{internal::nfa::Nfa, Match, Pattern, Result, Span};
+use crate::{Match, Pattern, Result, Span};
 
 use super::{
     ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledLookahead,
-    StateID, StateIDBase, TerminalID, TerminalIDBase,
+    MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
 /// A compiled NFA.
@@ -114,7 +114,8 @@ impl CompiledNfa {
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
         let ast = parse_regex_syntax(pattern.pattern())?;
-        let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
+        let mut nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
+        nfa.set_terminal_id(pattern.terminal_id());
         let mut nfa: CompiledNfa = nfa.into();
         nfa.lookaheads = FxHashMap::default();
         if let Some(lookahead) = pattern.lookahead() {
@@ -222,6 +223,75 @@ impl From<Nfa> for CompiledNfa {
     }
 }
 
+impl From<MultiPatternNfa> for CompiledNfa {
+    fn from(mp_nfa: MultiPatternNfa) -> Self {
+        let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
+        let mut transitions: FxHashSet<(StateSetID, CharClassID, StateSetID)> =
+            FxHashSet::default();
+        let mut accepting_states: Vec<(StateSetID, usize)> = Vec::new();
+        let mut queue: VecDeque<StateSetID> = VecDeque::new();
+        for (pattern_id, nfa) in mp_nfa.nfas.iter().enumerate() {
+            let epsilon_closure: BTreeSet<StateID> =
+                BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
+            let current_state = StateSetID::new(pattern_id as StateIDBase);
+            state_map.insert(epsilon_closure.clone(), current_state);
+            queue.push_back(current_state);
+        }
+
+        while let Some(current_state) = queue.pop_front() {
+            let epsilon_closure = state_map
+                .iter()
+                .find(|(_, v)| **v == current_state)
+                .unwrap()
+                .0
+                .clone();
+            let target_states = mp_nfa.get_match_transitions(epsilon_closure.iter().cloned());
+            let old_state_id = current_state;
+            for (cc, target_state) in target_states {
+                let epsilon_closure = BTreeSet::from_iter(mp_nfa.epsilon_closure(target_state));
+                let new_state_id_candidate = state_map.len() as StateIDBase;
+                let new_state_id = *state_map.entry(epsilon_closure.clone()).or_insert_with(|| {
+                    let new_state_id = StateSetID::new(new_state_id_candidate);
+                    queue.push_back(new_state_id);
+                    new_state_id
+                });
+                if epsilon_closure
+                    .iter()
+                    .any(|s| mp_nfa.is_accepting_state(*s))
+                    && !accepting_states.contains(&(new_state_id, mp_nfa.patterns.len()))
+                {
+                    accepting_states.push((new_state_id, mp_nfa.patterns.len()));
+                }
+                transitions.insert((old_state_id, cc, new_state_id));
+            }
+        }
+        // The transitions of the CompiledNfa.
+        let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
+        for _ in 0..state_map.len() {
+            states.push(StateData::default());
+        }
+        for (from, cc, to) in transitions {
+            states[from.as_usize()].transitions.push((cc, to));
+        }
+
+        let current_states = Vec::with_capacity(states.len());
+        let next_states = Vec::with_capacity(states.len());
+        let mut end_states = vec![(false, TerminalID::new(0)); states.len()];
+        for (state, term) in accepting_states {
+            end_states[state.as_usize()] = (true, TerminalID::new(term as TerminalIDBase));
+        }
+
+        Self {
+            patterns: vec![mp_nfa.patterns.iter().map(|p| p.pattern()).collect()],
+            states,
+            end_states,
+            lookaheads: FxHashMap::default(),
+            current_states,
+            next_states,
+        }
+    }
+}
+
 impl std::fmt::Display for CompiledNfa {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Pattern: {}", self.patterns.join("|"))?;
@@ -305,7 +375,7 @@ mod tests {
                     (false, 0.into()),
                     (false, 0.into()),
                     (false, 0.into()),
-                    (true, 1.into()),
+                    (true, 0.into()),
                 ],
                 match_data: vec![
                     ("AAABD", Some((0, 5))),
@@ -320,7 +390,7 @@ mod tests {
                 end_states: vec![
                     (false, 0.into()),
                     (false, 0.into()),
-                    (true, 1.into()),
+                    (true, 0.into()),
                     (false, 0.into()),
                     (false, 0.into()),
                     (false, 0.into()),
@@ -339,7 +409,7 @@ mod tests {
             TestData {
                 pattern: r"[a-zA-Z_]\w*",
                 name: "Identifier",
-                end_states: vec![(false, 0.into()), (true, 1.into()), (true, 1.into())],
+                end_states: vec![(false, 0.into()), (true, 0.into()), (true, 0.into())],
                 match_data: vec![
                     ("_a", Some((0, 2))),
                     ("a", Some((0, 1))),
@@ -357,8 +427,8 @@ mod tests {
                     (false, 0.into()),
                     (false, 0.into()),
                     (false, 0.into()),
-                    (true, 1.into()),
-                    (true, 1.into()),
+                    (true, 0.into()),
+                    (true, 0.into()),
                 ],
                 match_data: vec![
                     ("11010", Some((0, 5))),
@@ -401,7 +471,7 @@ mod tests {
                 let span = compiled_nfa.find_from(char_indices, &match_char_class);
                 assert_eq!(
                     span,
-                    expected.map(|(start, end)| Match::new(1, Span::new(start, end))),
+                    expected.map(|(start, end)| Match::new(0, Span::new(start, end))),
                     "Test '{}', Match data #{}, input '{}'",
                     test.name,
                     id,

@@ -157,6 +157,38 @@ impl MultiPatternNfa {
         result.sort_unstable();
         result
     }
+
+    pub(crate) fn get_match_transitions(
+        &self,
+        start_states: impl Iterator<Item = StateID>,
+    ) -> Vec<(CharClassID, StateID)> {
+        let mut target_states = Vec::new();
+        for state in start_states {
+            if state.id() == 0 {
+                for transition in &self.start_transitions {
+                    self.find_nfa(transition.target_state()).map(|nfa| {
+                        for state in nfa.states[nfa.start_state()].transitions() {
+                            target_states.push((state.char_class(), state.target_state()));
+                        }
+                    });
+                }
+            } else {
+                self.find_nfa(state).map(|nfa| {
+                    for state in nfa.states[state].transitions() {
+                        target_states.push((state.char_class(), state.target_state()));
+                    }
+                });
+            }
+        }
+        target_states.sort_unstable();
+        target_states.dedup();
+        target_states
+    }
+
+    /// Find the NFA that contains the state and return the state.
+    pub(crate) fn find_nfa(&self, state: StateID) -> Option<&Nfa> {
+        self.nfas.iter().find(|nfa| nfa.contains_state(state))
+    }
 }
 
 #[cfg(test)]
@@ -176,7 +208,7 @@ mod tests {
     }
 
     static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/veryl_modes.json");
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
         let file = fs::File::open(path).unwrap();
         serde_json::from_reader(file).unwrap()
     });

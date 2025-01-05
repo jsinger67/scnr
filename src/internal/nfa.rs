@@ -421,10 +421,10 @@ impl Nfa {
 
     pub(crate) fn get_match_transitions(
         &self,
-        start_state: impl Iterator<Item = StateID>,
+        start_states: impl Iterator<Item = StateID>,
     ) -> Vec<(CharClassID, StateID)> {
         let mut target_states = Vec::new();
-        for state in start_state {
+        for state in start_states {
             for transition in self.states()[state].transitions() {
                 target_states.push((transition.char_class(), transition.target_state()));
             }
