@@ -53,7 +53,8 @@ impl CompiledNfa {
     /// 2. Take the next character from the input.
     /// 3. If the queue is empty, stop and return the current match, if any.
     /// 4. For each state in the queue, check if it is an end state.
-    ///    If it is, remember the current match.
+    ///    If it is, remember the current match if it is longer than the previous match found and
+    ///    its terminal id is not higher at the same lenght.
     /// 5. For each state in the queue, check if there is a transition that matches the current
     ///    character.
     ///    If there is, add the target state to a second queue that will be used for the next
@@ -74,8 +75,10 @@ impl CompiledNfa {
         let mut match_start = None;
         let mut match_end = None;
         let mut match_terminal_id = None;
-        for (index, c) in char_indices {
+        for (index, c) in char_indices.clone() {
             if match_start.is_none() {
+                // A potential match starts at the current position.
+                // Is is only part of a valid match if match_end is also set at the end of the loop.
                 match_start = Some(index);
             }
 
@@ -89,8 +92,35 @@ impl CompiledNfa {
                             self.next_states.push(*next);
                         }
                         if self.end_states[next.as_usize()].0 {
-                            match_end = Some(index + c.len_utf8());
-                            match_terminal_id = Some(self.end_states[next.as_usize()].1);
+                            // Check if a lookahead is present and if it is satisfied.
+                            if let Some(lookahead) =
+                                self.lookaheads.get(&self.end_states[next.as_usize()].1)
+                            {
+                                // Create a CharIndices iterator starting from the current position.
+                                let char_indices = char_indices.as_str().char_indices();
+                                let mut lookahead = lookahead.clone();
+                                if !lookahead.satisfies_lookahead(char_indices, match_char_class) {
+                                    continue;
+                                }
+                            }
+                            // Update the match end and terminal id if the match is longer or the
+                            // terminal id is lower.
+                            if let Some(match_end_index) = match_end.as_ref() {
+                                match (index + c.len_utf8()).cmp(match_end_index) {
+                                    std::cmp::Ordering::Greater => {
+                                        match_end = Some(index + c.len_utf8());
+                                        match_terminal_id =
+                                            Some(self.end_states[next.as_usize()].1);
+                                    }
+                                    std::cmp::Ordering::Equal => {
+                                        let terminal_id = self.end_states[next.as_usize()].1;
+                                        if terminal_id < match_terminal_id.unwrap() {
+                                            match_terminal_id = Some(terminal_id);
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
                         }
                     }
                 }
@@ -101,14 +131,18 @@ impl CompiledNfa {
                 break;
             }
         }
-        match_end.map(|match_end| {
+        match_terminal_id.map(|match_terminal_id| {
+            // If the terminal id is set, match_start and match_end must always be set as well.
             Match::new(
-                match_terminal_id.unwrap().as_usize(),
-                Span::new(match_start.unwrap(), match_end),
+                match_terminal_id.as_usize(),
+                Span::new(match_start.unwrap(), match_end.unwrap()),
             )
         })
     }
 
+    /// Create a compiled NFA from a pattern.
+    /// Used for testing and debugging purposes.
+    #[allow(dead_code)]
     pub(crate) fn try_from_pattern(
         pattern: &Pattern,
         character_class_registry: &mut CharacterClassRegistry,
@@ -127,12 +161,26 @@ impl CompiledNfa {
         Ok(nfa)
     }
 
-    /// Returns the lookahead for the given terminal id, if any.
-    pub(crate) fn lookahead_mut(
-        &mut self,
-        terminal_id: TerminalID,
-    ) -> Option<&mut CompiledLookahead> {
-        self.lookaheads.get_mut(&terminal_id)
+    pub(crate) fn try_from_patterns(
+        patterns: &[Pattern],
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let mp_nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
+        let mut compiled_nfa: CompiledNfa = mp_nfa.into();
+        // Add the lookaheads to the compiled NFA.
+        for (terminal_id, pattern) in patterns.iter().enumerate() {
+            if let Some(lookahead) = pattern.lookahead() {
+                let lookahead =
+                    CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
+                compiled_nfa.add_lookahead((terminal_id as TerminalIDBase).into(), lookahead);
+            }
+        }
+        Ok(compiled_nfa)
+    }
+
+    /// Add a lookahead for a giben terminal_id to the compiled NFA.
+    pub(crate) fn add_lookahead(&mut self, terminal_id: TerminalID, lookahead: CompiledLookahead) {
+        self.lookaheads.insert(terminal_id, lookahead);
     }
 
     /// Returns the pattern for the given terminal id.
@@ -230,13 +278,20 @@ impl From<MultiPatternNfa> for CompiledNfa {
             FxHashSet::default();
         let mut accepting_states: Vec<(StateSetID, usize)> = Vec::new();
         let mut queue: VecDeque<StateSetID> = VecDeque::new();
-        for (pattern_id, nfa) in mp_nfa.nfas.iter().enumerate() {
-            let epsilon_closure: BTreeSet<StateID> =
-                BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
-            let current_state = StateSetID::new(pattern_id as StateIDBase);
-            state_map.insert(epsilon_closure.clone(), current_state);
-            queue.push_back(current_state);
-        }
+
+        // Calculate the epsilon closures of the start state of the multi-pattern NFA.
+        let epsilon_closure: BTreeSet<StateID> =
+            BTreeSet::from_iter(mp_nfa.epsilon_closure(0.into()));
+        state_map.insert(epsilon_closure.clone(), 0.into());
+        queue.push_back(StateSetID::new(0));
+
+        // for (index, nfa) in mp_nfa.nfas.iter().enumerate() {
+        //     let epsilon_closure: BTreeSet<StateID> =
+        //         BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
+        //     let current_state = StateSetID::new(index as StateIDBase);
+        //     state_map.insert(epsilon_closure.clone(), current_state + 1);
+        //     queue.push_back(current_state);
+        // }
 
         while let Some(current_state) = queue.pop_front() {
             let epsilon_closure = state_map
@@ -255,12 +310,13 @@ impl From<MultiPatternNfa> for CompiledNfa {
                     queue.push_back(new_state_id);
                     new_state_id
                 });
+                let target_nfa = mp_nfa.find_nfa(target_state).expect("NFA not found");
                 if epsilon_closure
                     .iter()
                     .any(|s| mp_nfa.is_accepting_state(*s))
-                    && !accepting_states.contains(&(new_state_id, mp_nfa.patterns.len()))
+                    && !accepting_states.contains(&(new_state_id, target_nfa.terminal_id()))
                 {
-                    accepting_states.push((new_state_id, mp_nfa.patterns.len()));
+                    accepting_states.push((new_state_id, target_nfa.terminal_id()));
                 }
                 transitions.insert((old_state_id, cc, new_state_id));
             }
@@ -322,14 +378,14 @@ impl std::fmt::Display for StateData {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
+    use std::{fs, sync::LazyLock};
 
     use log::trace;
 
     use super::*;
     use crate::{
         internal::{character_class_registry::CharacterClassRegistry, parser::parse_regex_syntax},
-        Pattern,
+        Pattern, ScannerMode,
     };
 
     /// A macro that simplifies the rendering of a dot file for a NFA.
@@ -346,6 +402,20 @@ mod tests {
             let mut f = std::fs::File::create(format!("target/{}CompiledNfa.dot", $label)).unwrap();
             $crate::internal::dot::compiled_nfa_render(
                 $compiled_nfa,
+                $label,
+                $character_class_registry,
+                &mut f,
+            );
+        };
+    }
+
+    /// A macro that simplifies the rendering of a dot file for a MultiPatternNfa.
+    macro_rules! multi_pattern_nfa_render_to {
+        ($mp_nfa:expr, $label:expr, $character_class_registry:expr) => {
+            let mut f =
+                std::fs::File::create(format!("target/{}MultiPatternNfa.dot", $label)).unwrap();
+            $crate::internal::dot::multi_pattern_nfa_render(
+                $mp_nfa,
                 $label,
                 $character_class_registry,
                 &mut f,
@@ -479,5 +549,25 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// A test that creates a CompiledNfa from a multi-pattern NFA and writes the dot files
+    /// to the target directory.
+    #[test]
+    fn test_multi_pattern_nfa() {
+        init();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "./benches/veryl_modes.json");
+        let file = fs::File::open(path).unwrap();
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
+
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let mp_nfa = MultiPatternNfa::try_from_patterns(
+            &scanner_modes[0].patterns,
+            &mut character_class_registry,
+        )
+        .unwrap();
+        multi_pattern_nfa_render_to!(&mp_nfa, "Veryl", &character_class_registry);
+        let compiled_nfa = CompiledNfa::from(mp_nfa);
+        compiled_nfa_render_to!(&compiled_nfa, "Veryl", &character_class_registry);
     }
 }

@@ -4,7 +4,15 @@
 //! multi-pattern NFA has one end state for each pattern.
 
 use super::{nfa::EpsilonTransition, CharClassID, Nfa, StateID};
-use crate::{Pattern, Result};
+use crate::{Pattern, Result, ScnrError, ScnrErrorKind};
+
+macro_rules! unsupported {
+    ($feature:expr) => {
+        ScnrError::new($crate::ScnrErrorKind::UnsupportedFeature(
+            $feature.to_string(),
+        ))
+    };
+}
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct MultiPatternNfa {
@@ -34,25 +42,59 @@ impl MultiPatternNfa {
     ) -> Result<Self> {
         let mut multi_pattern_nfa = Self::new();
         let mut next_state = 1;
-        for pattern in patterns {
+        // Assert in debug that th terminal ids are increasing.
+        debug_assert!(patterns
+            .windows(2)
+            .all(|w| w[0].terminal_id() < w[1].terminal_id()));
+        for (index, pattern) in patterns.iter().enumerate() {
             let ast = super::parse_regex_syntax(pattern.pattern())?;
-            let mut nfa = Nfa::try_from_ast(ast, character_class_registry)?;
+            let result = Nfa::try_from_ast(ast, character_class_registry);
+            match result {
+                Err(ScnrError { ref source }) => match source.as_ref() {
+                    ScnrErrorKind::RegexSyntaxError(r, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
+                            r.clone(),
+                            format!("Error in pattern #{} '{}'", index, pattern),
+                        )))?
+                    }
+                    ScnrErrorKind::UnsupportedFeature(s) => Err(unsupported!(format!(
+                        "Error in pattern #{} '{}': {}",
+                        index, pattern, s
+                    )))?,
+                    ScnrErrorKind::IoError(_) | ScnrErrorKind::EmptyToken => {
+                        Err(result.unwrap_err())?
+                    }
+                },
+                Ok(mut nfa) => {
+                    nfa.set_terminal_id(pattern.terminal_id());
+                    let (s, e) = nfa.shift_ids(next_state);
+                    debug_assert_eq!(e.id(), nfa.highest_state_number());
+                    next_state = e.id() as usize + 1;
 
-            let (s, e) = nfa.shift_ids(next_state);
-            debug_assert_eq!(e.id(), nfa.highest_state_number());
-            next_state = e.id() as usize + 1;
+                    multi_pattern_nfa
+                        .start_transitions
+                        .push(EpsilonTransition::new(s));
 
-            multi_pattern_nfa
-                .start_transitions
-                .push(EpsilonTransition::new(s));
-
-            multi_pattern_nfa.add_pattern(pattern.clone());
-            multi_pattern_nfa.add_nfa(nfa);
+                    multi_pattern_nfa.add_pattern(pattern.clone());
+                    multi_pattern_nfa.add_nfa(nfa);
+                }
+            }
         }
+        // Assert in debug that the all state ids belonging to an nfa with higher terminal_id in the
+        // pattern are higher than state ids of nfas witt lower terminal id in the pattern and that
+        // the the terminal ids are increasing.
+        // These constraints are neseccary be able to hold the priority of the patterns.
+        debug_assert!(multi_pattern_nfa.nfas.windows(2).all(|w| {
+            let end_state = w[0].end_state();
+            let start_state = w[1].start_state();
+            end_state.id() < start_state.id() && w[0].terminal_id() < w[1].terminal_id()
+        }));
         Ok(multi_pattern_nfa)
     }
 
     /// Returns the patterns as a slice of (pattern, terminal_id) tuples.
+    /// Used for testing.
+    #[allow(dead_code)]
     pub(crate) fn patterns(&self) -> &[Pattern] {
         &self.patterns
     }
@@ -79,7 +121,7 @@ impl MultiPatternNfa {
     /// of the NFAs.
     pub(crate) fn epsilon_closure(&self, state: StateID) -> Vec<StateID> {
         if state.id() == 0 {
-            let mut result = Vec::new();
+            let mut result = vec![0.into()];
             for nfa in &self.nfas {
                 let start_state = nfa.start_state();
                 let epsilon_closure = nfa.epsilon_closure(start_state);
@@ -107,6 +149,9 @@ impl MultiPatternNfa {
     /// the corresponding NFA.
     /// The epsilon closure of state 0 is the united set of all epsilon_closure of alle start states
     /// of the NFAs.
+    ///
+    /// Used for testing.
+    #[allow(dead_code)]
     pub(crate) fn epsilon_closure_set<I>(&self, states: I) -> Vec<StateID>
     where
         I: IntoIterator<Item = StateID>,
@@ -138,6 +183,9 @@ impl MultiPatternNfa {
 
     /// Calculate move(T, a) for a set of states T and a character class a.
     /// This is the set of states that can be reached from T by matching a.
+    ///
+    /// Used for testing.
+    #[allow(dead_code)]
     pub(crate) fn move_set(&self, states: &[StateID], char_class: CharClassID) -> Vec<StateID> {
         // Combine the move of all NFAs that contain the states.
         let mut result = Vec::new();
@@ -166,21 +214,31 @@ impl MultiPatternNfa {
         for state in start_states {
             if state.id() == 0 {
                 for transition in &self.start_transitions {
-                    self.find_nfa(transition.target_state()).map(|nfa| {
-                        for state in nfa.states[nfa.start_state()].transitions() {
-                            target_states.push((state.char_class(), state.target_state()));
+                    if let Some(nfa) = self.find_nfa(transition.target_state()) {
+                        if let Some(state) = nfa.find_state(transition.target_state()) {
+                            for state in state.transitions() {
+                                target_states.push((state.char_class(), state.target_state()));
+                            }
+                        } else {
+                            panic!("State {} not found", transition.target_state());
                         }
-                    });
+                    } else {
+                        panic!("NFA for target state not found");
+                    };
                 }
-            } else {
-                self.find_nfa(state).map(|nfa| {
-                    for state in nfa.states[state].transitions() {
+            } else if let Some(nfa) = self.find_nfa(state) {
+                if let Some(state) = nfa.find_state(state) {
+                    for state in state.transitions() {
                         target_states.push((state.char_class(), state.target_state()));
                     }
-                });
+                } else {
+                    panic!("State {} not found", state);
+                }
             }
         }
-        target_states.sort_unstable();
+        // Sort and dedup the target states by target state.
+        // Constraint is neseccary be able to hold the priority of the patterns.
+        target_states.sort_by_key(|t| t.1);
         target_states.dedup();
         target_states
     }

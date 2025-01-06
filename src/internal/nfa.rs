@@ -70,6 +70,10 @@ impl Nfa {
         self.pattern = Pattern::new(pattern.to_string(), self.pattern.terminal_id());
     }
 
+    pub(crate) fn terminal_id(&self) -> usize {
+        self.pattern.terminal_id()
+    }
+
     pub(crate) fn set_terminal_id(&mut self, terminal_id: usize) {
         self.pattern.set_token_type(terminal_id);
     }
@@ -387,12 +391,16 @@ impl Nfa {
         let mut i = 0;
         while i < closure.len() {
             let current_state = closure[i];
-            for epsilon_transition in self.states[current_state].epsilon_transitions() {
-                if !closure.contains(&epsilon_transition.target_state()) {
-                    closure.push(epsilon_transition.target_state());
+            if let Some(state) = self.find_state(current_state) {
+                for epsilon_transition in state.epsilon_transitions() {
+                    if !closure.contains(&epsilon_transition.target_state()) {
+                        closure.push(epsilon_transition.target_state());
+                    }
                 }
+                i += 1;
+            } else {
+                panic!("State not found: {:?}", current_state);
             }
-            i += 1;
         }
         closure.sort_unstable();
         closure.dedup();
@@ -438,7 +446,7 @@ impl Nfa {
         self.states.iter().any(|s| s.id() == state)
     }
 
-    fn find_state(&self, state: StateID) -> Option<&NfaState> {
+    pub(crate) fn find_state(&self, state: StateID) -> Option<&NfaState> {
         self.states.iter().find(|s| s.id() == state)
     }
 }

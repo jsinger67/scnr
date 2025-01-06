@@ -1,16 +1,6 @@
-use crate::{Result, ScannerMode, ScnrError, ScnrErrorKind};
+use crate::{Result, ScannerMode};
 
-use super::{
-    compiled_nfa::CompiledNfa, CharacterClassRegistry, ScannerModeID, TerminalID, TerminalIDBase,
-};
-
-macro_rules! unsupported {
-    ($feature:expr) => {
-        ScnrError::new($crate::ScnrErrorKind::UnsupportedFeature(
-            $feature.to_string(),
-        ))
-    };
-}
+use super::{compiled_nfa::CompiledNfa, CharacterClassRegistry, ScannerModeID, TerminalID};
 
 /// A compiled scanner mode that can be used to scan a string.
 #[derive(Debug, Clone)]
@@ -21,7 +11,7 @@ pub(crate) struct CompiledScannerMode {
     /// type numbers.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
-    pub(crate) nfas: Vec<CompiledNfa>,
+    pub(crate) nfa: CompiledNfa,
     pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
 }
 
@@ -36,35 +26,10 @@ impl CompiledScannerMode {
             patterns,
             transitions,
         } = scanner_mode;
-        let patterns =
-            patterns
-                .iter()
-                .enumerate()
-                .try_fold(Vec::new(), |mut acc, (index, pattern)| {
-                    let result = CompiledNfa::try_from_pattern(pattern, character_class_registry);
-                    match &result {
-                        Err(ScnrError { source }) => match &**source {
-                            ScnrErrorKind::RegexSyntaxError(r, _) => {
-                                Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
-                                    r.clone(),
-                                    format!("Error in pattern #{} '{}'", index, pattern),
-                                )))?
-                            }
-                            ScnrErrorKind::UnsupportedFeature(s) => Err(unsupported!(format!(
-                                "Error in pattern #{} '{}': {}",
-                                index, pattern, s
-                            )))?,
-                            _ => Err(result.unwrap_err())?,
-                        },
-                        _ => {
-                            acc.push(result.unwrap());
-                            Ok::<Vec<CompiledNfa>, ScnrError>(acc)
-                        }
-                    }
-                })?;
+        let mp_nfa = CompiledNfa::try_from_patterns(&patterns, character_class_registry)?;
         Ok(Self {
             name,
-            nfas: patterns,
+            nfa: mp_nfa,
             transitions,
         })
     }
@@ -118,7 +83,6 @@ mod tests {
             CompiledScannerMode::try_from_scanner_mode(scanner_mode, &mut character_class_registry)
                 .unwrap();
         assert_eq!(compiled_scanner_mode.name, "test");
-        assert_eq!(compiled_scanner_mode.nfas.len(), 1);
         assert_eq!(compiled_scanner_mode.transitions.len(), 1);
     }
 

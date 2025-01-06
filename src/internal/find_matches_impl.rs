@@ -277,7 +277,7 @@ impl std::fmt::Debug for FindMatchesImpl<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
+    use std::{fs, path::Path, sync::LazyLock};
 
     use super::*;
     use crate::{MatchExt, MatchExtIterator, Pattern, ScannerBuilder, ScannerMode};
@@ -336,8 +336,23 @@ Id2
             .build()
             .unwrap();
 
+        let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test_find_matches_impl");
+
+        // Delete all previously generated dot files.
+        let _ = fs::remove_dir_all(target_folder);
+        // Create the target folder.
+        fs::create_dir_all(target_folder).unwrap();
+
+        scanner
+            .generate_compiled_automata_as_dot(Path::new(target_folder))
+            .expect("Failed to generate compiled automata as dot");
+
         let find_matches = scanner.find_iter(INPUT);
         let matches: Vec<Match> = find_matches.collect();
+        trace!("Matches:");
+        matches.iter().for_each(|m| {
+            trace!("{:?}", m);
+        });
         assert_eq!(matches.len(), 9);
         assert_eq!(
             matches,

@@ -78,20 +78,15 @@ impl Scanner {
     /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
     /// To enable debug output compliled FSMs as dot file set the environment variable `RUST_LOG` to
     /// `scnr::internal::scanner_impl=debug`.
-    pub fn log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
-        self.inner.log_compiled_automata_as_dot(modes)
+    pub fn log_compiled_automata_as_dot(&self) -> Result<()> {
+        self.inner.log_compiled_automata_as_dot()
     }
 
     /// Generates the compiled FSMs as a Graphviz DOT files.
     /// The DOT files are written to the target folder.
     /// The file names are derived from the scanner mode names and the index of the regarding FSM.
-    pub fn generate_compiled_automata_as_dot(
-        &self,
-        modes: &[ScannerMode],
-        target_folder: &Path,
-    ) -> Result<()> {
-        self.inner
-            .generate_compiled_automata_as_dot(modes, target_folder)
+    pub fn generate_compiled_automata_as_dot(&self, target_folder: &Path) -> Result<()> {
+        self.inner.generate_compiled_automata_as_dot(target_folder)
     }
 }
 
@@ -287,7 +282,7 @@ mod tests {
                 .unwrap();
 
             scanner
-                .generate_compiled_automata_as_dot(&[scanner_mode], Path::new(&target_folder))
+                .generate_compiled_automata_as_dot(Path::new(&target_folder))
                 .unwrap();
 
             let mut find_iter = scanner.find_iter(test.input);

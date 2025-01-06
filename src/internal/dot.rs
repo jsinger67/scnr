@@ -93,13 +93,14 @@ pub(crate) fn compiled_nfa_render<W: Write>(
                 .set_color(dot_writer::Color::Blue)
                 .set_pen_width(3.0);
             source_node.set_label(&id.to_string());
-        }
-        if compiled_nfa.end_states[id].0 {
+        } else if compiled_nfa.end_states[id].0 {
             source_node
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Red)
                 .set_pen_width(3.0);
-            source_node.set_label(&format!("{}:{}", id, compiled_nfa.end_states[id].1));
+            source_node.set_label(&format!("{}:T{}", id, compiled_nfa.end_states[id].1));
+        } else {
+            source_node.set_label(&id.to_string());
         }
     }
     // Render the transitions of the NFA

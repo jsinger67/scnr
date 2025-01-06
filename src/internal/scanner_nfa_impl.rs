@@ -45,6 +45,11 @@ impl ScannerNfaImpl {
         let current_mode = &self.scanner_modes[self.current_mode];
         // We perform a scanner mode switch if a transition is defined for the token type found.
         if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
+            trace!(
+                "Switching from mode {} to mode {}",
+                self.current_mode,
+                next_mode
+            );
             self.current_mode = next_mode;
         }
     }
@@ -66,41 +71,30 @@ impl ScannerNfaImpl {
         &mut self,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].nfas;
+        let nfa = &mut self.scanner_modes[self.current_mode].nfa;
 
         let cloned_char_indices = char_indices.clone();
-        let mut matches = Vec::with_capacity(patterns.len());
-        for nfa in patterns {
-            // All NFAs are tested in parallel against the input.
-            // We clone the char_indices iterator for each NFA.
-            if let Some(matched) =
-                nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class)
-            {
-                let mut iter = char_indices.clone();
-                for _ in 0..matched.len() {
-                    iter.next();
-                }
-                if let Some(lookahead) =
-                    nfa.lookahead_mut((matched.token_type() as TerminalIDBase).into())
-                {
-                    if !lookahead.satisfies_lookahead(iter, &*self.match_char_class) {
-                        continue;
-                    }
-                }
-                if matched.is_empty() {
-                    panic!(
-                        r#"
+        let mut matches = Vec::with_capacity(nfa.patterns.len());
+        // We clone the char_indices iterator for each NFA.
+        if let Some(matched) = nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class) {
+            let mut iter = char_indices.clone();
+            for _ in 0..matched.len() {
+                iter.next();
+            }
+            if matched.is_empty() {
+                panic!(
+                    r#"
     An empty token was matched. This leads to an infinite loop.
     Avoid regexes that match empty tokens.
     Please, check regex {} for token type {}"#,
-                        nfa.pattern((matched.token_type() as TerminalIDBase).into())
-                            .escape_default(),
-                        matched.token_type()
-                    );
-                }
-                matches.push(matched);
+                    nfa.pattern((matched.token_type() as TerminalIDBase).into())
+                        .escape_default(),
+                    matched.token_type()
+                );
             }
+            matches.push(matched);
         }
+
         let current_match = self.find_first_longest_match(matches);
         if let Some(m) = current_match.as_ref() {
             self.execute_possible_mode_switch(m);
@@ -122,28 +116,30 @@ impl ScannerNfaImpl {
         &mut self,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].nfas;
+        let nfa = &mut self.scanner_modes[self.current_mode].nfa;
 
         let cloned_char_indices = char_indices.clone();
-        let mut matches = Vec::with_capacity(patterns.len());
-        for nfa in patterns {
-            if let Some(matched) =
-                nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class)
-            {
-                let mut iter = char_indices.clone();
-                for _ in 0..matched.len() {
-                    iter.next();
-                }
-                if let Some(lookahead) =
-                    nfa.lookahead_mut((matched.token_type() as TerminalIDBase).into())
-                {
-                    if !lookahead.satisfies_lookahead(iter, &*self.match_char_class) {
-                        continue;
-                    }
-                }
-                matches.push(matched);
+        let mut matches = Vec::with_capacity(nfa.patterns.len());
+        // We clone the char_indices iterator for each NFA.
+        if let Some(matched) = nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class) {
+            let mut iter = char_indices.clone();
+            for _ in 0..matched.len() {
+                iter.next();
             }
+            if matched.is_empty() {
+                panic!(
+                    r#"
+    An empty token was matched. This leads to an infinite loop.
+    Avoid regexes that match empty tokens.
+    Please, check regex {} for token type {}"#,
+                    nfa.pattern((matched.token_type() as TerminalIDBase).into())
+                        .escape_default(),
+                    matched.token_type()
+                );
+            }
+            matches.push(matched);
         }
+
         self.find_first_longest_match(matches)
     }
 
@@ -154,28 +150,23 @@ impl ScannerNfaImpl {
     /// Traces the compiled NFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
-    pub(crate) fn log_compiled_automata_as_dot(
-        &self,
-        modes: &[crate::ScannerMode],
-    ) -> crate::Result<()> {
+    pub(crate) fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, dfa) in scanner_mode.nfas.iter().enumerate() {
-                debug!("Compiled NFA: Mode {} Pattern {} \n{}", i, j, {
-                    let mut cursor = std::io::Cursor::new(Vec::new());
-                    let title = format!("Compiled NFA {}::{}", modes[i].name, modes[i].patterns[j]);
-                    super::dot::compiled_nfa_render(
-                        dfa,
-                        &title,
-                        &self.character_classes,
-                        &mut cursor,
-                    );
-                    let mut dot_format = String::new();
-                    cursor.set_position(0);
-                    cursor.read_to_string(&mut dot_format)?;
-                    dot_format
-                });
-            }
+            debug!("Compiled NFA: Mode {} \n{}", i, {
+                let mut cursor = std::io::Cursor::new(Vec::new());
+                let title = format!("Compiled NFA {}", scanner_mode.name);
+                super::dot::compiled_nfa_render(
+                    &scanner_mode.nfa,
+                    &title,
+                    &self.character_classes,
+                    &mut cursor,
+                );
+                let mut dot_format = String::new();
+                cursor.set_position(0);
+                cursor.read_to_string(&mut dot_format)?;
+                dot_format
+            });
         }
         Ok(())
     }
@@ -184,22 +175,23 @@ impl ScannerNfaImpl {
     /// The dot files are written to the target folder.
     pub(crate) fn generate_compiled_automata_as_dot(
         &self,
-        modes: &[crate::ScannerMode],
         target_folder: &std::path::Path,
     ) -> crate::Result<()> {
         use std::fs::File;
-        for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, nfa) in scanner_mode.nfas.iter().enumerate() {
-                let title = format!("Compiled NFA {} - {}", modes[i].name, modes[i].patterns[j]);
-                let file_name = format!(
-                    "{}/{}_{}.dot",
-                    target_folder.to_str().unwrap(),
-                    modes[i].name,
-                    j
-                );
-                let mut file = File::create(file_name)?;
-                super::dot::compiled_nfa_render(nfa, &title, &self.character_classes, &mut file);
-            }
+        for scanner_mode in self.scanner_modes.iter() {
+            let title = format!("Compiled NFA {}", scanner_mode.name);
+            let file_name = format!(
+                "{}/{}.dot",
+                target_folder.to_str().unwrap(),
+                scanner_mode.name
+            );
+            let mut file = File::create(file_name)?;
+            super::dot::compiled_nfa_render(
+                &scanner_mode.nfa,
+                &title,
+                &self.character_classes,
+                &mut file,
+            );
         }
         Ok(())
     }
@@ -304,7 +296,7 @@ mod tests {
 
         // Generate the compiled NFAs as dot files.
         scanner_impl
-            .generate_compiled_automata_as_dot(&scanner_modes, Path::new(target_folder))
+            .generate_compiled_automata_as_dot(Path::new(target_folder))
             .unwrap();
 
         // Check if the dot files are generated.
@@ -313,27 +305,27 @@ mod tests {
             .map(|entry| entry.unwrap().path())
             .collect();
 
-        assert_eq!(dot_files.len(), 12);
+        assert_eq!(dot_files.len(), 2);
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.extension().unwrap() == "dot")
                 .count(),
-            12
+            2
         );
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("INITIAL"))
                 .count(),
-            7
+            1
         );
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("STRING"))
                 .count(),
-            5
+            1
         );
     }
 }
