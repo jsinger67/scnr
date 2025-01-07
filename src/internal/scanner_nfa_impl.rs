@@ -131,14 +131,16 @@ impl ScannerNfaImpl {
     /// The dot files are written to the target folder.
     pub(crate) fn generate_compiled_automata_as_dot(
         &self,
+        prefix: &str,
         target_folder: &std::path::Path,
     ) -> crate::Result<()> {
         use std::fs::File;
         for scanner_mode in self.scanner_modes.iter() {
             let title = format!("Compiled NFA {}", scanner_mode.name);
             let file_name = format!(
-                "{}/{}.dot",
+                "{}/{}_{}.dot",
                 target_folder.to_str().unwrap(),
+                prefix,
                 scanner_mode.name
             );
             let mut file = File::create(file_name)?;
@@ -205,10 +207,25 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
 mod tests {
     use super::*;
     use crate::{Pattern, ScannerMode};
-    use std::{convert::TryInto, fs, path::Path};
+    use std::{convert::TryInto, fs, path::Path, sync::Once};
+
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target/testout/string_nfas");
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
 
     #[test]
     fn test_try_from() {
+        init();
         let scanner_modes = vec![
             ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
             ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
@@ -220,6 +237,7 @@ mod tests {
 
     #[test]
     fn test_match_char_class() {
+        init();
         let scanner_modes = vec![
             ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
             ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
@@ -236,6 +254,7 @@ mod tests {
 
     #[test]
     fn test_generate_dot_files() {
+        init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/string.json");
         let file = fs::File::open(path).unwrap();
 
@@ -243,20 +262,14 @@ mod tests {
             .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
 
         let scanner_impl: ScannerNfaImpl = scanner_modes.clone().try_into().unwrap();
-        let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/string_nfas");
-
-        // Delete all previously generated dot files.
-        let _ = fs::remove_dir_all(target_folder);
-        // Create the target folder.
-        fs::create_dir_all(target_folder).unwrap();
 
         // Generate the compiled NFAs as dot files.
         scanner_impl
-            .generate_compiled_automata_as_dot(Path::new(target_folder))
+            .generate_compiled_automata_as_dot("String", Path::new(TARGET_FOLDER))
             .unwrap();
 
         // Check if the dot files are generated.
-        let dot_files: Vec<_> = fs::read_dir(target_folder)
+        let dot_files: Vec<_> = fs::read_dir(TARGET_FOLDER)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect();

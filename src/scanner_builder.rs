@@ -80,14 +80,27 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path};
+    use std::{fs, path::Path, sync::Once};
 
     use crate::{Pattern, ScannerModeSwitcher};
 
     use super::*;
 
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/test_simple_scanner_builder"
+    );
+
     fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
     }
 
     #[test]
@@ -147,18 +160,8 @@ mod tests {
         // Line comment2
         "#;
 
-        let target_folder = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/target/test_simple_scanner_builder"
-        );
-
-        // Delete all previously generated dot files.
-        let _ = fs::remove_dir_all(target_folder);
-        // Create the target folder.
-        fs::create_dir_all(target_folder).unwrap();
-
         scanner
-            .generate_compiled_automata_as_dot(Path::new(target_folder))
+            .generate_compiled_automata_as_dot("LineComment", Path::new(TARGET_FOLDER))
             .expect("Failed to generate compiled automata as dot");
 
         let matches: Vec<_> = scanner.find_iter(input).collect();

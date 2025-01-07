@@ -51,3 +51,18 @@ impl CompiledLookahead {
         }
     }
 }
+
+impl std::fmt::Display for CompiledLookahead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} lookahead: {}",
+            if self.is_positive {
+                "Positive"
+            } else {
+                "Negative"
+            },
+            self.nfa
+        )
+    }
+}

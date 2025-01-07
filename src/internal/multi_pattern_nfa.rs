@@ -251,16 +251,37 @@ impl MultiPatternNfa {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, sync::LazyLock};
+    use std::{
+        fs,
+        sync::{LazyLock, Once},
+    };
 
     use super::*;
     use crate::{internal::character_class_registry::CharacterClassRegistry, ScannerMode};
+
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/multi_pattern_nfa_test"
+    );
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
 
     /// A macro that simplifies the rendering of a dot file for a MultiPatternNfa.
     macro_rules! mp_nfa_render_to {
         ($nfa:expr, $label:expr, $char_class:ident) => {
             let label = format!("{}MpNfa", $label);
-            let mut f = std::fs::File::create(format!("target/{}MpNfa.dot", $label)).unwrap();
+            let mut f =
+                std::fs::File::create(format!("{}/{}MpNfa.dot", TARGET_FOLDER, $label)).unwrap();
             $crate::internal::dot::multi_pattern_nfa_render($nfa, &label, &$char_class, &mut f);
         };
     }
@@ -273,6 +294,7 @@ mod tests {
 
     #[test]
     fn test_epsilon_closure() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let ast = super::super::parse_regex_syntax("a|b").unwrap();
         let nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
@@ -289,6 +311,7 @@ mod tests {
 
     #[test]
     fn test_epsilon_closure_set() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let ast = super::super::parse_regex_syntax("a|b").unwrap();
         let nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
@@ -314,6 +337,7 @@ mod tests {
 
     #[test]
     fn test_move_set() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let ast = super::super::parse_regex_syntax("a|b").unwrap();
         let nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
@@ -330,6 +354,7 @@ mod tests {
 
     #[test]
     fn test_try_from_patterns_single() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let multi_pattern_nfa = MultiPatternNfa::try_from_patterns(
             &[Pattern::new("a+".to_string(), 0)],
@@ -343,6 +368,7 @@ mod tests {
 
     #[test]
     fn test_try_from_patterns() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let multi_pattern_nfa = MultiPatternNfa::try_from_patterns(
             &SCANNER_MODES.iter().next().unwrap().patterns,

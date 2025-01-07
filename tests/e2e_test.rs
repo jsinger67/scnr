@@ -1,7 +1,7 @@
 // Test complete flow of the application
 // Run with `cargo test --test e2e_test`
 
-use std::fs;
+use std::{fs, path::Path};
 
 use regex::Regex;
 use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
@@ -13,6 +13,14 @@ fn e2e_test() {
 
     // Initialize the regex for newlines. It is used to make the tests platform independent.
     let rx_newline: Regex = Regex::new(r"\r?\n|\r").unwrap();
+
+    // Define the target folder for the generated dot files.
+    let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/testout/e2e_test");
+
+    // Delete all previously generated dot files.
+    let _ = fs::remove_dir_all(target_folder);
+    // Create the target folder.
+    fs::create_dir_all(target_folder).unwrap();
 
     // Iterate over all json files in the data directory that contain scanner modes
     for entry in fs::read_dir(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data")).unwrap() {
@@ -29,10 +37,10 @@ fn e2e_test() {
             continue;
         }
 
-        // Select only the parol.json files
-        // if entry.file_name() != "parol.json" {
-        //     continue;
-        // }
+        // Select only special files
+        if entry.file_name() != "negative_lookahead_n.json" {
+            continue;
+        }
 
         println!("--------------------------------------------------");
         println!("Entry: {:?}", entry.file_name());
@@ -48,6 +56,13 @@ fn e2e_test() {
             .add_scanner_modes(&scanner_modes)
             .build()
             .unwrap();
+
+        scanner
+            .generate_compiled_automata_as_dot(
+                path.file_stem().unwrap().to_str().unwrap(),
+                Path::new(target_folder),
+            )
+            .expect("Failed to generate compiled automata as dot");
 
         // Open the input file which has the same base name as the json file but with a .input
         // extension.

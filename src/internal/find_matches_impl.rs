@@ -277,7 +277,11 @@ impl std::fmt::Debug for FindMatchesImpl<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path, sync::LazyLock};
+    use std::{
+        fs,
+        path::Path,
+        sync::{LazyLock, Once},
+    };
 
     use super::*;
     use crate::{MatchExt, MatchExtIterator, Pattern, ScannerBuilder, ScannerMode};
@@ -323,8 +327,21 @@ Id1
 Id2
 "#;
 
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/test_find_matches_impl"
+    );
+
     fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
     }
 
     #[test]
@@ -336,15 +353,8 @@ Id2
             .build()
             .unwrap();
 
-        let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/test_find_matches_impl");
-
-        // Delete all previously generated dot files.
-        let _ = fs::remove_dir_all(target_folder);
-        // Create the target folder.
-        fs::create_dir_all(target_folder).unwrap();
-
         scanner
-            .generate_compiled_automata_as_dot(Path::new(target_folder))
+            .generate_compiled_automata_as_dot("String", Path::new(TARGET_FOLDER))
             .expect("Failed to generate compiled automata as dot");
 
         let find_matches = scanner.find_iter(INPUT);

@@ -929,14 +929,34 @@ mod tests {
 #[cfg(test)]
 mod tests_try_from {
 
+    use std::{fs, sync::Once};
+
     use crate::internal::parser::parse_regex_syntax;
 
     use super::*;
 
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/test_try_from_ast"
+    );
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
+
     /// A macro that simplifies the rendering of a dot file for a NFA.
     macro_rules! nfa_render_to {
         ($nfa:expr, $label:expr) => {
-            let mut f = std::fs::File::create(format!("target/{}Nfa.dot", $label)).unwrap();
+            let mut f =
+                std::fs::File::create(format!("{}/{}Nfa.dot", TARGET_FOLDER, $label)).unwrap();
             $crate::internal::dot::nfa_render($nfa, $label, &mut f);
         };
     }
@@ -1029,6 +1049,7 @@ mod tests_try_from {
 
     #[test]
     fn test_try_from_ast() {
+        init();
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
             let nfa: Nfa = Nfa::try_from_ast(

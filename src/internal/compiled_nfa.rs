@@ -62,7 +62,7 @@ impl CompiledNfa {
     /// 6. Replace the queue with the second queue.
     /// 7. If there are more characters in the input, go to step 2.
     ///
-    #[inline(always)]
+    // #[inline(always)]
     pub(crate) fn find_from(
         &mut self,
         char_indices: std::str::CharIndices,
@@ -120,6 +120,9 @@ impl CompiledNfa {
                                     }
                                     _ => {}
                                 }
+                            } else {
+                                match_end = Some(index + c.len_utf8());
+                                match_terminal_id = Some(self.end_states[next.as_usize()].1);
                             }
                         }
                     }
@@ -356,6 +359,9 @@ impl std::fmt::Display for CompiledNfa {
         for (i, state) in self.states.iter().enumerate() {
             writeln!(f, "State {}: {}", i, state)?;
         }
+        for (terminal_id, lookahead) in &self.lookaheads {
+            writeln!(f, "Lookahead: {} -> {}", terminal_id, lookahead)?;
+        }
         Ok(())
     }
 }
@@ -378,7 +384,10 @@ impl std::fmt::Display for StateData {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, sync::LazyLock};
+    use std::{
+        fs,
+        sync::{LazyLock, Once},
+    };
 
     use log::trace;
 
@@ -388,10 +397,28 @@ mod tests {
         Pattern, ScannerMode,
     };
 
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/compiled_nfa_tests"
+    );
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
+
     /// A macro that simplifies the rendering of a dot file for a NFA.
     macro_rules! nfa_render_to {
         ($nfa:expr, $label:expr) => {
-            let mut f = std::fs::File::create(format!("target/{}Nfa.dot", $label)).unwrap();
+            let mut f =
+                std::fs::File::create(format!("{}/{}Nfa.dot", TARGET_FOLDER, $label)).unwrap();
             $crate::internal::dot::nfa_render($nfa, $label, &mut f);
         };
     }
@@ -399,7 +426,9 @@ mod tests {
     /// A macro that simplifies the rendering of a dot file for a CompiledNfa.
     macro_rules! compiled_nfa_render_to {
         ($compiled_nfa:expr, $label:expr, $character_class_registry:expr) => {
-            let mut f = std::fs::File::create(format!("target/{}CompiledNfa.dot", $label)).unwrap();
+            let mut f =
+                std::fs::File::create(format!("{}/{}CompiledNfa.dot", TARGET_FOLDER, $label))
+                    .unwrap();
             $crate::internal::dot::compiled_nfa_render(
                 $compiled_nfa,
                 $label,
@@ -413,7 +442,8 @@ mod tests {
     macro_rules! multi_pattern_nfa_render_to {
         ($mp_nfa:expr, $label:expr, $character_class_registry:expr) => {
             let mut f =
-                std::fs::File::create(format!("target/{}MultiPatternNfa.dot", $label)).unwrap();
+                std::fs::File::create(format!("{}/{}MultiPatternNfa.dot", TARGET_FOLDER, $label))
+                    .unwrap();
             $crate::internal::dot::multi_pattern_nfa_render(
                 $mp_nfa,
                 $label,
@@ -421,10 +451,6 @@ mod tests {
                 &mut f,
             );
         };
-    }
-
-    fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
     }
 
     struct TestData {

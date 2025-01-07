@@ -49,20 +49,42 @@ impl CompiledScannerMode {
 
 #[cfg(test)]
 mod tests {
+    use std::{fs, sync::Once};
+
     use super::*;
     use crate::{Pattern, ScannerMode};
+
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/compiled_scanner_mode_test"
+    );
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
 
     /// A macro that simplifies the rendering of a dot file for a NFA.
     macro_rules! compiled_nfa_render_to {
         ($nfa:expr, $label:expr, $reg:ident) => {
             let label = format!("{}Dfa", $label);
-            let mut f = std::fs::File::create(format!("target/{}CompiledNfa.dot", $label)).unwrap();
+            let mut f =
+                std::fs::File::create(format!("{}/{}CompiledNfa.dot", TARGET_FOLDER, $label))
+                    .unwrap();
             $crate::internal::dot::compiled_nfa_render($nfa, &label, &$reg, &mut f);
         };
     }
 
     #[test]
     fn test_compile_to_nfa() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let pattern = Pattern::new("(//.*(\r\n|\r|\n))".to_string(), 0);
         let compiled_nfa =
@@ -73,6 +95,7 @@ mod tests {
 
     #[test]
     fn test_compiled_nfa_scanner_mode() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
             name: "test".to_string(),
@@ -88,6 +111,7 @@ mod tests {
 
     #[test]
     fn test_compiled_nfa_scanner_mode_error() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
             name: "test".to_string(),
@@ -101,6 +125,7 @@ mod tests {
 
     #[test]
     fn test_compiled_nfa_scanner_mode_transition() {
+        init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
             name: "test".to_string(),
