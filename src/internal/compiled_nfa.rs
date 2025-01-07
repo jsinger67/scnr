@@ -77,8 +77,8 @@ impl CompiledNfa {
         let mut match_terminal_id = None;
         for (index, c) in char_indices.clone() {
             if match_start.is_none() {
-                // A potential match starts at the current position.
-                // Is is only part of a valid match if match_end is also set at the end of the loop.
+                // A potential match starts always at the first position.
+                // Is is only part of a valid match if match_end is also set in the inner for loop.
                 match_start = Some(index);
             }
 
