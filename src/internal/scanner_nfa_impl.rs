@@ -21,24 +21,6 @@ pub(crate) struct ScannerNfaImpl {
     current_mode: usize,
 }
 impl ScannerNfaImpl {
-    /// We evaluate the matches of the NFAs in ascending order to prioritize the matches with the
-    /// lowest index.
-    /// We find the longest match with the lowest index in the given *matches* vector.
-    fn find_first_longest_match(&self, matches: Vec<Match>) -> Option<Match> {
-        let mut current_match: Option<Match> = None;
-        for m in matches {
-            if let Some(current) = current_match.as_ref() {
-                if m.span().len() > current.span().len() {
-                    current_match = Some(m);
-                }
-            } else {
-                current_match = Some(m);
-            }
-        }
-        trace!("Current match: {:?}", current_match);
-        current_match
-    }
-
     /// Executes a possible mode switch if a transition is defined for the token type found.
     #[inline]
     fn execute_possible_mode_switch(&mut self, current_match: &Match) {
@@ -71,35 +53,11 @@ impl ScannerNfaImpl {
         &mut self,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let nfa = &mut self.scanner_modes[self.current_mode].nfa;
-
-        let cloned_char_indices = char_indices.clone();
-        let mut matches = Vec::with_capacity(nfa.patterns.len());
-        // We clone the char_indices iterator for each NFA.
-        if let Some(matched) = nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class) {
-            let mut iter = char_indices.clone();
-            for _ in 0..matched.len() {
-                iter.next();
-            }
-            if matched.is_empty() {
-                panic!(
-                    r#"
-    An empty token was matched. This leads to an infinite loop.
-    Avoid regexes that match empty tokens.
-    Please, check regex {} for token type {}"#,
-                    nfa.pattern((matched.token_type() as TerminalIDBase).into())
-                        .escape_default(),
-                    matched.token_type()
-                );
-            }
-            matches.push(matched);
+        if let Some(matched) = self.peek_from(char_indices.clone()) {
+            self.execute_possible_mode_switch(&matched);
+            return Some(matched);
         }
-
-        let current_match = self.find_first_longest_match(matches);
-        if let Some(m) = current_match.as_ref() {
-            self.execute_possible_mode_switch(m);
-        }
-        current_match
+        None
     }
 
     /// This function is used by [super::find_matches_impl::FindMatchesImpl::peek_n].
@@ -119,7 +77,6 @@ impl ScannerNfaImpl {
         let nfa = &mut self.scanner_modes[self.current_mode].nfa;
 
         let cloned_char_indices = char_indices.clone();
-        let mut matches = Vec::with_capacity(nfa.patterns.len());
         // We clone the char_indices iterator for each NFA.
         if let Some(matched) = nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class) {
             let mut iter = char_indices.clone();
@@ -137,10 +94,9 @@ impl ScannerNfaImpl {
                     matched.token_type()
                 );
             }
-            matches.push(matched);
+            return Some(matched);
         }
-
-        self.find_first_longest_match(matches)
+        None
     }
 
     pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
