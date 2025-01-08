@@ -90,7 +90,7 @@ fn run_veryl_scanner(c: &mut Criterion) {
 
 criterion_group! {
     name = benchesscanner;
-    config = Criterion::default().measurement_time(Duration::from_secs(10));
+    config = Criterion::default().measurement_time(Duration::from_secs(15)).sample_size(50);
     targets = run_parol_scanner, run_veryl_scanner
 }
 
