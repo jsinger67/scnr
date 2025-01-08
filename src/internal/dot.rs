@@ -85,7 +85,7 @@ fn render_compiled_nfa(
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Red)
                 .set_pen_width(3.0);
-            source_node.set_label(&format!("{}:T{}", id, compiled_nfa.end_states[id].1));
+            source_node.set_label(&format!("{} T{}", id, compiled_nfa.end_states[id].1));
         } else {
             source_node.set_label(&id.to_string());
         }
@@ -101,7 +101,7 @@ fn render_compiled_nfa(
                 )
                 .attributes()
                 .set_label(&format!(
-                    "{}:#{}",
+                    "{} (C#{})",
                     character_class_registry.get_character_class(*cc).map_or(
                         "-".to_string(),
                         |cc| cc.ast().to_string().escape_debug().to_string()

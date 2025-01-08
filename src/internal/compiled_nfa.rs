@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, VecDeque};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{Match, Pattern, Result, Span};
+use crate::{pattern, Match, Pattern, Result, Span};
 
 use super::{
     ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledLookahead,
@@ -97,10 +97,23 @@ impl CompiledNfa {
                                 self.lookaheads.get(&self.end_states[next.as_usize()].1)
                             {
                                 // Create a CharIndices iterator starting from the current position.
-                                let char_indices = char_indices.as_str().char_indices();
-                                let mut lookahead = lookahead.clone();
-                                if !lookahead.satisfies_lookahead(char_indices, match_char_class) {
-                                    continue;
+                                if let Some((_, char_indices)) =
+                                    char_indices.as_str().split_at_checked(index)
+                                {
+                                    let char_indices = char_indices.char_indices();
+                                    let mut lookahead = lookahead.clone();
+                                    if !lookahead
+                                        .satisfies_lookahead(char_indices, match_char_class)
+                                    {
+                                        continue;
+                                    }
+                                } else {
+                                    // We are at the end of the input.
+                                    // If the lookahead is positive it is not satisfied, otherwise
+                                    // we can accept the match.
+                                    if lookahead.is_positive {
+                                        continue;
+                                    }
                                 }
                             }
                             // Update the match end and terminal id if the match is longer or the
@@ -171,11 +184,12 @@ impl CompiledNfa {
         let mp_nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
         let mut compiled_nfa: CompiledNfa = mp_nfa.into();
         // Add the lookaheads to the compiled NFA.
-        for (terminal_id, pattern) in patterns.iter().enumerate() {
+        for pattern in patterns.iter() {
             if let Some(lookahead) = pattern.lookahead() {
                 let lookahead =
                     CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
-                compiled_nfa.add_lookahead((terminal_id as TerminalIDBase).into(), lookahead);
+                compiled_nfa
+                    .add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
             }
         }
         Ok(compiled_nfa)
@@ -359,6 +373,7 @@ impl std::fmt::Display for CompiledNfa {
         for (i, state) in self.states.iter().enumerate() {
             writeln!(f, "State {}: {}", i, state)?;
         }
+        writeln!(f, "Lookaheads:")?;
         for (terminal_id, lookahead) in &self.lookaheads {
             writeln!(f, "Lookahead: {} -> {}", terminal_id, lookahead)?;
         }
@@ -585,15 +600,18 @@ mod tests {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "./benches/veryl_modes.json");
         let file = fs::File::open(path).unwrap();
         let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
-
+        assert!(scanner_modes[0].patterns[17].lookahead().is_some());
+        assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
         let mut character_class_registry = CharacterClassRegistry::new();
-        let mp_nfa = MultiPatternNfa::try_from_patterns(
+        let compiled_nfa = CompiledNfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )
         .unwrap();
-        multi_pattern_nfa_render_to!(&mp_nfa, "Veryl", &character_class_registry);
-        let compiled_nfa = CompiledNfa::from(mp_nfa);
+        assert_eq!(compiled_nfa.patterns.len(), 1);
+        assert_eq!(compiled_nfa.lookaheads.len(), 1);
+        println!("{}", compiled_nfa);
+        assert!(compiled_nfa.lookaheads.contains_key(&20.into()));
         compiled_nfa_render_to!(&compiled_nfa, "Veryl", &character_class_registry);
     }
 }
