@@ -2,7 +2,7 @@ use std::collections::{BTreeSet, VecDeque};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{pattern, Match, Pattern, Result, Span};
+use crate::{Match, Pattern, Result, Span};
 
 use super::{
     ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledLookahead,
@@ -446,21 +446,6 @@ mod tests {
                     .unwrap();
             $crate::internal::dot::compiled_nfa_render(
                 $compiled_nfa,
-                $label,
-                $character_class_registry,
-                &mut f,
-            );
-        };
-    }
-
-    /// A macro that simplifies the rendering of a dot file for a MultiPatternNfa.
-    macro_rules! multi_pattern_nfa_render_to {
-        ($mp_nfa:expr, $label:expr, $character_class_registry:expr) => {
-            let mut f =
-                std::fs::File::create(format!("{}/{}MultiPatternNfa.dot", TARGET_FOLDER, $label))
-                    .unwrap();
-            $crate::internal::dot::multi_pattern_nfa_render(
-                $mp_nfa,
                 $label,
                 $character_class_registry,
                 &mut f,

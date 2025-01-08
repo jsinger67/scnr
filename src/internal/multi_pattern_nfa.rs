@@ -4,7 +4,7 @@
 //! multi-pattern NFA has one end state for each pattern.
 
 use super::{nfa::EpsilonTransition, CharClassID, Nfa, StateID};
-use crate::{internal::CompiledLookahead, Pattern, Result, ScnrError, ScnrErrorKind};
+use crate::{Pattern, Result, ScnrError, ScnrErrorKind};
 
 macro_rules! unsupported {
     ($feature:expr) => {
