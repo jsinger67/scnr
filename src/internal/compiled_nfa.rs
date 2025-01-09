@@ -587,7 +587,7 @@ mod tests {
     fn test_multi_pattern_nfa() {
         init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "./benches/veryl_modes.json");
-        let file = fs::File::open(path).unwrap();
+        let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
         let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
         assert!(scanner_modes[0].patterns[17].lookahead().is_some());
         assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
