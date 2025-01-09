@@ -5,7 +5,7 @@ use std::vec;
 
 use regex_syntax::ast::{Ast, FlagsItemKind, GroupKind, RepetitionKind, RepetitionRange};
 
-use crate::{Result, ScnrError};
+use crate::{Pattern, Result, ScnrError};
 
 use super::{ids::StateIDBase, CharClassID, CharacterClassRegistry, ComparableAst, StateID};
 
@@ -19,7 +19,8 @@ macro_rules! unsupported {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct Nfa {
-    pub(crate) pattern: String,
+    /// The pattern that the NFA represents.
+    pub(crate) pattern: Pattern,
     pub(crate) states: Vec<NfaState>,
     // Used during NFA construction
     pub(crate) start_state: StateID,
@@ -30,7 +31,7 @@ pub(crate) struct Nfa {
 impl Nfa {
     pub(crate) fn new() -> Self {
         Self {
-            pattern: String::new(),
+            pattern: Pattern::default(),
             states: vec![NfaState::default()],
             start_state: StateID::default(),
             end_state: StateID::default(),
@@ -62,11 +63,19 @@ impl Nfa {
 
     #[allow(dead_code)]
     pub(crate) fn pattern(&self) -> &str {
-        &self.pattern
+        self.pattern.pattern()
     }
 
     pub(crate) fn set_pattern(&mut self, pattern: &str) {
-        self.pattern = pattern.to_string();
+        self.pattern = Pattern::new(pattern.to_string(), self.pattern.terminal_id());
+    }
+
+    pub(crate) fn terminal_id(&self) -> usize {
+        self.pattern.terminal_id()
+    }
+
+    pub(crate) fn set_terminal_id(&mut self, terminal_id: usize) {
+        self.pattern.set_token_type(terminal_id);
     }
 
     pub(crate) fn add_state(&mut self, state: NfaState) {
@@ -122,6 +131,16 @@ impl Nfa {
         self.start_state = StateID::new(self.start_state.id() + offset as StateIDBase);
         self.end_state = StateID::new(self.end_state.id() + offset as StateIDBase);
         (self.start_state, self.end_state)
+    }
+
+    /// Returns the number of the highest state.
+    /// If no states are present, it returns 0.
+    /// It is used during multi-pattern NFA construction.
+    pub(crate) fn highest_state_number(&self) -> StateIDBase {
+        self.states
+            .iter()
+            .max_by(|x, y| x.id().cmp(&y.id()))
+            .map_or(0, |s| s.id().id())
     }
 
     /// Concatenates the current NFA with another NFA.
@@ -371,24 +390,48 @@ impl Nfa {
         let mut i = 0;
         while i < closure.len() {
             let current_state = closure[i];
-            for epsilon_transition in self.states[current_state].epsilon_transitions() {
-                if !closure.contains(&epsilon_transition.target_state()) {
-                    closure.push(epsilon_transition.target_state());
+            if let Some(state) = self.find_state(current_state) {
+                for epsilon_transition in state.epsilon_transitions() {
+                    if !closure.contains(&epsilon_transition.target_state()) {
+                        closure.push(epsilon_transition.target_state());
+                    }
                 }
+                i += 1;
+            } else {
+                panic!("State not found: {:?}", current_state);
             }
-            i += 1;
         }
         closure.sort_unstable();
         closure.dedup();
         closure
     }
 
+    /// Calculate move(T, a) for a set of states T and a character class a.
+    /// This is the set of states that can be reached from T by matching a.
+    pub(crate) fn move_set(&self, states: &[StateID], char_class: CharClassID) -> Vec<StateID> {
+        let mut move_set = Vec::new();
+        for state in states {
+            if let Some(state) = self.find_state(*state) {
+                for transition in state.transitions() {
+                    if transition.char_class() == char_class {
+                        move_set.push(transition.target_state());
+                    }
+                }
+            } else {
+                panic!("State not found: {:?}", state);
+            }
+        }
+        move_set.sort_unstable();
+        move_set.dedup();
+        move_set
+    }
+
     pub(crate) fn get_match_transitions(
         &self,
-        start_state: impl Iterator<Item = StateID>,
+        start_states: impl Iterator<Item = StateID>,
     ) -> Vec<(CharClassID, StateID)> {
         let mut target_states = Vec::new();
-        for state in start_state {
+        for state in start_states {
             for transition in self.states()[state].transitions() {
                 target_states.push((transition.char_class(), transition.target_state()));
             }
@@ -396,6 +439,14 @@ impl Nfa {
         target_states.sort_unstable();
         target_states.dedup();
         target_states
+    }
+
+    pub(crate) fn contains_state(&self, state: StateID) -> bool {
+        self.states.iter().any(|s| s.id() == state)
+    }
+
+    pub(crate) fn find_state(&self, state: StateID) -> Option<&NfaState> {
+        self.states.iter().find(|s| s.id() == state)
     }
 }
 
@@ -481,6 +532,13 @@ pub(crate) struct EpsilonTransition {
 }
 
 impl EpsilonTransition {
+    /// Create a new epsilon transition to the given state.
+    #[inline]
+    pub(crate) fn new(target_state: StateID) -> Self {
+        Self { target_state }
+    }
+
+    #[inline]
     pub(crate) fn target_state(&self) -> StateID {
         self.target_state
     }
@@ -870,14 +928,34 @@ mod tests {
 #[cfg(test)]
 mod tests_try_from {
 
+    use std::{fs, sync::Once};
+
     use crate::internal::parser::parse_regex_syntax;
 
     use super::*;
 
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/test_try_from_ast"
+    );
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
+
     /// A macro that simplifies the rendering of a dot file for a NFA.
     macro_rules! nfa_render_to {
         ($nfa:expr, $label:expr) => {
-            let mut f = std::fs::File::create(format!("target/{}Nfa.dot", $label)).unwrap();
+            let mut f =
+                std::fs::File::create(format!("{}/{}Nfa.dot", TARGET_FOLDER, $label)).unwrap();
             $crate::internal::dot::nfa_render($nfa, $label, &mut f);
         };
     }
@@ -970,6 +1048,7 @@ mod tests_try_from {
 
     #[test]
     fn test_try_from_ast() {
+        init();
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
             let nfa: Nfa = Nfa::try_from_ast(

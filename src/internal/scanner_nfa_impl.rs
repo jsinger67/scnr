@@ -4,7 +4,9 @@ use log::{debug, trace};
 
 use crate::{Match, Result, ScannerMode, ScannerModeSwitcher};
 
-use super::{compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry};
+use super::{
+    compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry, TerminalIDBase,
+};
 
 /// ScannerNfaImpl instances are always created by the Scanner::try_new method and of course by
 /// the clone method.
@@ -19,30 +21,17 @@ pub(crate) struct ScannerNfaImpl {
     current_mode: usize,
 }
 impl ScannerNfaImpl {
-    /// We evaluate the matches of the NFAs in ascending order to prioritize the matches with the
-    /// lowest index.
-    /// We find the longest match with the lowest index in the given *matches* vector.
-    fn find_first_longest_match(&self, matches: Vec<Match>) -> Option<Match> {
-        let mut current_match: Option<Match> = None;
-        for m in matches {
-            if let Some(current) = current_match.as_ref() {
-                if m.span().len() > current.span().len() {
-                    current_match = Some(m);
-                }
-            } else {
-                current_match = Some(m);
-            }
-        }
-        trace!("Current match: {:?}", current_match);
-        current_match
-    }
-
     /// Executes a possible mode switch if a transition is defined for the token type found.
     #[inline]
     fn execute_possible_mode_switch(&mut self, current_match: &Match) {
         let current_mode = &self.scanner_modes[self.current_mode];
         // We perform a scanner mode switch if a transition is defined for the token type found.
         if let Some(next_mode) = current_mode.has_transition(current_match.token_type()) {
+            trace!(
+                "Switching from mode {} to mode {}",
+                self.current_mode,
+                next_mode
+            );
             self.current_mode = next_mode;
         }
     }
@@ -62,44 +51,14 @@ impl ScannerNfaImpl {
     /// During the search, all NFAs are tested in parallel.
     pub(crate) fn find_from(
         &mut self,
+        input: &str,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].nfas;
-
-        let cloned_char_indices = char_indices.clone();
-        let mut matches = Vec::with_capacity(patterns.len());
-        for (nfa, terminal_id) in patterns {
-            // All NFAs are tested in parallel against the input.
-            // We clone the char_indices iterator for each NFA.
-            if let Some(span) = nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class)
-            {
-                let mut iter = char_indices.clone();
-                for _ in 0..span.len() {
-                    iter.next();
-                }
-                if let Some(mut lookahead) = nfa.lookahead.clone() {
-                    if !lookahead.satisfies_lookahead(iter, &*self.match_char_class) {
-                        continue;
-                    }
-                }
-                if span.is_empty() {
-                    panic!(
-                        r#"
-    An empty token was matched. This leads to an infinite loop.
-    Avoid regexes that match empty tokens.
-    Please, check regex {} for token type {}"#,
-                        nfa.pattern.escape_default(),
-                        terminal_id
-                    );
-                }
-                matches.push(Match::new(terminal_id.as_usize(), span));
-            }
+        if let Some(matched) = self.peek_from(input, char_indices.clone()) {
+            self.execute_possible_mode_switch(&matched);
+            return Some(matched);
         }
-        let current_match = self.find_first_longest_match(matches);
-        if let Some(m) = current_match.as_ref() {
-            self.execute_possible_mode_switch(m);
-        }
-        current_match
+        None
     }
 
     /// This function is used by [super::find_matches_impl::FindMatchesImpl::peek_n].
@@ -114,28 +73,34 @@ impl ScannerNfaImpl {
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
     pub(crate) fn peek_from(
         &mut self,
+        input: &str,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let patterns = &mut self.scanner_modes[self.current_mode].nfas;
+        let nfa = &mut self.scanner_modes[self.current_mode].nfa;
 
         let cloned_char_indices = char_indices.clone();
-        let mut matches = Vec::with_capacity(patterns.len());
-        for (nfa, terminal_id) in patterns {
-            if let Some(span) = nfa.find_from(cloned_char_indices.clone(), &*self.match_char_class)
-            {
-                let mut iter = char_indices.clone();
-                for _ in 0..span.len() {
-                    iter.next();
-                }
-                if let Some(mut lookahead) = nfa.lookahead.clone() {
-                    if !lookahead.satisfies_lookahead(iter, &*self.match_char_class) {
-                        continue;
-                    }
-                }
-                matches.push(Match::new(terminal_id.as_usize(), span));
+        // We clone the char_indices iterator for each NFA.
+        if let Some(matched) =
+            nfa.find_from(input, cloned_char_indices.clone(), &*self.match_char_class)
+        {
+            let mut iter = char_indices.clone();
+            for _ in 0..matched.len() {
+                iter.next();
             }
+            if matched.is_empty() {
+                panic!(
+                    r#"
+    An empty token was matched. This leads to an infinite loop.
+    Avoid regexes that match empty tokens.
+    Please, check regex {} for token type {}"#,
+                    nfa.pattern((matched.token_type() as TerminalIDBase).into())
+                        .escape_default(),
+                    matched.token_type()
+                );
+            }
+            return Some(matched);
         }
-        self.find_first_longest_match(matches)
+        None
     }
 
     pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
@@ -145,28 +110,23 @@ impl ScannerNfaImpl {
     /// Traces the compiled NFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
-    pub(crate) fn log_compiled_automata_as_dot(
-        &self,
-        modes: &[crate::ScannerMode],
-    ) -> crate::Result<()> {
+    pub(crate) fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, (dfa, t)) in scanner_mode.nfas.iter().enumerate() {
-                debug!("Compiled NFA: Mode {} Pattern {} Token {}\n{}", i, j, t, {
-                    let mut cursor = std::io::Cursor::new(Vec::new());
-                    let title = format!("Compiled NFA {}::{}", modes[i].name, modes[i].patterns[j]);
-                    super::dot::compiled_nfa_render(
-                        dfa,
-                        &title,
-                        &self.character_classes,
-                        &mut cursor,
-                    );
-                    let mut dot_format = String::new();
-                    cursor.set_position(0);
-                    cursor.read_to_string(&mut dot_format)?;
-                    dot_format
-                });
-            }
+            debug!("Compiled NFA: Mode {} \n{}", i, {
+                let mut cursor = std::io::Cursor::new(Vec::new());
+                let title = format!("Compiled NFA {}", scanner_mode.name);
+                super::dot::compiled_nfa_render(
+                    &scanner_mode.nfa,
+                    &title,
+                    &self.character_classes,
+                    &mut cursor,
+                );
+                let mut dot_format = String::new();
+                cursor.set_position(0);
+                cursor.read_to_string(&mut dot_format)?;
+                dot_format
+            });
         }
         Ok(())
     }
@@ -175,23 +135,25 @@ impl ScannerNfaImpl {
     /// The dot files are written to the target folder.
     pub(crate) fn generate_compiled_automata_as_dot(
         &self,
-        modes: &[crate::ScannerMode],
+        prefix: &str,
         target_folder: &std::path::Path,
     ) -> crate::Result<()> {
         use std::fs::File;
-        for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            for (j, (nfa, t)) in scanner_mode.nfas.iter().enumerate() {
-                let title = format!("Compiled NFA {} - {}", modes[i].name, modes[i].patterns[j]);
-                let file_name = format!(
-                    "{}/{}_{}_{}.dot",
-                    target_folder.to_str().unwrap(),
-                    modes[i].name,
-                    j,
-                    t
-                );
-                let mut file = File::create(file_name)?;
-                super::dot::compiled_nfa_render(nfa, &title, &self.character_classes, &mut file);
-            }
+        for scanner_mode in self.scanner_modes.iter() {
+            let title = format!("Compiled NFA {}", scanner_mode.name);
+            let file_name = format!(
+                "{}/{}_{}.dot",
+                target_folder.to_str().unwrap(),
+                prefix,
+                scanner_mode.name
+            );
+            let mut file = File::create(file_name)?;
+            super::dot::compiled_nfa_render(
+                &scanner_mode.nfa,
+                &title,
+                &self.character_classes,
+                &mut file,
+            );
         }
         Ok(())
     }
@@ -249,10 +211,25 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
 mod tests {
     use super::*;
     use crate::{Pattern, ScannerMode};
-    use std::{convert::TryInto, fs, path::Path};
+    use std::{convert::TryInto, fs, path::Path, sync::Once};
+
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/target/testout/string_nfas");
+
+    fn init() {
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
+    }
 
     #[test]
     fn test_try_from() {
+        init();
         let scanner_modes = vec![
             ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
             ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
@@ -264,6 +241,7 @@ mod tests {
 
     #[test]
     fn test_match_char_class() {
+        init();
         let scanner_modes = vec![
             ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
             ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
@@ -280,6 +258,7 @@ mod tests {
 
     #[test]
     fn test_generate_dot_files() {
+        init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/string.json");
         let file = fs::File::open(path).unwrap();
 
@@ -287,45 +266,39 @@ mod tests {
             .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
 
         let scanner_impl: ScannerNfaImpl = scanner_modes.clone().try_into().unwrap();
-        let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/string_nfas");
-
-        // Delete all previously generated dot files.
-        let _ = fs::remove_dir_all(target_folder);
-        // Create the target folder.
-        fs::create_dir_all(target_folder).unwrap();
 
         // Generate the compiled NFAs as dot files.
         scanner_impl
-            .generate_compiled_automata_as_dot(&scanner_modes, Path::new(target_folder))
+            .generate_compiled_automata_as_dot("String", Path::new(TARGET_FOLDER))
             .unwrap();
 
         // Check if the dot files are generated.
-        let dot_files: Vec<_> = fs::read_dir(target_folder)
+        let dot_files: Vec<_> = fs::read_dir(TARGET_FOLDER)
             .unwrap()
             .map(|entry| entry.unwrap().path())
             .collect();
 
-        assert_eq!(dot_files.len(), 12);
+        assert_eq!(dot_files.len(), 2);
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.extension().unwrap() == "dot")
                 .count(),
-            12
+            2
         );
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("INITIAL"))
                 .count(),
-            7
+            1
         );
         assert_eq!(
             dot_files
                 .iter()
                 .filter(|p| p.file_stem().unwrap().to_str().unwrap().contains("STRING"))
                 .count(),
-            5
+            1
         );
     }
 }

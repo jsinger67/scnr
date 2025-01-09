@@ -49,7 +49,7 @@ fn trace_compiled_dfa_as_dot() {
             .unwrap();
 
         scanner
-            .log_compiled_automata_as_dot(&scanner_modes)
+            .log_compiled_automata_as_dot()
             .expect("Failed to trace compiled automata as dot");
     }
 }

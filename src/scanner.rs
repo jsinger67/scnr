@@ -78,8 +78,8 @@ impl Scanner {
     /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
     /// To enable debug output compliled FSMs as dot file set the environment variable `RUST_LOG` to
     /// `scnr::internal::scanner_impl=debug`.
-    pub fn log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()> {
-        self.inner.log_compiled_automata_as_dot(modes)
+    pub fn log_compiled_automata_as_dot(&self) -> Result<()> {
+        self.inner.log_compiled_automata_as_dot()
     }
 
     /// Generates the compiled FSMs as a Graphviz DOT files.
@@ -87,11 +87,11 @@ impl Scanner {
     /// The file names are derived from the scanner mode names and the index of the regarding FSM.
     pub fn generate_compiled_automata_as_dot(
         &self,
-        modes: &[ScannerMode],
+        prefix: &str,
         target_folder: &Path,
     ) -> Result<()> {
         self.inner
-            .generate_compiled_automata_as_dot(modes, target_folder)
+            .generate_compiled_automata_as_dot(prefix, target_folder)
     }
 }
 
@@ -131,14 +131,25 @@ impl TryFrom<Vec<ScannerMode>> for Scanner {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-
-    use crate::{Pattern, ScannerBuilder};
-
     use super::*;
+    use crate::{Pattern, ScannerBuilder};
+    use std::{fs, sync::Once};
+
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/test_pathological_regular_expressions_dfa"
+    );
 
     fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
     }
 
     #[test]
@@ -263,19 +274,6 @@ mod tests {
         init();
 
         for (index, test) in TEST_DATA.iter().enumerate() {
-            let target_folder = format!(
-                "{}_{}",
-                concat!(
-                    env!("CARGO_MANIFEST_DIR"),
-                    "/target/test_pathological_regular_expressions_dfa"
-                ),
-                index
-            );
-            // Delete all previously generated dot files.
-            let _ = fs::remove_dir_all(target_folder.clone());
-            // Create the target folder.
-            fs::create_dir_all(target_folder.clone()).unwrap();
-
             let scanner_mode = ScannerMode::new(
                 "INITIAL",
                 vec![Pattern::new(test.pattern.to_string(), 1)],
@@ -287,7 +285,10 @@ mod tests {
                 .unwrap();
 
             scanner
-                .generate_compiled_automata_as_dot(&[scanner_mode], Path::new(&target_folder))
+                .generate_compiled_automata_as_dot(
+                    &format!("Test{}", index),
+                    Path::new(&TARGET_FOLDER),
+                )
                 .unwrap();
 
             let mut find_iter = scanner.find_iter(test.input);

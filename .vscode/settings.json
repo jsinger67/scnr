@@ -11,5 +11,9 @@
         "scnr",
         "serde",
         "seshat"
-    ]
+    ],
+    "cSpell.enabledFileTypes": {
+        "veryl": false,
+        "json": false
+    }
 }

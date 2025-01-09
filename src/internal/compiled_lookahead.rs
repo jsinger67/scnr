@@ -41,13 +41,33 @@ impl CompiledLookahead {
     /// match the lookahead.
     pub(crate) fn satisfies_lookahead(
         &mut self,
+        input: &str,
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
     ) -> bool {
-        if self.nfa.find_from(char_indices, match_char_class).is_some() {
+        if self
+            .nfa
+            .find_from(input, char_indices, match_char_class)
+            .is_some()
+        {
             self.is_positive
         } else {
             !self.is_positive
         }
+    }
+}
+
+impl std::fmt::Display for CompiledLookahead {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} lookahead: {}",
+            if self.is_positive {
+                "Positive"
+            } else {
+                "Negative"
+            },
+            self.nfa
+        )
     }
 }

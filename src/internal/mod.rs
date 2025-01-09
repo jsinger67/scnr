@@ -38,6 +38,10 @@ pub(crate) use ids::{
 pub(crate) mod match_function;
 pub(crate) use match_function::MatchFunction;
 
+/// Module that provides functions and types related to the multi pattern NFA.
+pub(crate) mod multi_pattern_nfa;
+pub(crate) use multi_pattern_nfa::MultiPatternNfa;
+
 /// The nfa module contains the NFA implementation.
 mod nfa;
 pub(crate) use nfa::Nfa;

@@ -86,7 +86,9 @@ impl<'h> FindMatchesImpl<'h> {
         let mut result;
         trace!("Find next match from offset {}", self.offset);
         loop {
-            result = self.scanner_impl.find_from(self.char_indices.clone());
+            result = self
+                .scanner_impl
+                .find_from(self.input, self.char_indices.clone());
             if let Some(mut matched) = result {
                 self.advance_beyond_match(matched);
                 matched.add_offset(self.offset);
@@ -113,7 +115,9 @@ impl<'h> FindMatchesImpl<'h> {
         let mut mode_switch = false;
         let mut new_mode = 0;
         for _ in 0..n {
-            let result = self.scanner_impl.peek_from(char_indices.clone());
+            let result = self
+                .scanner_impl
+                .peek_from(self.input, char_indices.clone());
             if let Some(mut matched) = result {
                 let token_type = matched.token_type();
                 Self::advance_char_indices_beyond_match(&mut char_indices, matched);
@@ -277,7 +281,11 @@ impl std::fmt::Debug for FindMatchesImpl<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::LazyLock;
+    use std::{
+        fs,
+        path::Path,
+        sync::{LazyLock, Once},
+    };
 
     use super::*;
     use crate::{MatchExt, MatchExtIterator, Pattern, ScannerBuilder, ScannerMode};
@@ -323,8 +331,21 @@ Id1
 Id2
 "#;
 
+    static INIT: Once = Once::new();
+
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/target/testout/test_find_matches_impl"
+    );
+
     fn init() {
-        let _ = env_logger::builder().is_test(true).try_init();
+        INIT.call_once(|| {
+            let _ = env_logger::builder().is_test(true).try_init();
+            // Delete all previously generated dot files.
+            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            // Create the target folder.
+            fs::create_dir_all(TARGET_FOLDER).unwrap();
+        });
     }
 
     #[test]
@@ -336,8 +357,16 @@ Id2
             .build()
             .unwrap();
 
+        scanner
+            .generate_compiled_automata_as_dot("String", Path::new(TARGET_FOLDER))
+            .expect("Failed to generate compiled automata as dot");
+
         let find_matches = scanner.find_iter(INPUT);
         let matches: Vec<Match> = find_matches.collect();
+        trace!("Matches:");
+        matches.iter().for_each(|m| {
+            trace!("{:?}", m);
+        });
         assert_eq!(matches.len(), 9);
         assert_eq!(
             matches,
