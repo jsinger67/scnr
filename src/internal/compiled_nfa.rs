@@ -87,18 +87,17 @@ impl CompiledNfa {
             }
 
             for state in self.current_states.iter() {
-                if match_end.is_none() && self.end_states[state.as_usize()].0 {
+                if match_end.is_none() && self.end_states[*state].0 {
                     match_end = Some(index);
                 }
-                for (cc, next) in &self.states[state.as_usize()].transitions {
+                for (cc, next) in &self.states[*state].transitions {
                     if match_char_class(*cc, c) {
                         if !self.next_states.contains(next) {
                             self.next_states.push(*next);
                         }
-                        if self.end_states[next.as_usize()].0 {
+                        if self.end_states[*next].0 {
                             // Check if a lookahead is present and if it is satisfied.
-                            if let Some(lookahead) =
-                                self.lookaheads.get(&self.end_states[next.as_usize()].1)
+                            if let Some(lookahead) = self.lookaheads.get(&self.end_states[*next].1)
                             {
                                 // Create a CharIndices iterator starting from the current position.
                                 if let Some((_, next_slice)) =
@@ -128,11 +127,10 @@ impl CompiledNfa {
                                 match (index + c.len_utf8()).cmp(match_end_index) {
                                     std::cmp::Ordering::Greater => {
                                         match_end = Some(index + c.len_utf8());
-                                        match_terminal_id =
-                                            Some(self.end_states[next.as_usize()].1);
+                                        match_terminal_id = Some(self.end_states[*next].1);
                                     }
                                     std::cmp::Ordering::Equal => {
-                                        let terminal_id = self.end_states[next.as_usize()].1;
+                                        let terminal_id = self.end_states[*next].1;
                                         if terminal_id < match_terminal_id.unwrap() {
                                             match_terminal_id = Some(terminal_id);
                                         }
@@ -143,7 +141,7 @@ impl CompiledNfa {
                                 }
                             } else {
                                 match_end = Some(index + c.len_utf8());
-                                match_terminal_id = Some(self.end_states[next.as_usize()].1);
+                                match_terminal_id = Some(self.end_states[*next].1);
                             }
                         }
                     }
@@ -210,7 +208,7 @@ impl CompiledNfa {
 
     /// Returns the pattern for the given terminal id.
     pub(crate) fn pattern(&self, terminal_id: TerminalID) -> &str {
-        &self.patterns[terminal_id.as_usize()]
+        &self.patterns[terminal_id]
     }
 }
 
@@ -276,14 +274,14 @@ impl From<Nfa> for CompiledNfa {
             states.push(StateData::default());
         }
         for (from, cc, to) in transitions {
-            states[from.as_usize()].transitions.push((cc, to));
+            states[from].transitions.push((cc, to));
         }
 
         let current_states = Vec::with_capacity(states.len());
         let next_states = Vec::with_capacity(states.len());
         let mut end_states = vec![(false, TerminalID::new(0)); states.len()];
         for (state, term) in accepting_states {
-            end_states[state.as_usize()] = (true, TerminalID::new(term as TerminalIDBase));
+            end_states[state] = (true, TerminalID::new(term as TerminalIDBase));
         }
 
         Self {
@@ -348,14 +346,14 @@ impl From<MultiPatternNfa> for CompiledNfa {
             states.push(StateData::default());
         }
         for (from, cc, to) in transitions {
-            states[from.as_usize()].transitions.push((cc, to));
+            states[from].transitions.push((cc, to));
         }
 
         let current_states = Vec::with_capacity(states.len());
         let next_states = Vec::with_capacity(states.len());
         let mut end_states = vec![(false, TerminalID::new(0)); states.len()];
         for (state, term) in accepting_states {
-            end_states[state.as_usize()] = (true, TerminalID::new(term as TerminalIDBase));
+            end_states[state] = (true, TerminalID::new(term as TerminalIDBase));
         }
 
         Self {
