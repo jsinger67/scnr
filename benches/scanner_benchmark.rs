@@ -13,7 +13,7 @@ static PAR_SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
 });
 
 static VERLY_SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
-    let path = concat!(env!("CARGO_MANIFEST_DIR"), "./benches/veryl_modes.json");
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
     let file = fs::File::open(path).unwrap();
     serde_json::from_reader(file).unwrap()
 });
