@@ -17,9 +17,17 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.6.1 - Not released yet
+## 0.7.0 - Not released yet
 
-- performance: several optimizations
+- Improved benchmarking with throughput measurements
+- Performance: several optimizations
+    * `CompiledNfa` is now able to handle multiple terminals in one automaton per scanner mode
+    * To make creation feasible a new struct `MultiPatternNfa` was introduced as intermediate
+    creation step
+    * Each `Nfa` contains a `Pattern` now instead of a plain `String` to have terminal ids and
+    optional lookahead data available
+    * Two public methods on the `Scanner` struct have changed their arguments, thus this release
+    is potentially breaking
 
 ## 0.6.0 - 2024-12-14
 
