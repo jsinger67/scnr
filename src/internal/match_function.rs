@@ -54,16 +54,55 @@ impl MatchFunction {
     pub(crate) fn call(&self, c: char) -> bool {
         self.match_fn.call(c)
     }
+}
 
-    fn try_from_class_set(set: ClassSet) -> Result<MatchFn> {
-        let negated = false;
-        match &set {
-            ClassSet::Item(item) => Self::try_from_set_item(item.clone(), negated),
-            ClassSet::BinaryOp(bin_op) => Self::try_from_binary_op(bin_op.clone(), negated),
+impl TryFrom<&Literal> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from(l: &Literal) -> Result<Self> {
+        let Literal {
+            ref c, ref kind, ..
+        } = *l;
+        let c = *c;
+        if c == '.' && *kind == regex_syntax::ast::LiteralKind::Verbatim {
+            Ok(MatchFn::new(|ch| ch != '\n' && ch != '\r'))
+        } else {
+            Ok(MatchFn::new(move |ch| ch == c))
         }
     }
+}
 
-    fn try_from_class_unicode(unicode: ClassUnicode) -> Result<MatchFn> {
+impl TryFrom<&ClassSetUnion> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from(union: &ClassSetUnion) -> Result<Self> {
+        union
+            .items
+            .iter()
+            .try_fold(MatchFn::new(|_| false), |acc, s| {
+                (s, false)
+                    .try_into()
+                    .map(|f: MatchFn| MatchFn::new(move |ch| acc.call(ch) || f.call(ch)))
+            })
+    }
+}
+
+impl TryFrom<&ClassBracketed> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from(bracketed: &ClassBracketed) -> Result<Self> {
+        let negated = bracketed.negated;
+        match &bracketed.kind {
+            ClassSet::Item(item) => (item, negated).try_into(),
+            ClassSet::BinaryOp(bin_op) => (bin_op, negated).try_into(),
+        }
+    }
+}
+
+impl TryFrom<&ClassUnicode> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from(unicode: &ClassUnicode) -> Result<Self> {
         let kind = unicode.kind.clone();
         let match_function = match kind {
             OneLetter(ch) => {
@@ -148,8 +187,12 @@ impl MatchFunction {
             match_function
         })
     }
+}
 
-    fn try_from_class_perl(perl: ClassPerl) -> Result<MatchFn> {
+impl TryFrom<&ClassPerl> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from(perl: &ClassPerl) -> Result<Self> {
         let ClassPerl { negated, kind, .. } = perl;
         let match_function = match kind {
             ClassPerlKind::Digit => MatchFn::new(|ch| ch.is_numeric()),
@@ -158,58 +201,33 @@ impl MatchFunction {
                 ch.is_alphanumeric() || ch.join_c() || ch.gc() == Gc::Pc || ch.gc() == Gc::Mn
             }),
         };
-        Ok(if negated {
+        Ok(if *negated {
             MatchFn::new(move |ch| !match_function.call(ch))
         } else {
             match_function
         })
     }
+}
 
-    fn try_from_class_bracketed(bracketed: ClassBracketed) -> Result<MatchFn> {
-        let negated = bracketed.negated;
-        match &bracketed.kind {
-            ClassSet::Item(item) => Self::try_from_set_item(item.clone(), negated),
-            ClassSet::BinaryOp(bin_op) => Self::try_from_binary_op(bin_op.clone(), negated),
+impl TryFrom<&ClassSet> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from(set: &ClassSet) -> Result<Self> {
+        let negated = false;
+        match set {
+            ClassSet::Item(item) => (item, negated).try_into(),
+            ClassSet::BinaryOp(bin_op) => (bin_op, negated).try_into(),
         }
     }
+}
 
-    // Match one of the set items, i.e.
-    fn try_from_class_set_union(union: ClassSetUnion) -> Result<MatchFn> {
-        union
-            .items
-            .iter()
-            .try_fold(MatchFn::new(|_| false), |acc, s| {
-                Self::try_from_set_item(s.clone(), false)
-                    .map(|f| MatchFn::new(move |ch| acc.call(ch) || f.call(ch)))
-            })
-    }
+impl TryFrom<(&ClassSetItem, bool)> for MatchFn {
+    type Error = ScnrError;
 
-    fn try_from_binary_op(bin_op: ClassSetBinaryOp, negated: bool) -> Result<MatchFn> {
-        let ClassSetBinaryOp { kind, lhs, rhs, .. } = bin_op;
-        let lhs = Self::try_from_class_set(*lhs)?;
-        let rhs = Self::try_from_class_set(*rhs)?;
-        let match_function = match kind {
-            ClassSetBinaryOpKind::Intersection => {
-                MatchFn::new(move |ch| lhs.call(ch) && rhs.call(ch))
-            }
-            ClassSetBinaryOpKind::Difference => {
-                MatchFn::new(move |ch| lhs.call(ch) && !rhs.call(ch))
-            }
-            ClassSetBinaryOpKind::SymmetricDifference => {
-                MatchFn::new(move |ch| lhs.call(ch) != rhs.call(ch))
-            }
-        };
-        Ok(if negated {
-            MatchFn::new(move |ch| !match_function.call(ch))
-        } else {
-            match_function
-        })
-    }
-
-    fn try_from_set_item(item: ClassSetItem, negated: bool) -> Result<MatchFn> {
+    fn try_from((item, negated): (&ClassSetItem, bool)) -> Result<Self> {
         let match_function = match item {
             ClassSetItem::Empty(_) => MatchFn::new(|_| false),
-            ClassSetItem::Literal(ref l) => Self::try_from_literal(l)?,
+            ClassSetItem::Literal(ref l) => l.try_into()?,
             ClassSetItem::Range(ref r) => {
                 let ClassSetRange {
                     ref start, ref end, ..
@@ -249,10 +267,10 @@ impl MatchFunction {
                     match_function
                 }
             }
-            ClassSetItem::Unicode(ref c) => Self::try_from_class_unicode(c.clone())?,
-            ClassSetItem::Perl(ref c) => Self::try_from_class_perl(c.clone())?,
-            ClassSetItem::Bracketed(ref c) => Self::try_from_class_bracketed(*c.clone())?,
-            ClassSetItem::Union(ref c) => Self::try_from_class_set_union(c.clone())?,
+            ClassSetItem::Unicode(ref c) => c.try_into()?,
+            ClassSetItem::Perl(ref c) => c.try_into()?,
+            ClassSetItem::Bracketed(ref c) => c.as_ref().try_into()?,
+            ClassSetItem::Union(ref c) => c.try_into()?,
         };
         Ok(if negated {
             MatchFn::new(move |ch| !match_function.call(ch))
@@ -260,22 +278,31 @@ impl MatchFunction {
             match_function
         })
     }
-    fn try_from_literal(l: &Literal) -> Result<MatchFn> {
-        let Literal {
-            ref c, ref kind, ..
-        } = *l;
-        let c = *c;
-        if c == '.' && *kind == regex_syntax::ast::LiteralKind::Verbatim {
-            Ok(MatchFn::new(|ch| ch != '\n' && ch != '\r'))
-        } else {
-            Ok(MatchFn::new(move |ch| ch == c))
-        }
-    }
 }
 
-impl std::fmt::Debug for MatchFunction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "MatchFunction")
+impl TryFrom<(&ClassSetBinaryOp, bool)> for MatchFn {
+    type Error = ScnrError;
+
+    fn try_from((bin_op, negated): (&ClassSetBinaryOp, bool)) -> Result<Self> {
+        let ClassSetBinaryOp { kind, lhs, rhs, .. } = bin_op;
+        let lhs: MatchFn = lhs.as_ref().try_into()?;
+        let rhs: MatchFn = rhs.as_ref().try_into()?;
+        let match_function = match kind {
+            ClassSetBinaryOpKind::Intersection => {
+                MatchFn::new(move |ch| lhs.call(ch) && rhs.call(ch))
+            }
+            ClassSetBinaryOpKind::Difference => {
+                MatchFn::new(move |ch| lhs.call(ch) && !rhs.call(ch))
+            }
+            ClassSetBinaryOpKind::SymmetricDifference => {
+                MatchFn::new(move |ch| lhs.call(ch) != rhs.call(ch))
+            }
+        };
+        Ok(if negated {
+            MatchFn::new(move |ch| !match_function.call(ch))
+        } else {
+            match_function
+        })
     }
 }
 
@@ -295,21 +322,27 @@ impl TryFrom<&Ast> for MatchFunction {
             Ast::Literal(ref l) => {
                 // A literal AST matches a single character.
                 MatchFunction {
-                    match_fn: MatchFunction::try_from_literal(l)?,
+                    match_fn: l.as_ref().try_into()?,
                 }
             }
             Ast::ClassUnicode(ref c) => Self {
-                match_fn: Self::try_from_class_unicode(*c.clone())?,
+                match_fn: c.as_ref().try_into()?,
             },
             Ast::ClassPerl(ref c) => Self {
-                match_fn: Self::try_from_class_perl(*c.clone())?,
+                match_fn: c.as_ref().try_into()?,
             },
             Ast::ClassBracketed(ref c) => Self {
-                match_fn: Self::try_from_class_bracketed(*c.clone())?,
+                match_fn: c.as_ref().try_into()?,
             },
             _ => return Err(unsupported!(format!("{:#?}", ast))),
         };
         Ok(match_function)
+    }
+}
+
+impl std::fmt::Debug for MatchFunction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "MatchFunction")
     }
 }
 
