@@ -36,6 +36,9 @@ impl ScannerNfaImpl {
         }
     }
 
+    /// Creates a function that matches a character against a character class.
+    /// Used in tests only.
+    #[allow(dead_code)]
     pub(crate) fn create_match_char_class(
         &self,
     ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
@@ -196,14 +199,13 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
             )?;
             compiled_scanner_modes.push(compiled_scanner_mode);
         }
-        let mut me = Self {
+        let match_char_class = Arc::new(character_class_registry.create_match_char_class()?);
+        Ok(Self {
             character_classes: Arc::new(character_class_registry),
             scanner_modes: compiled_scanner_modes,
-            match_char_class: Arc::new(|_, _| false),
+            match_char_class,
             current_mode: 0,
-        };
-        me.match_char_class = Arc::new(Self::create_match_char_class(&me)?);
-        Ok(me)
+        })
     }
 }
 
