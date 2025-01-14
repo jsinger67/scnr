@@ -31,7 +31,7 @@ impl ScannerMode {
     ///     their token type numbers.
     /// * `mode_transitions` - The transitions between the scanner modes triggered by a token type
     ///     number. It is a vector of tuples of the token type numbers and the new scanner mode
-    ///     index. The entries should be are sorted by token type number.
+    ///     index. The entries should be sorted by token type number.
     ///     The scanner mode index is the index of the scanner mode in the scanner mode vector of
     ///     the scanner and is determined by the order of the insertions of scanner modes into the
     ///     scanner.
