@@ -78,7 +78,9 @@ impl SimpleScannerBuilder {
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        vec![self.scanner_mode].try_into()
+        Ok(Scanner {
+            inner: SCANNER_CACHE.write().unwrap().get(&[self.scanner_mode])?,
+        })
     }
 }
 
