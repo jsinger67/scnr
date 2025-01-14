@@ -26,8 +26,10 @@ new minor version numbers. Please note that this is no version handling covered 
     creation step
     * Each `Nfa` contains a `Pattern` now instead of a plain `String` to have terminal ids and
     optional lookahead data available
-    * Two public methods on the `Scanner` struct have changed their arguments, thus this release
-    is potentially breaking
+    * Introduced a `ScannerCache` that saves time when the same scanner is built multiple times
+    during the lifetime of a parser process
+- Two public methods on the `Scanner` struct have changed their arguments, thus this release is
+    potentially breaking
 
 ## 0.6.0 - 2024-12-14
 

@@ -1,4 +1,6 @@
-use crate::{scanner::Scanner, scanner_mode::ScannerMode, Pattern, Result};
+use crate::{
+    internal::SCANNER_CACHE, scanner::Scanner, scanner_mode::ScannerMode, Pattern, Result,
+};
 
 /// A builder for creating a scanner.
 #[derive(Debug, Clone, Default)]
@@ -46,7 +48,9 @@ impl ScannerBuilder {
 
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
-        self.scanner_modes.try_into()
+        Ok(Scanner {
+            inner: SCANNER_CACHE.write().unwrap().get(&self.scanner_modes)?,
+        })
     }
 }
 

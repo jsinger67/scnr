@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 /// A scanner mode that can be used to scan specific parts of the input.
 /// It has a name and a set of patterns that are valid token types in this mode.
 /// The scanner mode can also have transitions to other scanner modes triggered by a token type.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct ScannerMode {
     /// The name of the scanner mode.
     pub(crate) name: String,

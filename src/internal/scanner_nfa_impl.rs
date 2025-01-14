@@ -209,6 +209,28 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
     }
 }
 
+impl TryFrom<&[ScannerMode]> for ScannerNfaImpl {
+    type Error = crate::ScnrError;
+    fn try_from(scanner_modes: &[ScannerMode]) -> Result<Self> {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let mut compiled_scanner_modes = Vec::with_capacity(scanner_modes.len());
+        for scanner_mode in scanner_modes {
+            let compiled_scanner_mode = CompiledScannerMode::try_from_scanner_mode(
+                scanner_mode.clone(),
+                &mut character_class_registry,
+            )?;
+            compiled_scanner_modes.push(compiled_scanner_mode);
+        }
+        let match_char_class = Arc::new(character_class_registry.create_match_char_class()?);
+        Ok(Self {
+            character_classes: Arc::new(character_class_registry),
+            scanner_modes: compiled_scanner_modes,
+            match_char_class,
+            current_mode: 0,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
