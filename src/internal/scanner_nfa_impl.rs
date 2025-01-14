@@ -57,7 +57,7 @@ impl ScannerNfaImpl {
         input: &str,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        if let Some(matched) = self.peek_from(input, char_indices.clone()) {
+        if let Some(matched) = self.peek_from(input, char_indices) {
             self.execute_possible_mode_switch(&matched);
             return Some(matched);
         }
@@ -81,26 +81,18 @@ impl ScannerNfaImpl {
     ) -> Option<crate::Match> {
         let nfa = &mut self.scanner_modes[self.current_mode].nfa;
 
-        let cloned_char_indices = char_indices.clone();
-        // We clone the char_indices iterator for each NFA.
-        if let Some(matched) =
-            nfa.find_from(input, cloned_char_indices.clone(), &*self.match_char_class)
-        {
-            let mut iter = char_indices.clone();
-            for _ in 0..matched.len() {
-                iter.next();
-            }
-            if matched.is_empty() {
-                panic!(
-                    r#"
+        if let Some(matched) = nfa.find_from(input, char_indices, &*self.match_char_class) {
+            debug_assert!(
+                !matched.is_empty(),
+                r#"
     An empty token was matched. This leads to an infinite loop.
-    Avoid regexes that match empty tokens.
-    Please, check regex {} for token type {}"#,
-                    nfa.pattern((matched.token_type() as TerminalIDBase).into())
-                        .escape_default(),
-                    matched.token_type()
-                );
-            }
+    It is therefore necessary to avoid regexes that can match empty tokens.
+    Please, check regex '{}' for token type {} in scanner mode {}"#,
+                nfa.pattern((matched.token_type() as TerminalIDBase).into())
+                    .escape_default(),
+                matched.token_type(),
+                self.current_mode
+            );
             return Some(matched);
         }
         None
