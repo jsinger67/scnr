@@ -271,7 +271,7 @@ impl From<Nfa> for CompiledNfa {
         // The transitions of the CompiledNfa.
         let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
         for _ in 0..state_map.len() {
-            states.push(StateData::default());
+            states.push(StateData::new());
         }
         for (from, cc, to) in transitions {
             states[from].transitions.push((cc, to));
@@ -343,7 +343,7 @@ impl From<MultiPatternNfa> for CompiledNfa {
         // The transitions of the CompiledNfa.
         let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
         for _ in 0..state_map.len() {
-            states.push(StateData::default());
+            states.push(StateData::new());
         }
         for (from, cc, to) in transitions {
             states[from].transitions.push((cc, to));
@@ -388,6 +388,16 @@ pub(crate) struct StateData {
     /// A list of transitions from this state.
     /// The state ids are numbers of sets of states.
     pub(crate) transitions: Vec<(CharClassID, StateSetID)>,
+}
+
+impl StateData {
+    pub(crate) fn new() -> Self {
+        Self {
+            // Most states have only one or two transitions.
+            // Only the start state has many transitions.
+            transitions: Vec::with_capacity(2),
+        }
+    }
 }
 
 impl std::fmt::Display for StateData {
@@ -582,7 +592,7 @@ mod tests {
     /// A test that creates a CompiledNfa from a multi-pattern NFA and writes the dot files
     /// to the target directory.
     #[test]
-    fn test_multi_pattern_nfa() {
+    fn test_multi_pattern_nfa_veryl() {
         init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
         let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
@@ -600,5 +610,23 @@ mod tests {
         println!("{}", compiled_nfa);
         assert!(compiled_nfa.lookaheads.contains_key(&20.into()));
         compiled_nfa_render_to!(&compiled_nfa, "Veryl", &character_class_registry);
+    }
+
+    #[test]
+    fn test_multi_pattern_nfa_parol() {
+        init();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.json");
+        let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let compiled_nfa = CompiledNfa::try_from_patterns(
+            &scanner_modes[0].patterns,
+            &mut character_class_registry,
+        )
+        .unwrap();
+        assert_eq!(compiled_nfa.patterns.len(), 1);
+        assert_eq!(compiled_nfa.lookaheads.len(), 0);
+        println!("{}", compiled_nfa);
+        compiled_nfa_render_to!(&compiled_nfa, "Parol", &character_class_registry);
     }
 }
