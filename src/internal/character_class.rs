@@ -33,6 +33,12 @@ impl std::fmt::Debug for CharacterClass {
     }
 }
 
+impl std::fmt::Display for CharacterClass {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "#{} '{}'", self.id, self.ast)
+    }
+}
+
 impl std::hash::Hash for CharacterClass {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.id.hash(state);

@@ -80,3 +80,17 @@ impl CharacterClassRegistry {
         }))
     }
 }
+
+impl std::fmt::Display for CharacterClassRegistry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CharacterClassRegistry {{ len: {} }}",
+            self.character_classes.len()
+        )?;
+        for cc in &self.character_classes {
+            write!(f, "\n  {}", cc)?;
+        }
+        Ok(())
+    }
+}

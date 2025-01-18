@@ -413,6 +413,7 @@ impl std::fmt::Display for StateData {
 mod tests {
     use std::{
         fs,
+        io::Write,
         sync::{LazyLock, Once},
     };
 
@@ -628,5 +629,26 @@ mod tests {
         assert_eq!(compiled_nfa.lookaheads.len(), 0);
         println!("{}", compiled_nfa);
         compiled_nfa_render_to!(&compiled_nfa, "Parol", &character_class_registry);
+    }
+
+    #[test]
+    fn test_character_class_registry_data() {
+        init();
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
+        let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
+        assert!(scanner_modes[0].patterns[17].lookahead().is_some());
+        assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let _compiled_nfa = CompiledNfa::try_from_patterns(
+            &scanner_modes[0].patterns,
+            &mut character_class_registry,
+        )
+        .unwrap();
+        // Write the result of Display of the character class registry to a file for inspection.
+        let mut f =
+            std::fs::File::create(format!("{}/CharacterClassRegistry.txt", TARGET_FOLDER)).unwrap();
+        writeln!(f, "Character classes deduced from veryl_modes.json").unwrap();
+        writeln!(f, "{}", character_class_registry).unwrap();
     }
 }
