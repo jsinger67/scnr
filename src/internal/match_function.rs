@@ -313,15 +313,15 @@ impl TryFrom<&Ast> for MatchFunction {
         let match_function = match ast {
             Ast::Empty(_) => {
                 // An empty AST matches everything.
-                MatchFunction::new(|_| true)
+                Self::new(|_| true)
             }
             Ast::Dot(_) => {
                 // A dot AST matches any character except newline.
-                MatchFunction::new(|ch| ch != '\n' && ch != '\r')
+                Self::new(|ch| ch != '\n' && ch != '\r')
             }
             Ast::Literal(ref l) => {
                 // A literal AST matches a single character.
-                MatchFunction {
+                Self {
                     match_fn: l.as_ref().try_into()?,
                 }
             }
