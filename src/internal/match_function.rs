@@ -59,6 +59,7 @@ impl MatchFunction {
 impl TryFrom<&Literal> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(l: &Literal) -> Result<Self> {
         let Literal {
             ref c, ref kind, ..
@@ -75,6 +76,7 @@ impl TryFrom<&Literal> for MatchFn {
 impl TryFrom<&ClassSetUnion> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(union: &ClassSetUnion) -> Result<Self> {
         union
             .items
@@ -90,6 +92,7 @@ impl TryFrom<&ClassSetUnion> for MatchFn {
 impl TryFrom<&ClassBracketed> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(bracketed: &ClassBracketed) -> Result<Self> {
         let negated = bracketed.negated;
         match &bracketed.kind {
@@ -102,6 +105,7 @@ impl TryFrom<&ClassBracketed> for MatchFn {
 impl TryFrom<&ClassUnicode> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(unicode: &ClassUnicode) -> Result<Self> {
         let kind = unicode.kind.clone();
         let match_function = match kind {
@@ -192,6 +196,7 @@ impl TryFrom<&ClassUnicode> for MatchFn {
 impl TryFrom<&ClassPerl> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(perl: &ClassPerl) -> Result<Self> {
         let ClassPerl { negated, kind, .. } = perl;
         let match_function = match kind {
@@ -212,6 +217,7 @@ impl TryFrom<&ClassPerl> for MatchFn {
 impl TryFrom<&ClassSet> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(set: &ClassSet) -> Result<Self> {
         let negated = false;
         match set {
@@ -224,6 +230,7 @@ impl TryFrom<&ClassSet> for MatchFn {
 impl TryFrom<(&ClassSetItem, bool)> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from((item, negated): (&ClassSetItem, bool)) -> Result<Self> {
         let match_function = match item {
             ClassSetItem::Empty(_) => MatchFn::new(|_| false),
@@ -283,6 +290,7 @@ impl TryFrom<(&ClassSetItem, bool)> for MatchFn {
 impl TryFrom<(&ClassSetBinaryOp, bool)> for MatchFn {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from((bin_op, negated): (&ClassSetBinaryOp, bool)) -> Result<Self> {
         let ClassSetBinaryOp { kind, lhs, rhs, .. } = bin_op;
         let lhs: MatchFn = lhs.as_ref().try_into()?;
@@ -309,6 +317,7 @@ impl TryFrom<(&ClassSetBinaryOp, bool)> for MatchFn {
 impl TryFrom<&Ast> for MatchFunction {
     type Error = ScnrError;
 
+    #[inline(always)]
     fn try_from(ast: &Ast) -> Result<Self> {
         let match_function = match ast {
             Ast::Empty(_) => {
