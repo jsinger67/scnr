@@ -1,6 +1,6 @@
 @startuml
 
-title Scnr version 0.6.0
+title Scnr version 0.7.0
 
 interface std::iter::Iterator<<trait>> {
     + next(&mut self) -> Option<Self::Item>
@@ -156,6 +156,13 @@ package internal {
         + log_compiled_automata_as_dot(&self, modes: &[ScannerMode]) -> Result<()>
         + generate_compiled_automata_as_dot(&self, modes: &[ScannerMode], target_folder: &Path, ) -> Result<()>
     }
+    struct ScannerCache {
+    }
+    object SCANNER_CACHE<<(S, #FF7700) Singleton>>
+    struct ScannerCacheEntry<<tuple>> {
+        - modes: Vec<ScannerMode>
+        - nfa: ScannerNfaImpl
+    }
     struct CharacterClassRegistry {
     }
     struct CharacterClass {
@@ -184,9 +191,11 @@ package internal {
         ~ transitions: Vec<(CharClassID, StateSetID)>,
     }
     struct Nfa {
-        ~ pattern: String,
         ~ start_state: StateID,
         ~ end_state: StateID,
+    }
+    struct MultiPatternNfa {
+        ~ nfas: Vec<Nfa>,
     }
     struct EpsilonTransition {
         ~ target_state: StateID,
@@ -205,9 +214,16 @@ package internal {
 
     CharacterClass *--> ComparableAst: ~ ast
 
+    ScannerCache *--> "*" ScannerCacheEntry: ~ cache
+
     ComparableAst *--> Ast: ~ ast
 
     Nfa *--> "*" NfaState: ~ states
+    Nfa *--> "1" Pattern: ~ pattern
+
+    MultiPatternNfa *--> "*" Pattern: ~ patterns
+    MultiPatternNfa *--> "*" EpsilonTransition: ~ start_transitions
+    MultiPatternNfa *--> "*" Nfa: ~ nfas
 
     NfaTransition *--> CharacterTransition: ~ transition
 
@@ -219,6 +235,7 @@ package internal {
 
     CompiledNfa *--> "*" StateData: ~ states
     CompiledNfa "Option" *--> CompiledLookahead: ~ lookahead
+    ScannerCache <-- SCANNER_CACHE: + instance_of
 
 }
 
@@ -236,6 +253,7 @@ MatchExt *--> Span: - span
 
 ScannerBuilder *--> "1*" ScannerMode: - scanner_modes
 ScannerBuilder .> Scanner: build()
+ScannerBuilder ...> SCANNER_CACHE: uses
 
 Scanner *--> internal.ScannerNfaImpl: - inner
 Scanner -|> ScannerModeSwitcher: implements
