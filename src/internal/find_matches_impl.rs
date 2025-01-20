@@ -44,6 +44,7 @@ impl<'h> FindMatchesImpl<'h> {
     /// Sets an offset to the current position of the scanner. This offset is added to the start
     /// position of each match.
     pub(crate) fn with_offset(mut self, offset: usize) -> Self {
+        trace!("Set offset to {}", offset);
         // Split the input a byte position `offset` and create a new char_indices iterator.
         self.char_indices = self.input[offset..].char_indices();
 
@@ -96,6 +97,9 @@ impl<'h> FindMatchesImpl<'h> {
             } else if let Some((i, c)) = self.char_indices.next() {
                 self.record_line_offset(i + self.offset, c);
             } else {
+                // The iterator is exhausted.
+                // We should update the line offsets with the last character of the haystack.
+                self.record_line_offset(self.last_position + self.offset, '\0');
                 break;
             }
         }
