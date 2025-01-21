@@ -17,6 +17,14 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
+## 0.7.1 - 2025-01-21
+
+- Handle iterator exhaustion in FindMatchesImpl as partial fix for
+https://github.com/jsinger67/parol/issues/558.
+This fix updates the line offset vector when a newline character immediately precedes the end of
+input.
+
+
 ## 0.7.0 - 2025-01-17
 
 - Improved benchmarking with throughput measurements

@@ -1,6 +1,6 @@
 [package]
 name = "scnr"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2021"
 authors = ["Jörg Singer <singer.joerg@gmx.de>"]
 description = "Scanner/Lexer with regex patterns and multiple modes"
