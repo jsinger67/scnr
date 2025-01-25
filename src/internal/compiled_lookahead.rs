@@ -3,14 +3,14 @@
 use crate::{Lookahead, Result};
 
 use super::{
-    compiled_nfa::CompiledNfa, parse_regex_syntax, CharClassID, CharacterClassRegistry, Nfa,
+    compiled_dfa::CompiledDfa, parse_regex_syntax, CharClassID, CharacterClassRegistry, Nfa,
 };
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledLookahead {
-    /// The compiled NFA for the lookahead.
-    /// We need a box to break the cycle between CompiledNfa and CompiledLookahead.
-    pub(crate) nfa: Box<CompiledNfa>,
+    /// The compiled DFA for the lookahead.
+    /// We need a box to break the cycle between CompiledDfa and CompiledLookahead.
+    pub(crate) nfa: Box<CompiledDfa>,
     /// If the lookahead is positive or negative.
     pub(crate) is_positive: bool,
 }

@@ -8,19 +8,19 @@ use super::{
     compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry, TerminalIDBase,
 };
 
-/// ScannerNfaImpl instances are always created by the Scanner::try_new method and of course by
+/// ScannerImpl instances are always created by the Scanner::try_new method and of course by
 /// the clone method.
 #[derive(Clone)]
-pub(crate) struct ScannerNfaImpl {
+pub(crate) struct ScannerImpl {
     pub(crate) character_classes: Arc<CharacterClassRegistry>,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     // The function used to match characters against character classes.
     pub(crate) match_char_class: Arc<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>,
-    // The current mode is private and thereby makes the free creation of ScannerNfaImpl instances
+    // The current mode is private and thereby makes the free creation of ScannerImpl instances
     // impossible.
     current_mode: usize,
 }
-impl ScannerNfaImpl {
+impl ScannerImpl {
     /// Executes a possible mode switch if a transition is defined for the token type found.
     #[inline]
     fn execute_possible_mode_switch(&mut self, current_match: &Match) {
@@ -111,7 +111,7 @@ impl ScannerNfaImpl {
             debug!("Compiled NFA: Mode {} \n{}", i, {
                 let mut cursor = std::io::Cursor::new(Vec::new());
                 let title = format!("Compiled NFA {}", scanner_mode.name);
-                super::dot::compiled_nfa_render(
+                super::dot::compiled_dfa_render(
                     &scanner_mode.nfa,
                     &title,
                     &self.character_classes,
@@ -143,7 +143,7 @@ impl ScannerNfaImpl {
                 scanner_mode.name
             );
             let mut file = File::create(file_name)?;
-            super::dot::compiled_nfa_render(
+            super::dot::compiled_dfa_render(
                 &scanner_mode.nfa,
                 &title,
                 &self.character_classes,
@@ -154,7 +154,7 @@ impl ScannerNfaImpl {
     }
 }
 
-impl ScannerModeSwitcher for ScannerNfaImpl {
+impl ScannerModeSwitcher for ScannerImpl {
     fn mode_name(&self, index: usize) -> Option<&str> {
         self.scanner_modes.get(index).map(|mode| mode.name.as_str())
     }
@@ -170,16 +170,16 @@ impl ScannerModeSwitcher for ScannerNfaImpl {
     }
 }
 
-impl std::fmt::Debug for ScannerNfaImpl {
+impl std::fmt::Debug for ScannerImpl {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("ScannerNfaImpl")
+        f.debug_struct("ScannerImpl")
             .field("character_classes", &self.character_classes)
             .field("scanner_modes", &self.scanner_modes)
             .finish()
     }
 }
 
-impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
+impl TryFrom<Vec<ScannerMode>> for ScannerImpl {
     type Error = crate::ScnrError;
     fn try_from(scanner_modes: Vec<ScannerMode>) -> Result<Self> {
         let mut character_class_registry = CharacterClassRegistry::new();
@@ -201,7 +201,7 @@ impl TryFrom<Vec<ScannerMode>> for ScannerNfaImpl {
     }
 }
 
-impl TryFrom<&[ScannerMode]> for ScannerNfaImpl {
+impl TryFrom<&[ScannerMode]> for ScannerImpl {
     type Error = crate::ScnrError;
     fn try_from(scanner_modes: &[ScannerMode]) -> Result<Self> {
         let mut character_class_registry = CharacterClassRegistry::new();
@@ -253,7 +253,7 @@ mod tests {
             ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
             ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
         ];
-        let scanner_impl: ScannerNfaImpl = scanner_modes.try_into().unwrap();
+        let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         // assert_eq!(scanner_impl.character_classes.len(), 2);
         assert_eq!(scanner_impl.scanner_modes.len(), 2);
     }
@@ -265,7 +265,7 @@ mod tests {
             ScannerMode::new("mode1", vec![Pattern::new("a".to_string(), 0)], vec![]),
             ScannerMode::new("mode2", vec![Pattern::new("b".to_string(), 1)], vec![]),
         ];
-        let scanner_impl: ScannerNfaImpl = scanner_modes.try_into().unwrap();
+        let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         let match_char_class = scanner_impl.create_match_char_class().unwrap();
         assert!(match_char_class((0).into(), 'a'));
         assert!(!match_char_class((0).into(), 'b'));
@@ -284,7 +284,7 @@ mod tests {
         let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)
             .unwrap_or_else(|e| panic!("**** Failed to read json file {path}: {e}"));
 
-        let scanner_impl: ScannerNfaImpl = scanner_modes.clone().try_into().unwrap();
+        let scanner_impl: ScannerImpl = scanner_modes.clone().try_into().unwrap();
 
         // Generate the compiled NFAs as dot files.
         scanner_impl

@@ -2,13 +2,13 @@ use std::{fmt::Debug, path::Path};
 
 use log::trace;
 
-use crate::{internal::ScannerNfaImpl, FindMatches, Result, ScannerMode};
+use crate::{internal::ScannerImpl, FindMatches, Result, ScannerMode};
 
 /// A trait to switch between scanner modes.
 ///
 /// This trait is used to switch between different scanner modes from a parser's perspective.
-/// The parser can set the current scanner mode to switch to a different set of DFAs resp. NFAs, for
-/// short called Finite State Machines, FSMs.
+/// The parser can set the current scanner mode to switch to a different set of Finite State
+/// Machines, FSMs.
 /// Usually, the scanner mode is changed by the scanner itself based on the transitions defined
 /// in the active scanner mode.
 ///
@@ -50,9 +50,9 @@ pub trait ScannerModeSwitcher {
 }
 
 /// A Scanner.
-/// It consists of multiple DFAs resp. NFAs that are used to search for matches.
+/// It consists of multiple DFAs that are used to search for matches.
 ///
-/// Each NFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
+/// Each DFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
 /// All these FSMs are advanced in parallel to search for matches.
 /// It further constists of at least one scanner mode. Scanners support multiple scanner modes.
 /// This feature is known from Flex as *Start conditions* and provides more
@@ -65,7 +65,7 @@ pub trait ScannerModeSwitcher {
 /// `INITIAL`.
 #[derive(Debug)]
 pub struct Scanner {
-    pub(crate) inner: ScannerNfaImpl,
+    pub(crate) inner: ScannerImpl,
 }
 
 impl Scanner {
@@ -260,8 +260,6 @@ mod tests {
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
             expected_match: Some("aaaaaaaaaaaaaaaaaaaaaaaaaaab"),
         },
-        // The following test case is only applicable for the NFA.
-        // The NFA is able to handle this case but needs a view seconds to compile the automaton.
         TestData {
             pattern: r"a{5}{5}{5}{5}{5}{5}*b",
             input: "aaaaaaaaaaaaaaaaaaaaaaaaaaab",

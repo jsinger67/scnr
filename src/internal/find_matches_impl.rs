@@ -2,12 +2,12 @@ use log::trace;
 
 use crate::{Match, PeekResult, Position, ScannerModeSwitcher};
 
-use super::ScannerNfaImpl;
+use super::ScannerImpl;
 
 /// An iterator over all non-overlapping matches.
 pub(crate) struct FindMatchesImpl<'h> {
     // The scanner used to find matches.
-    scanner_impl: ScannerNfaImpl,
+    scanner_impl: ScannerImpl,
     // The input haystack.
     input: &'h str,
     // The char_indices iterator of the input haystack.
@@ -27,7 +27,7 @@ pub(crate) struct FindMatchesImpl<'h> {
 
 impl<'h> FindMatchesImpl<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: ScannerNfaImpl, input: &'h str) -> Self {
+    pub(crate) fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
         let mut me = Self {
             scanner_impl,
             input,

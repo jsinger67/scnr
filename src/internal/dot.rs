@@ -5,7 +5,7 @@ use std::io::Write;
 
 use dot_writer::{Attributes, DotWriter, RankDirection, Scope};
 
-use crate::internal::compiled_nfa::CompiledNfa;
+use crate::internal::compiled_dfa::CompiledDfa;
 
 use super::{nfa::Nfa, CharClassID, CharacterClassRegistry, MultiPatternNfa, StateID};
 
@@ -63,14 +63,14 @@ pub(crate) fn nfa_render<W: Write>(nfa: &Nfa, label: &str, output: &mut W) {
     }
 }
 
-fn render_compiled_nfa(
-    compiled_nfa: &CompiledNfa,
+fn render_compiled_dfa(
+    compiled_dfa: &CompiledDfa,
     node_prefix: &str,
     character_class_registry: &CharacterClassRegistry,
     graph: &mut Scope,
 ) {
     // Render the states of the NFA
-    for id in 0..compiled_nfa.states.len() {
+    for id in 0..compiled_dfa.states.len() {
         let node_name = format!("\"{}{}\"", node_prefix, id);
         let mut source_node = graph.node_named(&node_name);
         if id == 0 {
@@ -80,18 +80,18 @@ fn render_compiled_nfa(
                 .set_color(dot_writer::Color::Blue)
                 .set_pen_width(3.0);
             source_node.set_label(&id.to_string());
-        } else if compiled_nfa.end_states[id].0 {
+        } else if compiled_dfa.end_states[id].0 {
             source_node
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Red)
                 .set_pen_width(3.0);
-            source_node.set_label(&format!("{} T{}", id, compiled_nfa.end_states[id].1));
+            source_node.set_label(&format!("{} T{}", id, compiled_dfa.end_states[id].1));
         } else {
             source_node.set_label(&id.to_string());
         }
     }
     // Render the transitions of the NFA
-    for (id, state) in compiled_nfa.states.iter().enumerate() {
+    for (id, state) in compiled_dfa.states.iter().enumerate() {
         for (cc, next) in state.transitions.iter() {
             // Label the edge with the character class used to transition to the target state.
             graph
@@ -112,9 +112,9 @@ fn render_compiled_nfa(
     }
 }
 
-// Render a compiled NFA
-pub(crate) fn compiled_nfa_render<W: Write>(
-    compiled_nfa: &CompiledNfa,
+// Render a compiled DFA
+pub(crate) fn compiled_dfa_render<W: Write>(
+    compiled_dfa: &CompiledDfa,
     label: &str,
     character_class_registry: &CharacterClassRegistry,
     output: &mut W,
@@ -127,16 +127,16 @@ pub(crate) fn compiled_nfa_render<W: Write>(
             format!(
                 "{}: {}...",
                 label,
-                compiled_nfa.pattern(0.into()).escape_default()
+                compiled_dfa.pattern(0.into()).escape_default()
             )
             .as_str(),
         )
         .set_rank_direction(RankDirection::LeftRight);
 
-    render_compiled_nfa(compiled_nfa, "", character_class_registry, &mut digraph);
+    render_compiled_dfa(compiled_dfa, "", character_class_registry, &mut digraph);
 
-    // Render the lookaheads of the NFA each into a separate cluster
-    for (terminal_id, lookahead) in compiled_nfa.lookaheads.iter() {
+    // Render the lookaheads of the DFA each into a separate cluster
+    for (terminal_id, lookahead) in compiled_dfa.lookaheads.iter() {
         let mut cluster = digraph.cluster();
         cluster.set_label(&format!(
             "LA for T{}({})",
@@ -144,7 +144,7 @@ pub(crate) fn compiled_nfa_render<W: Write>(
             if lookahead.is_positive { "Pos" } else { "Neg" }
         ));
         let node_prefix = format!("{}_", terminal_id);
-        render_compiled_nfa(
+        render_compiled_dfa(
             &lookahead.nfa,
             &node_prefix,
             character_class_registry,

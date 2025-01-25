@@ -12,44 +12,45 @@ use super::{
     MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
-/// A compiled NFA.
-/// It represents the NFA in a way that is optimized for matching.
+/// A compiled DFA.
+/// It represents the DFA in a way that is optimized for matching.
 ///
-/// The data is the same as that of a non-optimized DFA, but the transitions are considered
-/// non-deterministic because they involve overlapping character classes. This allows a transition
-/// to multiple states when reading a single character if that character belongs to multiple
-/// character classes.
+/// Although the data represent a DFA, i.e. it has no epsilon transitions, the transitions are
+/// considered non-deterministic because they involve overlapping character classes. This allows a
+/// transition to multiple states when reading a single character if that character belongs to
+/// multiple character classes.
+/// See implementation of the [find_from] method.
 ///
 /// The start state is by design always 0.
 #[derive(Debug, Clone)]
-pub(crate) struct CompiledNfa {
-    /// The pattern(s) of the NFA. Used for debugging purposes.
+pub(crate) struct CompiledDfa {
+    /// The pattern(s) of the DFA. Used for debugging purposes.
     pub(crate) patterns: Vec<String>,
-    /// The states of the NFA.
+    /// The states of the DFA.
     pub(crate) states: Vec<StateData>,
-    /// The accepting states of the NFA are represented by a vector of booleans and terminal ids.
+    /// The accepting states of the DFA are represented by a vector of booleans and terminal ids.
     /// The index of the vector is the state id.
     /// If the value is true, the state is an accepting state.
     /// This is an optimization to avoid the need to search the end states during the simulation.
     pub(crate) end_states: Vec<(bool, TerminalID)>,
-    /// An optional lookahead that is used to check if the NFA should match the input.
+    /// An optional lookahead that is used to check if the DFA should match the input.
     pub(crate) lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
 
-    /// Current and next states of the NFA. They are used during the simulation of the NFA.
+    /// Current and next states of the DFA. They are used during the simulation of the DFA.
     /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
     /// drop them again during the simulation.
     current_states: Vec<StateSetID>,
     next_states: Vec<StateSetID>,
 }
 
-impl CompiledNfa {
-    /// Simulates the NFA on the given input.
+impl CompiledDfa {
+    /// Simulates the DFA on the given input.
     /// Returns a match starting at the current position. No try on next character is done.
     /// The caller must do that.
     ///
     /// If no match is found, None is returned.
     ///
-    /// We use a non-recursive implementation of the NFA simulation.
+    /// We use a non-recursive implementation of the DFA simulation.
     /// The algorithm uses a queue to store the states that are currently active.
     /// The algorithm is as follows:
     /// 1. Add the start state to the queue.
@@ -172,7 +173,7 @@ impl CompiledNfa {
         let ast = parse_regex_syntax(pattern.pattern())?;
         let mut nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         nfa.set_terminal_id(pattern.terminal_id());
-        let mut nfa: CompiledNfa = nfa.into();
+        let mut nfa: CompiledDfa = nfa.into();
         nfa.lookaheads = FxHashMap::default();
         if let Some(lookahead) = pattern.lookahead() {
             let lookahead =
@@ -188,17 +189,17 @@ impl CompiledNfa {
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
         let mp_nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
-        let mut compiled_nfa: CompiledNfa = mp_nfa.into();
+        let mut compiled_dfa: CompiledDfa = mp_nfa.into();
         // Add the lookaheads to the compiled NFA.
         for pattern in patterns.iter() {
             if let Some(lookahead) = pattern.lookahead() {
                 let lookahead =
                     CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
-                compiled_nfa
+                compiled_dfa
                     .add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
             }
         }
-        Ok(compiled_nfa)
+        Ok(compiled_dfa)
     }
 
     /// Add a lookahead for a giben terminal_id to the compiled NFA.
@@ -212,21 +213,21 @@ impl CompiledNfa {
     }
 }
 
-impl From<Nfa> for CompiledNfa {
+impl From<Nfa> for CompiledDfa {
     /// Create a dense representation of the NFA in form of match transitions between states sets.
     /// This is an equivalent algorithm to the subset construction for DFAs.
     ///
-    /// Note that the lookahead is not set in the resulting CompiledNfa. This must be done
+    /// Note that the lookahead is not set in the resulting CompiledDfa. This must be done
     /// separately because a character class registry is needed to create the lookaheads.
-    /// See [CompiledNfa::try_from_pattern].
+    /// See [CompiledDfa::try_from_pattern].
     fn from(nfa: Nfa) -> Self {
         // A temporary map to store the state ids of the sets of states.
         let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
-        // A temporary set to store the transitions of the CompiledNfa.
+        // A temporary set to store the transitions of the CompiledDfa.
         // The state ids are numbers of sets of states.
         let mut transitions: FxHashSet<(StateSetID, CharClassID, StateSetID)> =
             FxHashSet::default();
-        // The end states of the CompiledNfa are a vector of state ids and terminal ids.
+        // The end states of the CompiledDfa are a vector of state ids and terminal ids.
         let mut accepting_states: Vec<(StateSetID, usize)> = Vec::new();
         // Calculate the epsilon closure of the start state.
         let epsilon_closure: BTreeSet<StateID> =
@@ -268,7 +269,7 @@ impl From<Nfa> for CompiledNfa {
             }
         }
 
-        // The transitions of the CompiledNfa.
+        // The transitions of the CompiledDfa.
         let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
         for _ in 0..state_map.len() {
             states.push(StateData::new());
@@ -295,10 +296,10 @@ impl From<Nfa> for CompiledNfa {
     }
 }
 
-impl From<MultiPatternNfa> for CompiledNfa {
-    /// Note that the lookahead is not set in the resulting CompiledNfa. This must be done
+impl From<MultiPatternNfa> for CompiledDfa {
+    /// Note that the lookahead is not set in the resulting CompiledDfa. This must be done
     /// separately because a character class registry is needed to create the lookaheads.
-    /// See [CompiledNfa::try_from_patterns].
+    /// See [CompiledDfa::try_from_patterns].
     fn from(mp_nfa: MultiPatternNfa) -> Self {
         let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
         let mut transitions: FxHashSet<(StateSetID, CharClassID, StateSetID)> =
@@ -340,7 +341,7 @@ impl From<MultiPatternNfa> for CompiledNfa {
                 transitions.insert((old_state_id, cc, new_state_id));
             }
         }
-        // The transitions of the CompiledNfa.
+        // The transitions of the CompiledDfa.
         let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
         for _ in 0..state_map.len() {
             states.push(StateData::new());
@@ -367,7 +368,7 @@ impl From<MultiPatternNfa> for CompiledNfa {
     }
 }
 
-impl std::fmt::Display for CompiledNfa {
+impl std::fmt::Display for CompiledDfa {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Pattern: {}", self.patterns.join("|"))?;
         writeln!(f, "Start state: 0")?;
@@ -429,7 +430,7 @@ mod tests {
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/compiled_nfa_tests"
+        "/target/testout/compiled_dfa_tests"
     );
 
     fn init() {
@@ -451,14 +452,14 @@ mod tests {
         };
     }
 
-    /// A macro that simplifies the rendering of a dot file for a CompiledNfa.
-    macro_rules! compiled_nfa_render_to {
-        ($compiled_nfa:expr, $label:expr, $character_class_registry:expr) => {
+    /// A macro that simplifies the rendering of a dot file for a CompiledDfa.
+    macro_rules! compiled_dfa_render_to {
+        ($compiled_dfa:expr, $label:expr, $character_class_registry:expr) => {
             let mut f =
-                std::fs::File::create(format!("{}/{}CompiledNfa.dot", TARGET_FOLDER, $label))
+                std::fs::File::create(format!("{}/{}CompiledDfa.dot", TARGET_FOLDER, $label))
                     .unwrap();
-            $crate::internal::dot::compiled_nfa_render(
-                $compiled_nfa,
+            $crate::internal::dot::compiled_dfa_render(
+                $compiled_dfa,
                 $label,
                 $character_class_registry,
                 &mut f,
@@ -564,20 +565,20 @@ mod tests {
             let ast = parse_regex_syntax(pattern.pattern()).unwrap();
             let nfa: Nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
             nfa_render_to!(&nfa, test.name);
-            let mut compiled_nfa = CompiledNfa::from(nfa);
+            let mut compiled_dfa = CompiledDfa::from(nfa);
             assert_eq!(
-                compiled_nfa.end_states, test.end_states,
+                compiled_dfa.end_states, test.end_states,
                 "Test '{}', End states",
                 test.name
             );
-            compiled_nfa_render_to!(&compiled_nfa, test.name, &character_class_registry);
-            eprintln!("{}", compiled_nfa);
+            compiled_dfa_render_to!(&compiled_dfa, test.name, &character_class_registry);
+            eprintln!("{}", compiled_dfa);
 
             for (id, (input, expected)) in test.match_data.iter().enumerate() {
                 let char_indices = input.char_indices();
                 trace!("Matching string: {}", input);
                 let match_char_class = character_class_registry.create_match_char_class().unwrap();
-                let span = compiled_nfa.find_from(input, char_indices, &match_char_class);
+                let span = compiled_dfa.find_from(input, char_indices, &match_char_class);
                 assert_eq!(
                     span,
                     expected.map(|(start, end)| Match::new(0, Span::new(start, end))),
@@ -590,7 +591,7 @@ mod tests {
         }
     }
 
-    /// A test that creates a CompiledNfa from a multi-pattern NFA and writes the dot files
+    /// A test that creates a CompiledDfa from a multi-pattern NFA and writes the dot files
     /// to the target directory.
     #[test]
     fn test_multi_pattern_nfa_veryl() {
@@ -601,16 +602,16 @@ mod tests {
         assert!(scanner_modes[0].patterns[17].lookahead().is_some());
         assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
         let mut character_class_registry = CharacterClassRegistry::new();
-        let compiled_nfa = CompiledNfa::try_from_patterns(
+        let compiled_dfa = CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )
         .unwrap();
-        assert_eq!(compiled_nfa.patterns.len(), 1);
-        assert_eq!(compiled_nfa.lookaheads.len(), 1);
-        println!("{}", compiled_nfa);
-        assert!(compiled_nfa.lookaheads.contains_key(&20.into()));
-        compiled_nfa_render_to!(&compiled_nfa, "Veryl", &character_class_registry);
+        assert_eq!(compiled_dfa.patterns.len(), 1);
+        assert_eq!(compiled_dfa.lookaheads.len(), 1);
+        println!("{}", compiled_dfa);
+        assert!(compiled_dfa.lookaheads.contains_key(&20.into()));
+        compiled_dfa_render_to!(&compiled_dfa, "Veryl", &character_class_registry);
     }
 
     #[test]
@@ -620,15 +621,15 @@ mod tests {
         let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
         let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
         let mut character_class_registry = CharacterClassRegistry::new();
-        let compiled_nfa = CompiledNfa::try_from_patterns(
+        let compiled_dfa = CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )
         .unwrap();
-        assert_eq!(compiled_nfa.patterns.len(), 1);
-        assert_eq!(compiled_nfa.lookaheads.len(), 0);
-        println!("{}", compiled_nfa);
-        compiled_nfa_render_to!(&compiled_nfa, "Parol", &character_class_registry);
+        assert_eq!(compiled_dfa.patterns.len(), 1);
+        assert_eq!(compiled_dfa.lookaheads.len(), 0);
+        println!("{}", compiled_dfa);
+        compiled_dfa_render_to!(&compiled_dfa, "Parol", &character_class_registry);
     }
 
     #[test]
@@ -640,7 +641,7 @@ mod tests {
         assert!(scanner_modes[0].patterns[17].lookahead().is_some());
         assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
         let mut character_class_registry = CharacterClassRegistry::new();
-        let _compiled_nfa = CompiledNfa::try_from_patterns(
+        let _compiled_dfa = CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )
