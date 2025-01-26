@@ -553,6 +553,26 @@ mod tests {
                     ("0", None),
                 ],
             },
+            TestData {
+                pattern: r"a*(a|b)b*",
+                name: "MinimalMatch",
+                end_states: vec![
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (true, 0.into()),
+                    (true, 0.into()),
+                    (true, 0.into()),
+                ],
+                match_data: vec![
+                    ("a", Some((0, 1))),
+                    ("b", Some((0, 1))),
+                    ("abb", Some((0, 3))),
+                    ("bbbb", Some((0, 4))),
+                    ("aaaabbbbbc", Some((0, 9))),
+                    ("c", None),
+                    ("", None),
+                ],
+            },
         ]
     });
 
