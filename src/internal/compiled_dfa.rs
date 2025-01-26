@@ -8,8 +8,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{Match, Pattern, Result, Span};
 
 use super::{
-    ids::StateSetID, parse_regex_syntax, CharClassID, CharacterClassRegistry, CompiledLookahead,
-    MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
+    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, CharClassID, CharacterClassRegistry,
+    CompiledLookahead, MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
 /// A compiled DFA.
@@ -39,8 +39,8 @@ pub(crate) struct CompiledDfa {
     /// Current and next states of the DFA. They are used during the simulation of the DFA.
     /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
     /// drop them again during the simulation.
-    current_states: Vec<StateSetID>,
-    next_states: Vec<StateSetID>,
+    pub(crate) current_states: Vec<StateSetID>,
+    pub(crate) next_states: Vec<StateSetID>,
 }
 
 impl CompiledDfa {
@@ -285,14 +285,14 @@ impl From<Nfa> for CompiledDfa {
             end_states[state] = (true, TerminalID::new(term as TerminalIDBase));
         }
 
-        Self {
+        Minimizer::minimize(Self {
             patterns: vec![nfa.pattern.pattern().to_string()],
             states,
             end_states,
             lookaheads: FxHashMap::default(),
             current_states,
             next_states,
-        }
+        })
     }
 }
 
@@ -357,14 +357,14 @@ impl From<MultiPatternNfa> for CompiledDfa {
             end_states[state] = (true, TerminalID::new(term as TerminalIDBase));
         }
 
-        Self {
+        Minimizer::minimize(Self {
             patterns: vec![mp_nfa.patterns.iter().map(|p| p.pattern()).collect()],
             states,
             end_states,
             lookaheads: FxHashMap::default(),
             current_states,
             next_states,
-        }
+        })
     }
 }
 
@@ -484,7 +484,6 @@ mod tests {
                     (false, 0.into()),
                     (false, 0.into()),
                     (false, 0.into()),
-                    (false, 0.into()),
                     (true, 0.into()),
                 ],
                 match_data: vec![
@@ -500,15 +499,12 @@ mod tests {
                 end_states: vec![
                     (false, 0.into()),
                     (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
                     (true, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
                 ],
                 match_data: vec![
                     (r#""autumn""#, Some((0, 8))),
@@ -519,7 +515,7 @@ mod tests {
             TestData {
                 pattern: r"[a-zA-Z_]\w*",
                 name: "Identifier",
-                end_states: vec![(false, 0.into()), (true, 0.into()), (true, 0.into())],
+                end_states: vec![(false, 0.into()), (true, 0.into())],
                 match_data: vec![
                     ("_a", Some((0, 2))),
                     ("a", Some((0, 1))),
@@ -532,14 +528,7 @@ mod tests {
             TestData {
                 pattern: r"(0|1)*1(0|1)",
                 name: "SecondLastBitIs1",
-                end_states: vec![
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (true, 0.into()),
-                    (true, 0.into()),
-                ],
+                end_states: vec![(false, 0.into()), (false, 0.into()), (true, 0.into())],
                 match_data: vec![
                     ("11010", Some((0, 5))),
                     ("11011", Some((0, 5))),
@@ -556,13 +545,7 @@ mod tests {
             TestData {
                 pattern: r"a*(a|b)b*",
                 name: "MinimalMatch",
-                end_states: vec![
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (true, 0.into()),
-                    (true, 0.into()),
-                    (true, 0.into()),
-                ],
+                end_states: vec![(false, 0.into()), (true, 0.into())],
                 match_data: vec![
                     ("a", Some((0, 1))),
                     ("b", Some((0, 1))),
