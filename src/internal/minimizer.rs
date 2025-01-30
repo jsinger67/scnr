@@ -56,15 +56,10 @@ impl Minimizer {
         // The transitions of the DFA in a convenient data structure.
         let mut transitions = TransitionMap::new();
         dfa.states.iter().enumerate().for_each(|(id, state)| {
-            transitions
-                .entry((id as StateIDBase).into())
-                .or_insert_with(BTreeMap::new);
+            transitions.entry((id as StateIDBase).into()).or_default();
             for t in &state.transitions {
                 let t_of_s = transitions.get_mut(&(id as StateIDBase).into()).unwrap();
-                t_of_s
-                    .entry(t.0)
-                    .or_insert_with(Vec::new)
-                    .push(t.1.id().into());
+                t_of_s.entry(t.0).or_default().push(t.1.id().into());
                 t_of_s.get_mut(&t.0).unwrap().sort();
                 t_of_s.get_mut(&t.0).unwrap().dedup();
             }
