@@ -57,5 +57,5 @@ mod scanner_cache;
 pub(crate) use scanner_cache::SCANNER_CACHE;
 
 /// Module that provides functions and types related to NFA scanner implementations.
-pub(crate) mod scanner_nfa_impl;
-pub(crate) use scanner_nfa_impl::ScannerImpl;
+pub(crate) mod scanner_impl;
+pub(crate) use scanner_impl::ScannerImpl;
