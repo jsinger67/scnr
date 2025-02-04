@@ -444,10 +444,22 @@ mod tests {
         assert!(!match_function.call(' '));
     }
 
-    // [[:^alpha:]]  Negated ASCII character class ([^A-Za-z])
+    // [^[:alpha:]]  Negated ASCII character class ([^A-Za-z])
     #[test]
     fn test_match_function_negated_ascii_class() {
         let ast = Parser::new().parse(r"[^[:alpha:]]").unwrap();
+        let match_function = MatchFunction::try_from(&ast).unwrap();
+        assert!(!match_function.call('a'));
+        assert!(!match_function.call('A'));
+        assert!(!match_function.call('ä'));
+        assert!(match_function.call('1'));
+        assert!(match_function.call(' '));
+    }
+
+    // [[:^alpha:]]  Negated ASCII character class ([^A-Za-z])
+    #[test]
+    fn test_match_function_negated_ascii_class_2() {
+        let ast = Parser::new().parse(r"[[:^alpha:]]").unwrap();
         let match_function = MatchFunction::try_from(&ast).unwrap();
         assert!(!match_function.call('a'));
         assert!(!match_function.call('A'));

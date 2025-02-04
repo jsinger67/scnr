@@ -1,7 +1,9 @@
 use regex_syntax::ast::Ast;
 
-use super::{ids::CharClassIDBase, CharClassID, CharacterClass, ComparableAst};
-use crate::{internal::MatchFunction, Result, ScnrError};
+use super::{
+    char_matcher::CharMatcher, ids::CharClassIDBase, CharClassID, CharacterClass, ComparableAst,
+};
+use crate::{Result, ScnrError};
 
 /// CharacterClassRegistry is a registry of character classes.
 #[derive(Debug, Clone, Default)]
@@ -76,13 +78,21 @@ impl CharacterClassRegistry {
                 .iter()
                 .try_fold(Vec::new(), |mut acc, cc| {
                     // trace!("Create match function for char class {:?}", cc);
-                    let match_function: MatchFunction = cc.ast().try_into()?;
-                    acc.push(match_function);
-                    Ok::<Vec<MatchFunction>, ScnrError>(acc)
+                    // let match_function: MatchFunction = cc.ast().try_into()?;
+                    // acc.push(match_function);
+                    // Ok::<Vec<MatchFunction>, ScnrError>(acc)
+
+                    let char_matcher: CharMatcher = cc.ast().try_into()?;
+                    acc.push(char_matcher);
+                    Ok::<Vec<CharMatcher>, ScnrError>(acc)
                 })?;
         Ok(Box::new(move |char_class, c| {
             // trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
-            unsafe { match_functions.get_unchecked(char_class.as_usize()).call(c) }
+            unsafe {
+                match_functions
+                    .get_unchecked(char_class.as_usize())
+                    .matches(c)
+            }
         }))
     }
 }

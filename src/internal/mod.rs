@@ -1,3 +1,6 @@
+/// Module that provides an enum that can match a character class.
+mod char_matcher;
+
 /// Module that provides functions and types related to character classes.
 mod character_class;
 pub(crate) use character_class::CharacterClass;
@@ -34,9 +37,9 @@ pub(crate) use ids::{
     CharClassID, ScannerModeID, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
-/// Module that provides functions and types related to match functions.
-pub(crate) mod match_function;
-pub(crate) use match_function::MatchFunction;
+// Module that provides functions and types related to match functions.
+// pub(crate) mod match_function;
+// pub(crate) use match_function::MatchFunction;
 
 /// Module that provides functions and types related to DFA minimization.
 pub(crate) mod minimizer;
