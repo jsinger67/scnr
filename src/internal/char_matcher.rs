@@ -524,6 +524,7 @@ fn try_from_unicode_class(unicode: &ClassUnicode) -> Result<CharMatcher> {
     })
 }
 
+#[inline(always)]
 fn match_class_set_binary_operation(
     c: char,
     class_set_binary_op_kind: &ClassSetBinaryOpKind,
@@ -540,6 +541,7 @@ fn match_class_set_binary_operation(
     }
 }
 
+#[inline(always)]
 fn match_perl_class(c: char, kind: &ClassPerlKind) -> bool {
     match kind {
         ClassPerlKind::Digit => c.is_numeric(),
@@ -550,6 +552,7 @@ fn match_perl_class(c: char, kind: &ClassPerlKind) -> bool {
     }
 }
 
+#[inline(always)]
 fn match_ascii_class(c: char, kind: &ClassAsciiKind) -> bool {
     match kind {
         ClassAsciiKind::Alnum => c.is_alphanumeric(),
@@ -571,21 +574,7 @@ fn match_ascii_class(c: char, kind: &ClassAsciiKind) -> bool {
     }
 }
 
-fn match_negated_letter_unicode_class(c: char, ch: &UnicodeClassOneLetter) -> bool {
-    match ch {
-        // Unicode class for Letters
-        UnicodeClassOneLetter::L => !c.alpha(),
-        // Unicode class for Numbers
-        UnicodeClassOneLetter::N => !c.is_numeric(),
-        // Unicode class for Whitespace
-        UnicodeClassOneLetter::Z => !c.is_whitespace(),
-        // Unicode class Terminal_Punctuation
-        UnicodeClassOneLetter::P => !c.term(),
-        // Unicode class for Control characters
-        UnicodeClassOneLetter::C => !c.is_control(),
-    }
-}
-
+#[inline(always)]
 fn match_letter_unicode_class(c: char, ch: &UnicodeClassOneLetter) -> bool {
     match ch {
         // Unicode class for Letters
@@ -601,6 +590,23 @@ fn match_letter_unicode_class(c: char, ch: &UnicodeClassOneLetter) -> bool {
     }
 }
 
+#[inline(always)]
+fn match_negated_letter_unicode_class(c: char, ch: &UnicodeClassOneLetter) -> bool {
+    match ch {
+        // Unicode class for Letters
+        UnicodeClassOneLetter::L => !c.alpha(),
+        // Unicode class for Numbers
+        UnicodeClassOneLetter::N => !c.is_numeric(),
+        // Unicode class for Whitespace
+        UnicodeClassOneLetter::Z => !c.is_whitespace(),
+        // Unicode class Terminal_Punctuation
+        UnicodeClassOneLetter::P => !c.term(),
+        // Unicode class for Control characters
+        UnicodeClassOneLetter::C => !c.is_control(),
+    }
+}
+
+#[inline(always)]
 fn match_unicode_class(c: char, name: &UnicodeClassNames) -> bool {
     match *name {
         UnicodeClassNames::Alphabetic => c.alpha(),
