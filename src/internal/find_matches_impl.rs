@@ -44,34 +44,24 @@ impl<'h> FindMatchesImpl<'h> {
     /// Sets an offset to the current position of the scanner. This offset is added to the start
     /// position of each match.
     pub(crate) fn with_offset(mut self, offset: usize) -> Self {
-        trace!("Set offset to {}", offset);
-        // Split the input a byte position `offset` and create a new char_indices iterator.
-        self.char_indices = self.input[offset..].char_indices();
-
-        Self {
-            scanner_impl: self.scanner_impl,
-            input: self.input,
-            char_indices: self.char_indices,
-            last_position: self.last_position,
-            last_char: self.last_char,
-            line_offsets: self.line_offsets, // The line offsets are not affected by the offset because they are based on the original input.
-            offset,
-        }
+        self.set_offset(offset);
+        self
     }
 
     /// Set the offset of the char indices iterator to the given position on the current instance.
     /// The function is used to set the position of the char_indices iterator to the given position.
-    pub(crate) fn set_offset(&mut self, position: usize) {
-        trace!("Set offset to {}", position);
-        if position <= self.input.len() {
-            self.char_indices = self.input[position..].char_indices();
+    pub(crate) fn set_offset(&mut self, offset: usize) {
+        trace!("Set offset to {}", offset);
+        if offset <= self.input.len() {
+            // Split the input a byte position `offset` and create a new char_indices iterator.
+            self.char_indices = self.input[offset..].char_indices();
         } else {
             // The position is greater than the length of the haystack.
             // Take an empty slice after the haystack to create an empty char_indices iterator.
             self.char_indices = self.input[self.input.len()..self.input.len()].char_indices();
         }
         self.last_position = 0;
-        self.offset = position;
+        self.offset = offset;
     }
 
     /// Returns the next match in the haystack.
