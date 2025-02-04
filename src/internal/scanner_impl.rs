@@ -51,7 +51,6 @@ impl ScannerImpl {
 
     /// Executes a leftmost search and returns the first match that is found, if one exists.
     /// It starts the search at the position of the given CharIndices iterator.
-    /// During the search, all NFAs are tested in parallel.
     pub(crate) fn find_from(
         &mut self,
         input: &str,
@@ -79,7 +78,7 @@ impl ScannerImpl {
         input: &str,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let nfa = &mut self.scanner_modes[self.current_mode].nfa;
+        let nfa = &mut self.scanner_modes[self.current_mode].dfa;
 
         if let Some(matched) = nfa.find_from(input, char_indices, &*self.match_char_class) {
             debug_assert!(
@@ -112,7 +111,7 @@ impl ScannerImpl {
                 let mut cursor = std::io::Cursor::new(Vec::new());
                 let title = format!("Compiled NFA {}", scanner_mode.name);
                 super::dot::compiled_dfa_render(
-                    &scanner_mode.nfa,
+                    &scanner_mode.dfa,
                     &title,
                     &self.character_classes,
                     &mut cursor,
@@ -144,7 +143,7 @@ impl ScannerImpl {
             );
             let mut file = File::create(file_name)?;
             super::dot::compiled_dfa_render(
-                &scanner_mode.nfa,
+                &scanner_mode.dfa,
                 &title,
                 &self.character_classes,
                 &mut file,
