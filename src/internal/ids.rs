@@ -124,3 +124,8 @@ impl_id!(TerminalID, TerminalIDBase);
 /// of the scanner.
 pub(crate) type ScannerModeIDBase = usize;
 impl_id!(ScannerModeID, ScannerModeIDBase);
+
+/// The ID type for groups in Partions. This is the index of the group in the partition vector of
+/// the minimizer.
+pub(crate) type StateGroupIDBase = u16;
+impl_id!(StateGroupID, StateGroupIDBase);

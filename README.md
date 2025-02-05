@@ -54,7 +54,7 @@ fn main() {
 ## Guard rails
 
 * The scanners should be built quickly.
-* Scanners are based on NFAs internally.
+* Scanners are based on finite automata internally.
 * The scanners only support `&str`, i.e. patterns are of type `&str` and the input is of type
 `&str`. `scnr` focuses on programming languages rather than byte sequences.
 
@@ -114,8 +114,8 @@ The lookahead patterns denoted above as `S` are not considered as part of the ma
 
 ## Greediness of repetitions
 
-The generated scanners work with *compact NFAs* in which all repetition patterns like `*` and `+`
-match **greedily**.
+The generated scanners work with *compact DFAs* in which all repetition patterns like `*`, `+` and
+`?` match **greedily**.
 
 The `scnr` scanner generator does not directly support non-greedy quantifiers like *? or +? found in
 some other regex engines. However, you can achieve non-greedy behavior by carefully structuring your

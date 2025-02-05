@@ -17,6 +17,13 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
+## 0.7.2 - Not release yet
+
+- Refactor internal structs
+    - Refactored `CompiledNfa` to `CompiledDfa` for clarity
+    - Refactored `ScannerNfaImpl` to `ScannerImpl` for clarity
+- Minimization of the `CompiledDfa` for enhanced scanning performance
+
 ## 0.7.1 - 2025-01-21
 
 - Handle iterator exhaustion in FindMatchesImpl as partial fix for

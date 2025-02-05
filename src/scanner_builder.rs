@@ -52,6 +52,15 @@ impl ScannerBuilder {
             inner: SCANNER_CACHE.write().unwrap().get(&self.scanner_modes)?,
         })
     }
+
+    /// Builds the scanner from the scanner builder without caching it.
+    /// This is useful for testing and benchmarking purposes.
+    #[allow(dead_code)]
+    pub fn build_uncached(self) -> Result<Scanner> {
+        Ok(Scanner {
+            inner: self.scanner_modes.try_into()?,
+        })
+    }
 }
 
 /// A struct used by the [ScannerBuilder] for creating a simple scanner.

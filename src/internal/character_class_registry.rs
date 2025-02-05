@@ -62,6 +62,12 @@ impl CharacterClassRegistry {
         self.character_classes.is_empty()
     }
 
+    /// Creates a match function for the character classes in the registry.
+    ///
+    /// Safety:
+    ///     The callers ensure that the character classes in the registry are valid.
+    ///     All character classes in the registry are valid which is guaranteed by the construction
+    ///     of the registry.
     pub(crate) fn create_match_char_class(
         &self,
     ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
@@ -76,7 +82,7 @@ impl CharacterClassRegistry {
                 })?;
         Ok(Box::new(move |char_class, c| {
             // trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
-            match_functions[char_class].call(c)
+            unsafe { match_functions.get_unchecked(char_class.as_usize()).call(c) }
         }))
     }
 }

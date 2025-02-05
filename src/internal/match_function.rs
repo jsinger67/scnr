@@ -27,9 +27,11 @@ impl MatchFn {
         MatchFn(Box::new(f))
     }
 
+    /// Flatten the MatchFn to a function pointer for performance.
+    /// This is safe because MatchFn is a thin wrapper around a function pointer.
     #[inline]
-    pub(crate) fn call(&self, c: char) -> bool {
-        (self.0)(c)
+    pub(crate) fn inner(&self) -> &(dyn Fn(char) -> bool + 'static + Send + Sync) {
+        &*self.0
     }
 }
 
@@ -52,7 +54,7 @@ impl MatchFunction {
     /// Call the match function with a character.
     #[inline]
     pub(crate) fn call(&self, c: char) -> bool {
-        self.match_fn.call(c)
+        self.match_fn.inner()(c)
     }
 }
 
@@ -84,7 +86,7 @@ impl TryFrom<&ClassSetUnion> for MatchFn {
             .try_fold(MatchFn::new(|_| false), |acc, s| {
                 (s, false)
                     .try_into()
-                    .map(|f: MatchFn| MatchFn::new(move |ch| acc.call(ch) || f.call(ch)))
+                    .map(|f: MatchFn| MatchFn::new(move |ch| acc.inner()(ch) || f.inner()(ch)))
             })
     }
 }
@@ -186,7 +188,7 @@ impl TryFrom<&ClassUnicode> for MatchFn {
             }
         };
         Ok(if unicode.is_negated() {
-            MatchFn::new(move |ch| !match_function.call(ch))
+            MatchFn::new(move |ch| !match_function.inner()(ch))
         } else {
             match_function
         })
@@ -207,7 +209,7 @@ impl TryFrom<&ClassPerl> for MatchFn {
             }),
         };
         Ok(if *negated {
-            MatchFn::new(move |ch| !match_function.call(ch))
+            MatchFn::new(move |ch| !match_function.inner()(ch))
         } else {
             match_function
         })
@@ -269,7 +271,7 @@ impl TryFrom<(&ClassSetItem, bool)> for MatchFn {
                     ClassAsciiKind::Xdigit => MatchFn::new(|ch| ch.is_ascii_hexdigit()),
                 };
                 if negated {
-                    MatchFn::new(move |ch| !match_function.call(ch))
+                    MatchFn::new(move |ch| !match_function.inner()(ch))
                 } else {
                     match_function
                 }
@@ -280,7 +282,7 @@ impl TryFrom<(&ClassSetItem, bool)> for MatchFn {
             ClassSetItem::Union(ref c) => c.try_into()?,
         };
         Ok(if negated {
-            MatchFn::new(move |ch| !match_function.call(ch))
+            MatchFn::new(move |ch| !match_function.inner()(ch))
         } else {
             match_function
         })
@@ -297,17 +299,17 @@ impl TryFrom<(&ClassSetBinaryOp, bool)> for MatchFn {
         let rhs: MatchFn = rhs.as_ref().try_into()?;
         let match_function = match kind {
             ClassSetBinaryOpKind::Intersection => {
-                MatchFn::new(move |ch| lhs.call(ch) && rhs.call(ch))
+                MatchFn::new(move |ch| lhs.inner()(ch) && rhs.inner()(ch))
             }
             ClassSetBinaryOpKind::Difference => {
-                MatchFn::new(move |ch| lhs.call(ch) && !rhs.call(ch))
+                MatchFn::new(move |ch| lhs.inner()(ch) && !rhs.inner()(ch))
             }
             ClassSetBinaryOpKind::SymmetricDifference => {
-                MatchFn::new(move |ch| lhs.call(ch) != rhs.call(ch))
+                MatchFn::new(move |ch| lhs.inner()(ch) != rhs.inner()(ch))
             }
         };
         Ok(if negated {
-            MatchFn::new(move |ch| !match_function.call(ch))
+            MatchFn::new(move |ch| !match_function.inner()(ch))
         } else {
             match_function
         })

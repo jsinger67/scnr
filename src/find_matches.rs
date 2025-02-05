@@ -1,7 +1,7 @@
 use log::trace;
 
 use crate::{
-    internal::{find_matches_impl::FindMatchesImpl, ScannerNfaImpl},
+    internal::{find_matches_impl::FindMatchesImpl, ScannerImpl},
     Match, Position, PositionProvider, ScannerModeSwitcher,
 };
 
@@ -34,7 +34,7 @@ pub struct FindMatches<'h> {
 
 impl<'h> FindMatches<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: ScannerNfaImpl, input: &'h str) -> Self {
+    pub(crate) fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
         Self {
             inner: FindMatchesImpl::new(scanner_impl, input),
         }

@@ -1,6 +1,6 @@
 use crate::{Result, ScannerMode};
 
-use super::{compiled_nfa::CompiledNfa, CharacterClassRegistry, ScannerModeID, TerminalID};
+use super::{compiled_dfa::CompiledDfa, CharacterClassRegistry, ScannerModeID, TerminalID};
 
 /// A compiled scanner mode that can be used to scan a string.
 #[derive(Debug, Clone)]
@@ -11,7 +11,7 @@ pub(crate) struct CompiledScannerMode {
     /// type numbers.
     /// The priorities of the patterns are determined by their order in the vector. Lower indices
     /// have higher priority if multiple patterns match the input and have the same length.
-    pub(crate) nfa: CompiledNfa,
+    pub(crate) dfa: CompiledDfa,
     pub(crate) transitions: Vec<(TerminalID, ScannerModeID)>,
 }
 
@@ -26,10 +26,10 @@ impl CompiledScannerMode {
             patterns,
             transitions,
         } = scanner_mode;
-        let mp_nfa = CompiledNfa::try_from_patterns(&patterns, character_class_registry)?;
+        let dfa = CompiledDfa::try_from_patterns(&patterns, character_class_registry)?;
         Ok(Self {
             name,
-            nfa: mp_nfa,
+            dfa,
             transitions,
         })
     }
@@ -71,14 +71,14 @@ mod tests {
         });
     }
 
-    /// A macro that simplifies the rendering of a dot file for a NFA.
-    macro_rules! compiled_nfa_render_to {
+    /// A macro that simplifies the rendering of a dot file for a DFA.
+    macro_rules! compiled_dfa_render_to {
         ($nfa:expr, $label:expr, $reg:ident) => {
             let label = format!("{}Dfa", $label);
             let mut f =
-                std::fs::File::create(format!("{}/{}CompiledNfa.dot", TARGET_FOLDER, $label))
+                std::fs::File::create(format!("{}/{}CompiledDfa.dot", TARGET_FOLDER, $label))
                     .unwrap();
-            $crate::internal::dot::compiled_nfa_render($nfa, &label, &$reg, &mut f);
+            $crate::internal::dot::compiled_dfa_render($nfa, &label, &$reg, &mut f);
         };
     }
 
@@ -87,14 +87,14 @@ mod tests {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let pattern = Pattern::new("(//.*(\r\n|\r|\n))".to_string(), 0);
-        let compiled_nfa =
-            CompiledNfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
-        compiled_nfa_render_to!(&compiled_nfa, "LineComment_", character_class_registry);
+        let compiled_dfa =
+            CompiledDfa::try_from_pattern(&pattern, &mut character_class_registry).unwrap();
+        compiled_dfa_render_to!(&compiled_dfa, "LineComment_", character_class_registry);
         // assert_eq!(compiled_dfa.accepting_states.len(), 1);
     }
 
     #[test]
-    fn test_compiled_nfa_scanner_mode() {
+    fn test_compiled_dfa_scanner_mode() {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
@@ -110,7 +110,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compiled_nfa_scanner_mode_error() {
+    fn test_compiled_dfa_scanner_mode_error() {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
@@ -124,7 +124,7 @@ mod tests {
     }
 
     #[test]
-    fn test_compiled_nfa_scanner_mode_transition() {
+    fn test_compiled_dfa_scanner_mode_transition() {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
         let scanner_mode = ScannerMode {
