@@ -601,16 +601,24 @@ mod tests {
         assert!(scanner_modes[0].patterns[17].lookahead().is_some());
         assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
         let mut character_class_registry = CharacterClassRegistry::new();
-        let compiled_nfa = CompiledNfa::try_from_patterns(
-            &scanner_modes[0].patterns,
-            &mut character_class_registry,
-        )
-        .unwrap();
-        assert_eq!(compiled_nfa.patterns.len(), 1);
-        assert_eq!(compiled_nfa.lookaheads.len(), 1);
-        println!("{}", compiled_nfa);
-        assert!(compiled_nfa.lookaheads.contains_key(&20.into()));
-        compiled_nfa_render_to!(&compiled_nfa, "Veryl", &character_class_registry);
+        for scanner_mode in &scanner_modes[0..3] {
+            let compiled_nfa = CompiledNfa::try_from_patterns(
+                &scanner_mode.patterns,
+                &mut character_class_registry,
+            )
+            .unwrap();
+            if scanner_mode.name == "INITIAL" {
+                assert_eq!(compiled_nfa.patterns.len(), 1);
+                assert_eq!(compiled_nfa.lookaheads.len(), 1);
+                println!("{}", compiled_nfa);
+                assert!(compiled_nfa.lookaheads.contains_key(&20.into()));
+            }
+            compiled_nfa_render_to!(
+                &compiled_nfa,
+                &format!("Veryl_{}_", scanner_mode.name),
+                &character_class_registry
+            );
+        }
     }
 
     #[test]
