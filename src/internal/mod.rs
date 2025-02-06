@@ -57,5 +57,12 @@ mod scanner_cache;
 pub(crate) use scanner_cache::SCANNER_CACHE;
 
 /// Module that provides functions and types related to NFA scanner implementations.
+#[cfg(not(feature = "regex_automata"))]
 pub(crate) mod scanner_impl;
+#[cfg(not(feature = "regex_automata"))]
 pub(crate) use scanner_impl::ScannerImpl;
+
+#[cfg(feature = "regex_automata")]
+pub(crate) mod scanner_impl_rx;
+#[cfg(feature = "regex_automata")]
+pub(crate) use scanner_impl_rx::ScannerImpl;

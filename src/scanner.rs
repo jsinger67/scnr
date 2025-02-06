@@ -2,7 +2,12 @@ use std::{fmt::Debug, path::Path};
 
 use log::trace;
 
-use crate::{internal::ScannerImpl, FindMatches, Result, ScannerMode};
+#[cfg(feature = "default")]
+use crate::internal::ScannerImpl;
+#[cfg(feature = "regex_automata")]
+use crate::internal::ScannerImplRx;
+
+use crate::{FindMatches, Result, ScannerMode};
 
 /// A trait to switch between scanner modes.
 ///
@@ -65,7 +70,10 @@ pub trait ScannerModeSwitcher {
 /// `INITIAL`.
 #[derive(Debug)]
 pub struct Scanner {
+    #[cfg(not(feature = "regex_automata"))]
     pub(crate) inner: ScannerImpl,
+    #[cfg(feature = "regex_automata")]
+    pub(crate) inner: ScannerImplRx,
 }
 
 impl Scanner {
