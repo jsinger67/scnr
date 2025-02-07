@@ -43,7 +43,7 @@ use crate::{FindMatches, Result, ScannerMode};
 /// part of the grammar but instead part of the scanner. `parol` will prevent the LR grammar from
 /// containing scanner mode changes.
 ///
-/// See <https://github.com/jsinger67/parol> for more informationon about the `parol` parser
+/// See <https://github.com/jsinger67/parol> for more information about the `parol` parser
 /// generator.
 pub trait ScannerModeSwitcher {
     /// Sets the current scanner mode.
@@ -59,7 +59,7 @@ pub trait ScannerModeSwitcher {
 ///
 /// Each DFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
 /// All these FSMs are advanced in parallel to search for matches.
-/// It further constists of at least one scanner mode. Scanners support multiple scanner modes.
+/// It further consists of at least one scanner mode. Scanners support multiple scanner modes.
 /// This feature is known from Flex as *Start conditions* and provides more
 /// flexibility by defining several scanners for several parts of your grammar.
 /// See <https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html#SEC11>
@@ -84,7 +84,7 @@ impl Scanner {
     }
 
     /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
-    /// To enable debug output compliled FSMs as dot file set the environment variable `RUST_LOG` to
+    /// To enable debug output compiled FSMs as dot file set the environment variable `RUST_LOG` to
     /// `scnr::internal::scanner_impl=debug`.
     pub fn log_compiled_automata_as_dot(&self) -> Result<()> {
         self.inner.log_compiled_automata_as_dot()
@@ -218,7 +218,7 @@ mod tests {
         assert_eq!(0, scanner.inner.clone().current_mode());
     }
 
-    // A test that checks the behavoir of the scanner when so called 'pathological regular expressions'
+    // A test that checks the behavior of the scanner when so called 'pathological regular expressions'
     // are used. These are regular expressions that are very slow to match.
     // The test checks if the scanner is able to handle these cases and does not hang.
     struct TestData {

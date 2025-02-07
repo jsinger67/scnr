@@ -1,5 +1,7 @@
 {
     "cSpell.words": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
+        "aaaaaaaaaaaaaaaaaaaaaaaaaab",
         "bfnt",
         "dependi",
         "nfas",
@@ -10,7 +12,8 @@
         "scminput",
         "scnr",
         "serde",
-        "seshat"
+        "seshat",
+        "testout"
     ],
     "cSpell.enabledFileTypes": {
         "veryl": false,
