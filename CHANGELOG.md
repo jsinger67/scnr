@@ -17,12 +17,29 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.7.2 - Not release yet
+## 0.8.0 - Not release yet
 
 - Refactor internal structs
     - Refactored `CompiledNfa` to `CompiledDfa` for clarity
     - Refactored `ScannerNfaImpl` to `ScannerImpl` for clarity
 - Minimization of the `CompiledDfa` for enhanced scanning performance
+- Introduce the feature `regex_automata`.
+    Using the default feature set, which is actually empty, usually results in a slower scanner, but
+    it is faster at compiling the regexes. The `regex_automata` feature is faster at scanning the
+    input, but it is possibly slower at compiling the regexes. This depends on the size of your
+    scanner modes, i.e. the number of regexes you use.
+
+    Both features are mutually exclusive.
+
+    Using the default feature set is straight forward:
+    ```toml
+    scnr = "0.8.0"
+    ```
+    For the feature `regex_automata` to be enabled use this variant:
+    ```toml
+    scnr = { version = "0.8.0", default-features = false, features = [ "regex_automata" ] }
+    ```
+
 
 ## 0.7.1 - 2025-01-21
 

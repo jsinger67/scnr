@@ -2,10 +2,7 @@ use std::{fmt::Debug, path::Path};
 
 use log::trace;
 
-#[cfg(feature = "default")]
 use crate::internal::ScannerImpl;
-#[cfg(feature = "regex_automata")]
-use crate::internal::ScannerImplRx;
 
 use crate::{FindMatches, Result, ScannerMode};
 
@@ -70,15 +67,12 @@ pub trait ScannerModeSwitcher {
 /// `INITIAL`.
 #[derive(Debug)]
 pub struct Scanner {
-    #[cfg(not(feature = "regex_automata"))]
     pub(crate) inner: ScannerImpl,
-    #[cfg(feature = "regex_automata")]
-    pub(crate) inner: ScannerImplRx,
 }
 
 impl Scanner {
     /// Returns an iterator over all non-overlapping matches.
-    /// The iterator yields a [`Match`] value until no more matches could be found.
+    /// The iterator yields a [`crate::Match`] value until no more matches could be found.
     pub fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
         FindMatches::new(self.inner.clone(), input)
     }
@@ -282,6 +276,7 @@ mod tests {
     fn test_pathological_regular_expressions_dfa() {
         init();
 
+        #[allow(unused_variables)]
         for (index, test) in TEST_DATA.iter().enumerate() {
             let scanner_mode = ScannerMode::new(
                 "INITIAL",
@@ -293,6 +288,7 @@ mod tests {
                 .build()
                 .unwrap();
 
+            #[cfg(not(feature = "regex_automata"))]
             scanner
                 .generate_compiled_automata_as_dot(
                     &format!("Test{}", index),

@@ -1,3 +1,4 @@
+#![cfg(not(feature = "regex_automata"))]
 /// This file contains a hopefully increasing number of match tests to verify the correctness of the
 /// scanner.
 ///
@@ -46,6 +47,8 @@ macro_rules! tu {
     };
 }
 
+const ERROR_MSG: &str = "regex parse error";
+
 // Pattern that causes a regex parse error
 macro_rules! tr {
     ($pattern:expr, $input:expr, $expected:expr, $num:expr) => {
@@ -53,7 +56,7 @@ macro_rules! tr {
             pattern: $pattern,
             input: "",
             expected: &[],
-            error_msg: Some("regex parse error"),
+            error_msg: Some(ERROR_MSG),
             test_number: $num,
         }
     };

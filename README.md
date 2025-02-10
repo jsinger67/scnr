@@ -25,7 +25,7 @@ static PATTERNS: &[&str] = &[
     r";",                          // Semicolon
     r"0|[1-9][0-9]*",              // Number
     r"//.*(\r\n|\r|\n)",           // Line comment
-    r"/\*([.\r\n--*]|\*[^/])*\*/", // Block comment
+    r"/\*([^*]|\*[^/])*\*/",       // Block comment
     r"[a-zA-Z_]\w*",               // Identifier
     r"=",                          // Assignment
 ];
@@ -126,7 +126,6 @@ you to control when and how patterns are matched. This approach can help you sim
 behavior by ensuring that the scanner only matches the minimal necessary input before switching to a
 different mode.
 
-
 ### Scanner modes
 
 As an example for a possible realization of a non-greedy behavior we take the simple case of a block
@@ -174,3 +173,36 @@ type 3, **comment content**.
 
 In this scenario the parser knows that token type 3 is **comment content** and can handle it
 accordingly.
+
+## The feature `regex_automata`
+
+As of version 0.8.0 if you enable the crate feature `regex_automata` many of the above mentioned
+restrictions are vanished. When this feature is used `scnr` basically uses the `regex_automata`
+crate as regex engine instead of `scnr`'s own regex engine. The `regex_automata` crate provides more
+regex features, such as non-greedy repetitions, flags and anchored matches.
+
+Both, the feature `regex_automata` and the `default` feature are mutually exclusive. You can enable
+one of them, but not both at the same time.
+
+Using the default feature set is straight forward:
+```toml
+scnr = "0.8.0"
+```
+For the feature `regex_automata` to be enabled use this variant:
+```toml
+scnr = { version = "0.8.0", default-features = false, features = [ "regex_automata" ] }
+```
+
+Enabling the `default` feature usually results in a slower scanner, but it is faster at compiling
+the regexes.
+
+On the other hand, the `regex_automata` feature creates faster scanners, but it is possibly slower
+at compiling the regexes. This depends on the size of your scanner modes, i.e. the number of regexes
+you use.
+
+`scnr` maintains a cache of compiled scanner modes, i.e. compiled regexes in both feature
+configurations. This can mitigate the costs of regex compilation if they are used multiple times
+during the lifetime of your parsing tool.
+
+I can't give a simple rule of thumb, which regex engine of `scnr` to chose for your parsing tool.
+Therefore I recommend to carry out your own measurements.

@@ -114,3 +114,9 @@ impl std::fmt::Display for Pattern {
         Ok(())
     }
 }
+
+impl AsRef<str> for Pattern {
+    fn as_ref(&self) -> &str {
+        &self.pattern
+    }
+}

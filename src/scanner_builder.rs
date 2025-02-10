@@ -95,7 +95,9 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path, sync::Once};
+    #[cfg(not(feature = "regex_automata"))]
+    use std::path::Path;
+    use std::{fs, sync::Once};
 
     use crate::{Pattern, ScannerModeSwitcher};
 
@@ -175,6 +177,7 @@ mod tests {
         // Line comment2
         "#;
 
+        #[cfg(not(feature = "regex_automata"))]
         scanner
             .generate_compiled_automata_as_dot("LineComment", Path::new(TARGET_FOLDER))
             .expect("Failed to generate compiled automata as dot");

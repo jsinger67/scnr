@@ -58,7 +58,7 @@ impl CompiledDfa {
     /// 3. If the queue is empty, stop and return the current match, if any.
     /// 4. For each state in the queue, check if it is an end state.
     ///    If it is, remember the current match if it is longer than the previous match found and
-    ///    its terminal id is not higher at the same lenght.
+    ///    its terminal id is not higher at the same length.
     /// 5. For each state in the queue, check if there is a transition that matches the current
     ///    character.
     ///    If there is, add the target state to a second queue that will be used for the next
@@ -202,7 +202,7 @@ impl CompiledDfa {
         Ok(compiled_dfa)
     }
 
-    /// Add a lookahead for a giben terminal_id to the compiled NFA.
+    /// Add a lookahead for a given terminal_id to the compiled NFA.
     pub(crate) fn add_lookahead(&mut self, terminal_id: TerminalID, lookahead: CompiledLookahead) {
         self.lookaheads.insert(terminal_id, lookahead);
     }

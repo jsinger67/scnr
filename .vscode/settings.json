@@ -1,22 +1,26 @@
 {
-    "cSpell.words": [
-        "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
-        "aaaaaaaaaaaaaaaaaaaaaaaaaab",
-        "bfnt",
-        "dependi",
-        "nfas",
-        "openai",
-        "plantuml",
-        "POSIX",
-        "println",
-        "scminput",
-        "scnr",
-        "serde",
-        "seshat",
-        "testout"
-    ],
-    "cSpell.enabledFileTypes": {
-        "veryl": false,
-        "json": false
-    }
+  "cSpell.words": [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaab",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaab",
+    "bfnt",
+    "dependi",
+    "Kosako",
+    "lookaheads",
+    "nfas",
+    "nongreedy",
+    "openai",
+    "plantuml",
+    "POSIX",
+    "println",
+    "scminput",
+    "scnr",
+    "serde",
+    "seshat",
+    "testout"
+  ],
+  "cSpell.enabledFileTypes": {
+    "veryl": false,
+    "json": false
+  },
+  "cSpell.ignorePaths": ["tests/match_test.rs" ]
 }

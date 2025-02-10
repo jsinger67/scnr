@@ -78,16 +78,16 @@ impl ScannerImpl {
         input: &str,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let nfa = &mut self.scanner_modes[self.current_mode].dfa;
+        let dfa = &mut self.scanner_modes[self.current_mode].dfa;
 
-        if let Some(matched) = nfa.find_from(input, char_indices, &*self.match_char_class) {
+        if let Some(matched) = dfa.find_from(input, char_indices, &*self.match_char_class) {
             debug_assert!(
                 !matched.is_empty(),
                 r#"
     An empty token was matched. This leads to an infinite loop.
     It is therefore necessary to avoid regexes that can match empty tokens.
     Please, check regex '{}' for token type {} in scanner mode {}"#,
-                nfa.pattern((matched.token_type() as TerminalIDBase).into())
+                dfa.pattern((matched.token_type() as TerminalIDBase).into())
                     .escape_default(),
                 matched.token_type(),
                 self.current_mode
@@ -101,15 +101,15 @@ impl ScannerImpl {
         self.scanner_modes[self.current_mode].has_transition(token_type)
     }
 
-    /// Traces the compiled NFAs as dot format.
+    /// Traces the compiled DFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
     pub(crate) fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
         use std::io::Read;
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
-            debug!("Compiled NFA: Mode {} \n{}", i, {
+            debug!("Compiled DFA: Mode {} \n{}", i, {
                 let mut cursor = std::io::Cursor::new(Vec::new());
-                let title = format!("Compiled NFA {}", scanner_mode.name);
+                let title = format!("Compiled DFA {}", scanner_mode.name);
                 super::dot::compiled_dfa_render(
                     &scanner_mode.dfa,
                     &title,
@@ -125,7 +125,7 @@ impl ScannerImpl {
         Ok(())
     }
 
-    /// Generates the compiled NFAs as dot files.
+    /// Generates the compiled DFAs as dot files.
     /// The dot files are written to the target folder.
     pub(crate) fn generate_compiled_automata_as_dot(
         &self,
@@ -134,7 +134,7 @@ impl ScannerImpl {
     ) -> crate::Result<()> {
         use std::fs::File;
         for scanner_mode in self.scanner_modes.iter() {
-            let title = format!("Compiled NFA {}", scanner_mode.name);
+            let title = format!("Compiled DFA {}", scanner_mode.name);
             let file_name = format!(
                 "{}/{}_{}.dot",
                 target_folder.to_str().unwrap(),

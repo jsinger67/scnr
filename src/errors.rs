@@ -32,6 +32,11 @@ pub enum ScnrErrorKind {
     #[error("'{1}' {0}")]
     RegexSyntaxError(regex_syntax::ast::Error, String),
 
+    /// An error occurred during the parsing of the regex syntax.
+    #[cfg(feature = "regex_automata")]
+    #[error(transparent)]
+    RegexBuildError(#[from] regex_automata::dfa::dense::BuildError),
+
     /// A std::io error occurred.
     #[error(transparent)]
     IoError(#[from] std::io::Error),

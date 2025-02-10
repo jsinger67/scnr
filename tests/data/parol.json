@@ -5,7 +5,7 @@
       { "pattern": "\\r\\n|\\r|\\n", "token_type": 1 },
       { "pattern": "[\\s--\\r\\n]+", "token_type": 2 },
       { "pattern": "//.*(\\r\\n|\\r|\\n)", "token_type": 3 },
-      { "pattern": "/\\*([.\\r\\n--*]|\\*[^/])*\\*/", "token_type": 4 },
+      { "pattern": "/\\*([^*]|\\*[^/])*\\*/", "token_type": 4 },
       { "pattern": "%start", "token_type": 5 },
       { "pattern": "%title", "token_type": 6 },
       { "pattern": "%comment", "token_type": 7 },

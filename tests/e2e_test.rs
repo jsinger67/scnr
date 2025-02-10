@@ -1,7 +1,9 @@
 // Test complete flow of the application
 // Run with `cargo test --test e2e_test`
 
-use std::{fs, path::Path};
+use std::fs;
+#[cfg(not(feature = "regex_automata"))]
+use std::path::Path;
 
 use regex::Regex;
 use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
@@ -38,7 +40,7 @@ fn e2e_test() {
         }
 
         // Select only special files
-        // if entry.file_name() != "positive_lookahead_n.json" {
+        // if entry.file_name() != "nongreedy2.json" {
         //     continue;
         // }
 
@@ -57,6 +59,7 @@ fn e2e_test() {
             .build()
             .unwrap();
 
+        #[cfg(not(feature = "regex_automata"))]
         scanner
             .generate_compiled_automata_as_dot(
                 path.file_stem().unwrap().to_str().unwrap(),

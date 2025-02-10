@@ -10,7 +10,8 @@
     "name": "COMMENT",
     "patterns": [
       { "pattern": "\\*/", "token_type": 2},
-      { "pattern": "[.\r\n]", "token_type": 3}
+      { "pattern": ".", "token_type": 3},
+      { "pattern": "[\\r\\n]", "token_type": 4}
     ],
     "transitions": [[2, 0]]
   }

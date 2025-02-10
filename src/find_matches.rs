@@ -80,13 +80,13 @@ impl<'h> FindMatches<'h> {
     ///
     /// The peek operation always stops at the end of the haystack or when a mode switch is
     /// triggered by the last match. The mode switch is not conducted by the peek operation to not
-    /// change the state of the scanner as well as to aviod a mix of tokens from different modes
+    /// change the state of the scanner as well as to avoid a mix of tokens from different modes
     /// being returned.
     pub fn peek_n(&mut self, n: usize) -> PeekResult {
         self.inner.peek_n(n)
     }
 
-    /// Advane the char_indices iterator to the given position.
+    /// Advance the char_indices iterator to the given position.
     /// The function is used to skip a given number of characters in the haystack.
     /// It can be used after a peek operation to skip the characters of the peeked matches.
     /// The function returns the new position of the char_indices iterator.

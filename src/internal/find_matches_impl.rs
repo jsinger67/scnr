@@ -101,7 +101,7 @@ impl<'h> FindMatchesImpl<'h> {
     ///
     /// The peek operation always stops at the end of the haystack or when a mode switch is
     /// triggered by the last match. The mode switch is not conducted by the peek operation to not
-    /// change the state of the scanner as well as to aviod a mix of tokens from different modes
+    /// change the state of the scanner as well as to avoid a mix of tokens from different modes
     /// being returned.
     pub(crate) fn peek_n(&mut self, n: usize) -> PeekResult {
         let mut char_indices = self.char_indices.clone();
@@ -161,7 +161,7 @@ impl<'h> FindMatchesImpl<'h> {
         }
     }
 
-    /// Advane the char_indices iterator to the given position.
+    /// Advance the char_indices iterator to the given position.
     /// The function is used to skip a given number of characters in the haystack.
     /// It can be used after a peek operation to skip the characters of the peeked matches.
     /// The function returns the new position of the char_indices iterator.
@@ -251,7 +251,7 @@ impl<'h> FindMatchesImpl<'h> {
     /// Merges the given line start offsets with the current line start offsets.
     /// The function is used to merge the given line start offsets.
     /// Already existing line start offsets are not added to the vector.
-    /// New line start offsets are added to the vector while maintainng the ascending order.
+    /// New line start offsets are added to the vector while maintaining the ascending order.
     fn merge_line_offsets(&mut self, line_start_offsets: Vec<usize>) {
         // The line offsets are always sorted in ascending order.
         debug_assert!(self.line_offsets.windows(2).all(|w| w[0] < w[1]));
@@ -275,9 +275,10 @@ impl std::fmt::Debug for FindMatchesImpl<'_> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(not(feature = "regex_automata"))]
+    use std::path::Path;
     use std::{
         fs,
-        path::Path,
         sync::{LazyLock, Once},
     };
 
@@ -351,6 +352,7 @@ Id2
             .build()
             .unwrap();
 
+        #[cfg(not(feature = "regex_automata"))]
         scanner
             .generate_compiled_automata_as_dot("String", Path::new(TARGET_FOLDER))
             .expect("Failed to generate compiled automata as dot");

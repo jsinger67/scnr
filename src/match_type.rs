@@ -69,6 +69,16 @@ impl Match {
     }
 }
 
+#[cfg(feature = "regex_automata")]
+impl From<regex_automata::Match> for Match {
+    fn from(value: regex_automata::Match) -> Self {
+        Self {
+            token_type: value.pattern().as_usize(),
+            span: Span::new(value.start(), value.end()),
+        }
+    }
+}
+
 /// A match with line and column information for start and end positions.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct MatchExt {
