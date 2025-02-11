@@ -11,7 +11,7 @@
 //! finite state machines.
 //! To parse the given regular expressions, the crate uses the `regex-syntax` crate.
 //!
-//! # Example
+//! # Example with a simple pattern list
 //! ```rust
 //! use scnr::ScannerBuilder;
 //!
@@ -62,6 +62,63 @@
 //! Match: Match { token_type: 5, span: Span { start: 99, end: 100 } }: '='
 //! Match: Match { token_type: 4, span: Span { start: 101, end: 102 } }: 'a'
 //! Match: Match { token_type: 0, span: Span { start: 102, end: 103 } }: ';'
+//! ```
+//!
+//! # Example with scanner modes
+//! ```rust
+//! use std::sync::LazyLock;
+//!
+//! use scnr::{Pattern, ScannerBuilder, ScannerMode};
+//!
+//! static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
+//!     vec![
+//!         ScannerMode::new(
+//!             "INITIAL",
+//!             vec![
+//!                 Pattern::new(r"\r\n|\r|\n".to_string(), 0),   // Newline
+//!                 Pattern::new(r"[a-zA-Z_]\w*".to_string(), 4), // Identifier
+//!                 Pattern::new(r#"""#.to_string(), 6),          // String delimiter
+//!             ],
+//!             vec![
+//!                 (6, 1), // Token "String delimiter" -> Mode "STRING"
+//!             ],
+//!         ),
+//!         ScannerMode::new(
+//!             "STRING",
+//!             vec![
+//!                 Pattern::new(r#"""#.to_string(), 6),     // String delimiter
+//!                 Pattern::new(r#"[^"]+"#.to_string(), 5), // String content
+//!             ],
+//!             vec![
+//!                 (6, 0), // Token "String delimiter" -> Mode "INITIAL"
+//!             ],
+//!         ),
+//!     ]
+//! });
+//!
+//! const INPUT: &str = r#"Id1 "1. String" "2. String""#;
+//!
+//! fn main() {
+//!     let scanner = ScannerBuilder::new()
+//!         .add_scanner_modes(&SCANNER_MODES)
+//!         .build()
+//!         .expect("ScannerBuilder error");
+//!     let find_iter = scanner.find_iter(INPUT);
+//!     for ma in find_iter {
+//!         println!("Match: {:?}: '{}'", ma, &INPUT[ma.span().range()]);
+//!     }
+//! }
+//! ```
+//!
+//! The output of this example is:
+//! ```text
+//! Match: Match { token_type: 4, span: Span { start: 0, end: 3 } }: 'Id1'
+//! Match: Match { token_type: 6, span: Span { start: 4, end: 5 } }: '"'
+//! Match: Match { token_type: 5, span: Span { start: 5, end: 14 } }: '1. String'
+//! Match: Match { token_type: 6, span: Span { start: 14, end: 15 } }: '"'
+//! Match: Match { token_type: 6, span: Span { start: 16, end: 17 } }: '"'
+//! Match: Match { token_type: 5, span: Span { start: 17, end: 26 } }: '2. String'
+//! Match: Match { token_type: 6, span: Span { start: 26, end: 27 } }: '"'
 //! ```
 //!
 //! # Crate features
