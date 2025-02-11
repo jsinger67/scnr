@@ -26,6 +26,8 @@ use super::{
 pub(crate) struct CompiledDfa {
     /// The pattern(s) of the DFA. Used for debugging purposes.
     pub(crate) patterns: Vec<String>,
+    /// The terminal ids of the DFA in priority order. Lower indices have higher priority.
+    pub(crate) terminal_ids: Vec<TerminalID>,
     /// The states of the DFA.
     pub(crate) states: Vec<StateData>,
     /// The accepting states of the DFA are represented by a vector of booleans and terminal ids.
@@ -131,9 +133,12 @@ impl CompiledDfa {
                                         match_terminal_id = Some(self.end_states[*next].1);
                                     }
                                     std::cmp::Ordering::Equal => {
-                                        let terminal_id = self.end_states[*next].1;
-                                        if terminal_id < match_terminal_id.unwrap() {
-                                            match_terminal_id = Some(terminal_id);
+                                        let terminal_id =
+                                            self.priority_of(self.end_states[*next].1);
+                                        if terminal_id
+                                            < self.priority_of(match_terminal_id.unwrap())
+                                        {
+                                            match_terminal_id = Some(self.end_states[*next].1);
                                         }
                                     }
                                     _ => {
@@ -211,6 +216,14 @@ impl CompiledDfa {
     pub(crate) fn pattern(&self, terminal_id: TerminalID) -> &str {
         &self.patterns[terminal_id]
     }
+
+    #[inline(always)]
+    fn priority_of(&self, terminal_id: TerminalID) -> usize {
+        self.terminal_ids
+            .iter()
+            .position(|&id| id == terminal_id)
+            .unwrap()
+    }
 }
 
 impl From<Nfa> for CompiledDfa {
@@ -287,6 +300,7 @@ impl From<Nfa> for CompiledDfa {
 
         Minimizer::minimize(Self {
             patterns: vec![nfa.pattern.pattern().to_string()],
+            terminal_ids: vec![(nfa.pattern.terminal_id() as TerminalIDBase).into()],
             states,
             end_states,
             lookaheads: FxHashMap::default(),
@@ -359,6 +373,11 @@ impl From<MultiPatternNfa> for CompiledDfa {
 
         Minimizer::minimize(Self {
             patterns: vec![mp_nfa.patterns.iter().map(|p| p.pattern()).collect()],
+            terminal_ids: mp_nfa
+                .patterns
+                .iter()
+                .map(|p| (p.terminal_id() as TerminalIDBase).into())
+                .collect(),
             states,
             end_states,
             lookaheads: FxHashMap::default(),

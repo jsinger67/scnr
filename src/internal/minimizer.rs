@@ -213,6 +213,7 @@ impl Minimizer {
         trace!("from partition {:?}", partition);
         let CompiledDfa {
             patterns,
+            terminal_ids,
             states: _,
             end_states,
             lookaheads,
@@ -221,6 +222,7 @@ impl Minimizer {
         } = dfa;
         let mut dfa = CompiledDfa {
             patterns,
+            terminal_ids,
             states: vec![StateData::new(); partition.len()],
             end_states: vec![(false, 0.into()); partition.len()],
             lookaheads,
@@ -280,7 +282,7 @@ impl Minimizer {
         let representative_state_id = group.first().unwrap();
 
         trace!(
-            "Add representive state {} with id {}",
+            "Add representative state {} with id {}",
             representative_state_id.as_usize(),
             state_id.as_usize()
         );
@@ -439,6 +441,7 @@ mod tests {
     fn test_calculate_initial_partition() {
         let dfa = CompiledDfa {
             patterns: vec![],
+            terminal_ids: vec![0.into(), 1.into(), 2.into()],
             states: vec![StateData::new(); 5],
             end_states: vec![
                 (true, 0.into()),
@@ -464,6 +467,7 @@ mod tests {
     fn test_calculate_new_partition() {
         let dfa = CompiledDfa {
             patterns: vec![],
+            terminal_ids: vec![0.into(), 1.into(), 2.into()],
             states: vec![StateData::new(); 5],
             end_states: vec![
                 (true, 0.into()),

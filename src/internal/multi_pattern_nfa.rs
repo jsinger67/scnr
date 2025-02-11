@@ -42,10 +42,6 @@ impl MultiPatternNfa {
     ) -> Result<Self> {
         let mut multi_pattern_nfa = Self::new();
         let mut next_state = 1;
-        // Assert in debug that th terminal ids are increasing.
-        debug_assert!(patterns
-            .windows(2)
-            .all(|w| w[0].terminal_id() < w[1].terminal_id()));
         for (index, pattern) in patterns.iter().enumerate() {
             let ast = super::parse_regex_syntax(pattern.pattern())?;
             let result = Nfa::try_from_ast(ast, character_class_registry);
@@ -80,15 +76,6 @@ impl MultiPatternNfa {
                 }
             }
         }
-        // Assert in debug that the all state ids belonging to an nfa with higher terminal_id in the
-        // pattern are higher than state ids of nfas witt lower terminal id in the pattern and that
-        // the the terminal ids are increasing.
-        // These constraints are neseccary be able to hold the priority of the patterns.
-        debug_assert!(multi_pattern_nfa.nfas.windows(2).all(|w| {
-            let end_state = w[0].end_state();
-            let start_state = w[1].start_state();
-            end_state.id() < start_state.id() && w[0].terminal_id() < w[1].terminal_id()
-        }));
         Ok(multi_pattern_nfa)
     }
 
