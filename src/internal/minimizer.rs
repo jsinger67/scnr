@@ -23,7 +23,7 @@ type Partition = Vec<StateGroup>;
 // A transition map is a map of state ids to a map of character class ids to state set ids.
 type TransitionMap = BTreeMap<StateID, BTreeMap<CharClassID, Vec<StateID>>>;
 
-// A data type that is calcuated from the transitions of a DFA state so that for each character
+// A data type that is calculated from the transitions of a DFA state so that for each character
 // class the target state is mapped to the partition group it belongs to.
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct TransitionsToPartitionGroups(pub(crate) Vec<(CharClassID, StateGroupID)>);
@@ -127,7 +127,7 @@ impl Minimizer {
     fn calculate_new_partition(partition: &[StateGroup], transitions: &TransitionMap) -> Partition {
         let mut new_partition = Partition::new();
         for (index, group) in partition.iter().enumerate() {
-            // The new group receives the states from the old group which are distiguishable from
+            // The new group receives the states from the old group which are distinguishable from
             // the other states in group.
             Self::split_group(index, group, partition, transitions)
                 .into_iter()
@@ -249,7 +249,7 @@ impl Minimizer {
             // For each group we add a representative state to the DFA.
             // It's id is the index of the group in the partition.
             // This function also updates the accepting states of the DFA.
-            Self::add_representive_state(
+            Self::add_representative_state(
                 &mut dfa,
                 (id as StateGroupIDBase).into(),
                 group,
@@ -269,7 +269,7 @@ impl Minimizer {
     /// The representative state is the first state in the group.
     /// The accepting states are used to determine if the DFA state is an accepting state.
     /// The new state id is returned.
-    fn add_representive_state(
+    fn add_representative_state(
         dfa: &mut CompiledDfa,
         group_id: StateGroupID,
         group: &BTreeSet<StateID>,
@@ -304,7 +304,7 @@ impl Minimizer {
         partition: &[StateGroup],
         transitions: &TransitionMap,
     ) {
-        // Create a vector because we dont want to mess the transitins map while renumbering.
+        // Create a vector because we dont want to mess the transitions map while renumbering.
         let mut transitions = transitions
             .iter()
             .map(|(s, t)| (*s, t.clone()))
@@ -341,28 +341,28 @@ impl Minimizer {
         partition: &[StateGroup],
         transitions: &mut Vec<(StateID, BTreeMap<CharClassID, Vec<StateID>>)>,
     ) {
-        // Remove all transitions that do not belong to the representive states of a group.
-        // The representive states are the first states in the groups.
+        // Remove all transitions that do not belong to the representative states of a group.
+        // The representative states are the first states in the groups.
         for group in partition {
             debug_assert!(!group.is_empty());
             if group.len() == 1 {
                 continue;
             }
-            let representive_state_id = group.first().unwrap();
+            let representative_state_id = group.first().unwrap();
             for state_id in group.iter().skip(1) {
-                Self::merge_transitions_of_state(*state_id, *representive_state_id, transitions);
+                Self::merge_transitions_of_state(*state_id, *representative_state_id, transitions);
             }
         }
     }
 
     fn merge_transitions_of_state(
         state_id: StateID,
-        representive_state_id: StateID,
+        representative_state_id: StateID,
         transitions: &mut Vec<(StateID, BTreeMap<CharClassID, Vec<StateID>>)>,
     ) {
         if let Some(rep_pos) = transitions
             .iter()
-            .position(|(s, _)| *s == representive_state_id)
+            .position(|(s, _)| *s == representative_state_id)
         {
             let mut rep_trans = transitions.get_mut(rep_pos).unwrap().1.clone();
             if let Some(pos) = transitions.iter().position(|(s, _)| *s == state_id) {
