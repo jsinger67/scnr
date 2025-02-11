@@ -293,7 +293,7 @@ mod tests {
                     Pattern::new(r"\r\n|\r|\n".to_string(), 0),  // Newline
                     Pattern::new(r"[\s--\r\n]+".to_string(), 1), // Whitespace
                     Pattern::new(r"//.*(\r\n|\r|\n)".to_string(), 2), // Line comment
-                    Pattern::new(r"/\*([.\r\n--*]|\*[^/])*\*/".to_string(), 3), // Block comment
+                    Pattern::new(r"/\*([^*]|\*[^/])*\*/".to_string(), 3), // Block comment
                     Pattern::new(r"[a-zA-Z_]\w*".to_string(), 4), // Identifier
                     Pattern::new(r"\u{22}".to_string(), 8),      // String delimiter
                     Pattern::new(r".".to_string(), 9),           // Error
