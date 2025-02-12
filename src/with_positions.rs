@@ -24,9 +24,9 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         self.iter.next().map(|m| {
-            let start_positon = self.iter.position(m.start());
+            let start_position = self.iter.position(m.start());
             let end_position = self.iter.position(m.end());
-            MatchExt::new(m.token_type(), m.span(), start_positon, end_position)
+            MatchExt::new(m.token_type(), m.span(), start_position, end_position)
         })
     }
 }
@@ -49,6 +49,13 @@ where
 }
 
 /// An extension trait for iterators over matches.
+///
+/// You can create a `MatchExt` iterator from a `Match` iterator by calling the `with_positions`
+/// method on the iterator.
+///
+/// ```ignore
+/// let find_iter = scanner.find_iter(INPUT).with_positions();
+/// ```
 pub trait MatchExtIterator: Iterator<Item = Match> + PositionProvider + Sized {
     /// An iterator that yields matches with positions.
     fn with_positions(self) -> WithPositions<Self> {

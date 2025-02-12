@@ -80,6 +80,13 @@ impl From<regex_automata::Match> for Match {
 }
 
 /// A match with line and column information for start and end positions.
+///
+/// You can create a `MatchExt` iterator from a `Match` iterator by calling the `with_positions`
+/// method on the iterator.
+///
+/// ```ignore
+/// let find_iter = scanner.find_iter(INPUT).with_positions();
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
 pub struct MatchExt {
     /// The token type number associated with the match.

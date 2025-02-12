@@ -64,11 +64,11 @@
 //! Match: Match { token_type: 0, span: Span { start: 102, end: 103 } }: ';'
 //! ```
 //!
-//! # Example with scanner modes
+//! # Example with scanner modes and position information
 //! ```rust
 //! use std::sync::LazyLock;
 //!
-//! use scnr::{Pattern, ScannerBuilder, ScannerMode};
+//! use scnr::{MatchExtIterator, Pattern, ScannerBuilder, ScannerMode};
 //!
 //! static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
 //!     vec![
@@ -103,22 +103,22 @@
 //!         .add_scanner_modes(&SCANNER_MODES)
 //!         .build()
 //!         .expect("ScannerBuilder error");
-//!     let find_iter = scanner.find_iter(INPUT);
+//!     let find_iter = scanner.find_iter(INPUT).with_positions();
 //!     for ma in find_iter {
-//!         println!("Match: {:?}: '{}'", ma, &INPUT[ma.span().range()]);
+//!         println!("{:?}: '{}'", ma, &INPUT[ma.span().range()]);
 //!     }
 //! }
 //! ```
 //!
 //! The output of this example is:
 //! ```text
-//! Match: Match { token_type: 4, span: Span { start: 0, end: 3 } }: 'Id1'
-//! Match: Match { token_type: 6, span: Span { start: 4, end: 5 } }: '"'
-//! Match: Match { token_type: 5, span: Span { start: 5, end: 14 } }: '1. String'
-//! Match: Match { token_type: 6, span: Span { start: 14, end: 15 } }: '"'
-//! Match: Match { token_type: 6, span: Span { start: 16, end: 17 } }: '"'
-//! Match: Match { token_type: 5, span: Span { start: 17, end: 26 } }: '2. String'
-//! Match: Match { token_type: 6, span: Span { start: 26, end: 27 } }: '"'
+//! MatchExt { token_type: 4, span: Span { start: 0, end: 3 }, start_position: Position { line: 1, column: 1 }, end_position: Position { line: 1, column: 4 } }: 'Id1'
+//! MatchExt { token_type: 6, span: Span { start: 4, end: 5 }, start_position: Position { line: 1, column: 5 }, end_position: Position { line: 1, column: 6 } }: '"'
+//! MatchExt { token_type: 5, span: Span { start: 5, end: 14 }, start_position: Position { line: 1, column: 6 }, end_position: Position { line: 1, column: 15 } }: '1. String'
+//! MatchExt { token_type: 6, span: Span { start: 14, end: 15 }, start_position: Position { line: 1, column: 15 }, end_position: Position { line: 1, column: 16 } }: '"'
+//! MatchExt { token_type: 6, span: Span { start: 16, end: 17 }, start_position: Position { line: 1, column: 17 }, end_position: Position { line: 1, column: 18 } }: '"'
+//! MatchExt { token_type: 5, span: Span { start: 17, end: 26 }, start_position: Position { line: 1, column: 18 }, end_position: Position { line: 1, column: 27 } }: '2. String'
+//! MatchExt { token_type: 6, span: Span { start: 26, end: 27 }, start_position: Position { line: 1, column: 27 }, end_position: Position { line: 1, column: 28 } }: '"'
 //! ```
 //!
 //! # Crate features
