@@ -54,10 +54,8 @@ pub trait ScannerModeSwitcher {
 /// A Scanner.
 /// It consists of multiple DFAs that are used to search for matches.
 ///
-/// Each DFA corresponds to a terminal symbol (token type) the lexer/scanner can recognize.
-/// All these FSMs are advanced in parallel to search for matches.
-/// It further consists of at least one scanner mode. Scanners support multiple scanner modes.
-/// This feature is known from Flex as *Start conditions* and provides more
+/// Each DFA corresponds to a scanner mode that can recognize the tokens that belongs to it.
+/// Scanner modes are known from Flex as *Start conditions* and provides more
 /// flexibility by defining several scanners for several parts of your grammar.
 /// See <https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html#SEC11>
 /// for more information.
@@ -80,6 +78,8 @@ impl Scanner {
     /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
     /// To enable debug output compiled FSMs as dot file set the environment variable `RUST_LOG` to
     /// `scnr::internal::scanner_impl=debug`.
+    ///
+    /// This is not available when the `regex_automata` feature is enabled.
     pub fn log_compiled_automata_as_dot(&self) -> Result<()> {
         self.inner.log_compiled_automata_as_dot()
     }
@@ -87,6 +87,8 @@ impl Scanner {
     /// Generates the compiled FSMs as a Graphviz DOT files.
     /// The DOT files are written to the target folder.
     /// The file names are derived from the scanner mode names and the index of the regarding FSM.
+    ///
+    /// This is not available when the `regex_automata` feature is enabled.
     pub fn generate_compiled_automata_as_dot(
         &self,
         prefix: &str,

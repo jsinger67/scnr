@@ -1,15 +1,23 @@
 //! Module with the pattern types and their methods.
 use serde::{Deserialize, Serialize};
 
-/// A lookahead is used to restrict a match in the input.
-/// The lookahead is a regular expression whose condition must be met after the pattern itself for
-/// it to be considered a match.
-/// The lookahead can be positive or negative.
+/// A lookahead is a regular expression that restricts a match of a pattern so that it must be
+/// matched after the pattern.
 ///
-/// If the lookahead is positive, it must match for the pattern to be considered a match.
-/// If the lookahead is negative, it must not match for the pattern to be considered a match.
+/// If the lookahead is negative, it must not be matched after the pattern.
+///
+/// With the help of a positive lookahead you can define a semantic like
+/// ```
+/// match pattern R only if it is followed by pattern S
+/// ```
+/// On the other hand with a negative lookahead you can define a semantic like
+/// ```
+/// match pattern R only if it is NOT followed by pattern S
+/// ```
+///
+/// The lookahead patterns denoted above as `S` are not considered as part of the matched string.
+///
 /// The lookahead is an optional member of the [crate::Pattern] struct.
-/// The characters read by the lookahead are not included in the match.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Lookahead {
     /// If the lookahead is positive.
@@ -53,7 +61,7 @@ impl std::fmt::Display for Lookahead {
 /// A pattern that is used to match the input.
 /// The pattern is represented by a regular expression and a token type number.
 /// The token type number is used to identify the pattern in the scanner.
-/// The pattern also has an optional lookahead.
+/// The pattern also has an optional [Lookahead].
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Pattern {
     pattern: String,

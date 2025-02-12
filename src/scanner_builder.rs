@@ -55,6 +55,9 @@ impl ScannerBuilder {
 
     /// Builds the scanner from the scanner builder without caching it.
     /// This is useful for testing and benchmarking purposes.
+    ///
+    /// A user should not call this method in production code. It is recommended to use the `build`
+    /// method instead.
     #[allow(dead_code)]
     pub fn build_uncached(self) -> Result<Scanner> {
         Ok(Scanner {

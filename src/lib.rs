@@ -123,10 +123,11 @@
 //!
 //! # Crate features
 //! The crate has the following features:
-//! - `default`: This is the default feature set. It uses the `scnr` crate's own regex engine.
+//! - `default`: This is the default feature set. When it is enabled it uses the `scnr` crate's own
+//!   regex engine.
 //!
-//! - `regex_automata`: This feature is not enabled by default. It uses the `regex_automata` crate
-//!   as regex engine.
+//! - `regex_automata`: This feature is not enabled by default. It instructs the lib to use the
+//!   crate `regex_automata` as regex engine.
 //!
 //! Both features are mutually exclusive. You can enable one of them, but not both at the same time.
 //!
