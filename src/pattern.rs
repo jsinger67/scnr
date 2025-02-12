@@ -7,11 +7,11 @@ use serde::{Deserialize, Serialize};
 /// If the lookahead is negative, it must not be matched after the pattern.
 ///
 /// With the help of a positive lookahead you can define a semantic like
-/// ```
+/// ```text
 /// match pattern R only if it is followed by pattern S
 /// ```
 /// On the other hand with a negative lookahead you can define a semantic like
-/// ```
+/// ```text
 /// match pattern R only if it is NOT followed by pattern S
 /// ```
 ///
