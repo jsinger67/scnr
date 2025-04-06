@@ -99,6 +99,7 @@ impl CompiledDfa {
                             self.next_states.push(*next);
                         }
                         if self.end_states[*next].0 {
+                            let mut lookahead_len = 0;
                             // Check if a lookahead is present and if it is satisfied.
                             if let Some(lookahead) = self.lookaheads.get(&self.end_states[*next].1)
                             {
@@ -108,13 +109,15 @@ impl CompiledDfa {
                                 {
                                     let char_indices = next_slice.char_indices();
                                     let mut lookahead = lookahead.clone();
-                                    if !lookahead.satisfies_lookahead(
-                                        input,
+                                    let (satisfied, len) = lookahead.satisfies_lookahead(
+                                        next_slice,
                                         char_indices,
                                         match_char_class,
-                                    ) {
+                                    );
+                                    if !satisfied {
                                         continue;
                                     }
+                                    lookahead_len = len;
                                 } else {
                                     // We are at the end of the input.
                                     // If the lookahead is positive it is not satisfied, otherwise
@@ -127,7 +130,8 @@ impl CompiledDfa {
                             // Update the match end and terminal id if the match is longer or the
                             // terminal id is lower.
                             if let Some(match_end_index) = match_end.as_ref() {
-                                match (index + c.len_utf8()).cmp(match_end_index) {
+                                match (index + c.len_utf8()).cmp(&(match_end_index + lookahead_len))
+                                {
                                     std::cmp::Ordering::Greater => {
                                         match_end = Some(index + c.len_utf8());
                                         match_terminal_id = Some(self.end_states[*next].1);
@@ -141,8 +145,8 @@ impl CompiledDfa {
                                             match_terminal_id = Some(self.end_states[*next].1);
                                         }
                                     }
-                                    _ => {
-                                        unreachable!()
+                                    std::cmp::Ordering::Less => {
+                                        match_terminal_id = Some(self.end_states[*next].1);
                                     }
                                 }
                             } else {
@@ -600,9 +604,9 @@ mod tests {
                 let char_indices = input.char_indices();
                 trace!("Matching string: {}", input);
                 let match_char_class = character_class_registry.create_match_char_class().unwrap();
-                let span = compiled_dfa.find_from(input, char_indices, &match_char_class);
+                let matched = compiled_dfa.find_from(input, char_indices, &match_char_class);
                 assert_eq!(
-                    span,
+                    matched,
                     expected.map(|(start, end)| Match::new(0, Span::new(start, end))),
                     "Test '{}', Match data #{}, input '{}'",
                     test.name,
@@ -681,5 +685,41 @@ mod tests {
             std::fs::File::create(format!("{}/CharacterClassRegistry.txt", TARGET_FOLDER)).unwrap();
         writeln!(f, "Character classes deduced from veryl_modes.json").unwrap();
         writeln!(f, "{}", character_class_registry).unwrap();
+    }
+
+    /// This test failed until issue [#6](https://github.com/jsinger67/scnr/issues/6) was fixed.
+    #[test]
+    fn test_match_with_positive_lookahead() {
+        let json = r#"
+            [
+            {
+                "name": "INITIAL",
+                "patterns": [
+                { "pattern": "World", "token_type": 6 },
+                {
+                    "pattern": "World",
+                    "token_type": 7,
+                    "lookahead": { "is_positive": true, "pattern": "!" }
+                }
+                ],
+                "transitions": []
+            }
+            ]"#;
+        let scanner_modes: Vec<ScannerMode> = serde_json::from_str(json).unwrap();
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let mut compiled_dfa = CompiledDfa::try_from_patterns(
+            &scanner_modes[0].patterns,
+            &mut character_class_registry,
+        )
+        .expect("Failed to create compiled DFA from patterns");
+        let match_char_class = character_class_registry
+            .create_match_char_class()
+            .expect("Failed to create match char class function");
+        let input = "World!";
+        let char_indices = input.char_indices();
+        let matched = compiled_dfa
+            .find_from(input, char_indices, &match_char_class)
+            .expect("Failed to match input");
+        assert_eq!(matched.token_type(), 7);
     }
 }

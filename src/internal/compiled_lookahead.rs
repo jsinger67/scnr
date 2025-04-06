@@ -36,23 +36,23 @@ impl CompiledLookahead {
 
     /// Check if the lookahead constraints are met.
     ///
-    /// If the lookahead is positive, the function returns true if the input matches the lookahead.
-    /// Otherwise if the lookahead is negative, the function returns true if the input does not
-    /// match the lookahead.
+    /// The function returns a tuple of (bool, usize) where the bool indicates if the lookahead
+    /// is satisfied and the usize indicates the number of characters consumed.
+    ///
+    /// The boolean value in the returned tuple is calculated based on the value of `is_positive`.
+    /// If the lookahead is positive, the value is true if the input matches the lookahead.
+    /// Otherwise if the lookahead is negative, the value is true if the input does not match the
+    /// lookahead.
     pub(crate) fn satisfies_lookahead(
         &mut self,
         input: &str,
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
-    ) -> bool {
-        if self
-            .nfa
-            .find_from(input, char_indices, match_char_class)
-            .is_some()
-        {
-            self.is_positive
+    ) -> (bool, usize) {
+        if let Some(ma) = self.nfa.find_from(input, char_indices, match_char_class) {
+            (self.is_positive, ma.len())
         } else {
-            !self.is_positive
+            (!self.is_positive, 0)
         }
     }
 }
