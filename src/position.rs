@@ -3,12 +3,14 @@
 
 use std::fmt;
 
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A position in the haystack.
 /// The position is represented by a line and column number.
 /// The line and column numbers are 1-based.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub struct Position {
     /// The line number of the position.
     pub line: usize,

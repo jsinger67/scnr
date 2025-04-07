@@ -87,6 +87,7 @@ impl MultiPatternNfa {
     }
 
     /// Returns the start transitions of the MultiPatternNfa.
+    #[allow(dead_code)]
     pub(crate) fn start_transitions(&self) -> &[EpsilonTransition] {
         &self.start_transitions
     }
@@ -238,15 +239,10 @@ impl MultiPatternNfa {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        sync::{LazyLock, Once},
-    };
-
     use super::*;
-    use crate::{internal::character_class_registry::CharacterClassRegistry, ScannerMode};
+    use crate::internal::character_class_registry::CharacterClassRegistry;
 
-    static INIT: Once = Once::new();
+    static INIT: std::sync::Once = std::sync::Once::new();
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -257,13 +253,14 @@ mod tests {
         INIT.call_once(|| {
             let _ = env_logger::builder().is_test(true).try_init();
             // Delete all previously generated dot files.
-            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            let _ = std::fs::remove_dir_all(TARGET_FOLDER);
             // Create the target folder.
-            fs::create_dir_all(TARGET_FOLDER).unwrap();
+            std::fs::create_dir_all(TARGET_FOLDER).unwrap();
         });
     }
 
     /// A macro that simplifies the rendering of a dot file for a MultiPatternNfa.
+    #[cfg(feature = "dot_writer")]
     macro_rules! mp_nfa_render_to {
         ($nfa:expr, $label:expr, $char_class:ident) => {
             let label = format!("{}MpNfa", $label);
@@ -273,11 +270,13 @@ mod tests {
         };
     }
 
-    static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
-        let file = fs::File::open(path).unwrap();
-        serde_json::from_reader(file).unwrap()
-    });
+    #[cfg(feature = "serde")]
+    static SCANNER_MODES: std::sync::LazyLock<Vec<crate::ScannerMode>> =
+        std::sync::LazyLock::new(|| {
+            let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
+            let file = std::fs::File::open(path).unwrap();
+            serde_json::from_reader(file).unwrap()
+        });
 
     #[test]
     fn test_epsilon_closure() {
@@ -339,6 +338,7 @@ mod tests {
         assert_eq!(move_set, Vec::<StateID>::new());
     }
 
+    #[cfg(feature = "dot_writer")]
     #[test]
     fn test_try_from_patterns_single() {
         init();
@@ -353,6 +353,7 @@ mod tests {
         mp_nfa_render_to!(&multi_pattern_nfa, "APlus", character_class_registry);
     }
 
+    #[cfg(feature = "dot_writer")]
     #[test]
     fn test_try_from_patterns() {
         init();

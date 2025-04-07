@@ -1,13 +1,12 @@
+#![cfg(feature = "dot_writer")]
+#![cfg(feature = "serde")]
 // Outputs the compiled automata as in dot format for all the modes files in the data directory.
 // Run with `cargo test -- --nocapture trace_compiled_dfa_as_dot`
 
-#[cfg(not(feature = "regex_automata"))]
 use std::fs;
 
-#[cfg(not(feature = "regex_automata"))]
 use scnr::{ScannerBuilder, ScannerMode};
 
-#[cfg(not(feature = "regex_automata"))]
 #[test]
 fn trace_compiled_dfa_as_dot() {
     // Initialize the logger
@@ -51,6 +50,7 @@ fn trace_compiled_dfa_as_dot() {
             .build()
             .unwrap();
 
+        #[cfg(feature = "dot_writer")]
         scanner
             .log_compiled_automata_as_dot()
             .expect("Failed to trace compiled automata as dot");

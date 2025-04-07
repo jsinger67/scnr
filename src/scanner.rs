@@ -1,4 +1,7 @@
-use std::{fmt::Debug, path::Path};
+#[cfg(feature = "dot_writer")]
+use std::path::Path;
+
+use std::fmt::Debug;
 
 use log::trace;
 
@@ -80,6 +83,7 @@ impl Scanner {
     /// `scnr::internal::scanner_impl=debug`.
     ///
     /// This is not available when the `regex_automata` feature is enabled.
+    #[cfg(feature = "dot_writer")]
     pub fn log_compiled_automata_as_dot(&self) -> Result<()> {
         self.inner.log_compiled_automata_as_dot()
     }
@@ -89,6 +93,7 @@ impl Scanner {
     /// The file names are derived from the scanner mode names and the index of the regarding FSM.
     ///
     /// This is not available when the `regex_automata` feature is enabled.
+    #[cfg(feature = "dot_writer")]
     pub fn generate_compiled_automata_as_dot(
         &self,
         prefix: &str,
@@ -217,12 +222,14 @@ mod tests {
     // A test that checks the behavior of the scanner when so called 'pathological regular expressions'
     // are used. These are regular expressions that are very slow to match.
     // The test checks if the scanner is able to handle these cases and does not hang.
+    #[cfg(feature = "dot_writer")]
     struct TestData {
         pattern: &'static str,
         input: &'static str,
         expected_match: Option<&'static str>,
     }
 
+    #[cfg(feature = "dot_writer")]
     const TEST_DATA: &[TestData] = &[
         TestData {
             pattern: r"((a*)*b)",
@@ -274,6 +281,7 @@ mod tests {
         // },
     ];
 
+    #[cfg(feature = "dot_writer")]
     #[test]
     fn test_pathological_regular_expressions_dfa() {
         init();
@@ -290,7 +298,6 @@ mod tests {
                 .build()
                 .unwrap();
 
-            #[cfg(not(feature = "regex_automata"))]
             scanner
                 .generate_compiled_automata_as_dot(
                     &format!("Test{}", index),

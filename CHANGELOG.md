@@ -17,9 +17,12 @@ Be aware that this project is still v0.y.z which means that anything can change 
 We defined for this project that while being on major version zero we mark incompatible changes with
 new minor version numbers. Please note that this is no version handling covered by `Semver`.
 
-## 0.8.1 - Not released yet
+## 0.9.0 - Not released yet
 
-- Fix [#6](https://github.com/jsinger67/scnr/issues/6)
+- Fixed issues
+    - [Fix match length calculations for terminals with lookahead #6](https://github.com/jsinger67/scnr/issues/6)
+    - [Make dependency to dot-writer optional #4](https://github.com/jsinger67/scnr/issues/4)
+    - [Make dependencies to serde and serde_json optional #3](https://github.com/jsinger67/scnr/issues/3)
 
 ## 0.8.0 - 2025-02-12
 

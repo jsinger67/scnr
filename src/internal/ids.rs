@@ -1,19 +1,8 @@
 macro_rules! impl_id {
     ($name:ident, $tp:ty) => {
         /// The ID type $name.
-        #[derive(
-            Debug,
-            Clone,
-            Copy,
-            PartialEq,
-            Eq,
-            PartialOrd,
-            Ord,
-            Hash,
-            Default,
-            serde::Serialize,
-            serde::Deserialize,
-        )]
+        #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
         pub(crate) struct $name($tp);
 
         impl $name {
@@ -125,7 +114,7 @@ impl_id!(TerminalID, TerminalIDBase);
 pub(crate) type ScannerModeIDBase = usize;
 impl_id!(ScannerModeID, ScannerModeIDBase);
 
-/// The ID type for groups in Partions. This is the index of the group in the partition vector of
+/// The ID type for groups in Partitions. This is the index of the group in the partition vector of
 /// the minimizer.
 pub(crate) type StateGroupIDBase = u16;
 impl_id!(StateGroupID, StateGroupIDBase);

@@ -1,3 +1,4 @@
+#![cfg(feature = "default")]
 // Test complete flow of the application
 // Run with `cargo test --test e2e_test`
 

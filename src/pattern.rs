@@ -1,4 +1,5 @@
 //! Module with the pattern types and their methods.
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 /// A lookahead is a regular expression that restricts a match of a pattern so that it must be
@@ -18,7 +19,8 @@ use serde::{Deserialize, Serialize};
 /// The lookahead patterns denoted above as `S` are not considered as part of the matched string.
 ///
 /// The lookahead is an optional member of the [crate::Pattern] struct.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Lookahead {
     /// If the lookahead is positive.
     pub is_positive: bool,
@@ -62,11 +64,12 @@ impl std::fmt::Display for Lookahead {
 /// The pattern is represented by a regular expression and a token type number.
 /// The token type number is used to identify the pattern in the scanner.
 /// The pattern also has an optional [Lookahead].
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
 pub struct Pattern {
     pattern: String,
     token_type: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
     lookahead: Option<Lookahead>,
 }
 

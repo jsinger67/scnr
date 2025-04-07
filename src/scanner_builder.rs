@@ -98,15 +98,11 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(feature = "regex_automata"))]
-    use std::path::Path;
-    use std::{fs, sync::Once};
-
     use crate::{Pattern, ScannerModeSwitcher};
 
     use super::*;
 
-    static INIT: Once = Once::new();
+    static INIT: std::sync::Once = std::sync::Once::new();
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -117,9 +113,9 @@ mod tests {
         INIT.call_once(|| {
             let _ = env_logger::builder().is_test(true).try_init();
             // Delete all previously generated dot files.
-            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            let _ = std::fs::remove_dir_all(TARGET_FOLDER);
             // Create the target folder.
-            fs::create_dir_all(TARGET_FOLDER).unwrap();
+            std::fs::create_dir_all(TARGET_FOLDER).unwrap();
         });
     }
 
@@ -181,8 +177,9 @@ mod tests {
         "#;
 
         #[cfg(not(feature = "regex_automata"))]
+        #[cfg(feature = "dot_writer")]
         scanner
-            .generate_compiled_automata_as_dot("LineComment", Path::new(TARGET_FOLDER))
+            .generate_compiled_automata_as_dot("LineComment", std::path::Path::new(TARGET_FOLDER))
             .expect("Failed to generate compiled automata as dot");
 
         let matches: Vec<_> = scanner.find_iter(input).collect();

@@ -33,7 +33,7 @@ pub(crate) mod comparable_ast;
 pub(crate) use comparable_ast::ComparableAst;
 
 /// Module with conversion to graphviz dot format
-#[cfg(not(feature = "regex_automata"))]
+#[cfg(feature = "dot_writer")]
 pub(crate) mod dot;
 
 /// Module that provides functions and types related to the `find_matches` function.

@@ -16,7 +16,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Build
+    - name: Build with default features
       run: cargo build --verbose
-    - name: Run tests
+    - name: Run tests with default features
       run: cargo test --verbose
+    - name: Build with feature regex_automata
+      run: cargo build --no-default-features -features regex_automata --verbose
+    - name: Run tests with feature regex_automata
+      run: cargo test --no-default-features -features regex_automata --verbose

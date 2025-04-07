@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use log::{debug, trace};
+use log::trace;
 
 use crate::{Match, Result, ScannerMode, ScannerModeSwitcher};
 
@@ -104,8 +104,11 @@ impl ScannerImpl {
     /// Traces the compiled DFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
+    #[cfg(feature = "dot_writer")]
     pub(crate) fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
+        use log::debug;
         use std::io::Read;
+
         for (i, scanner_mode) in self.scanner_modes.iter().enumerate() {
             debug!("Compiled DFA: Mode {} \n{}", i, {
                 let mut cursor = std::io::Cursor::new(Vec::new());
@@ -127,6 +130,7 @@ impl ScannerImpl {
 
     /// Generates the compiled DFAs as dot files.
     /// The dot files are written to the target folder.
+    #[cfg(feature = "dot_writer")]
     pub(crate) fn generate_compiled_automata_as_dot(
         &self,
         prefix: &str,
@@ -226,7 +230,7 @@ impl TryFrom<&[ScannerMode]> for ScannerImpl {
 mod tests {
     use super::*;
     use crate::{Pattern, ScannerMode};
-    use std::{convert::TryInto, fs, path::Path, sync::Once};
+    use std::{convert::TryInto, fs, sync::Once};
 
     static INIT: Once = Once::new();
 
@@ -274,6 +278,7 @@ mod tests {
         assert!(!match_char_class((1).into(), 'c'));
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_generate_dot_files() {
         init();
@@ -287,7 +292,7 @@ mod tests {
 
         // Generate the compiled NFAs as dot files.
         scanner_impl
-            .generate_compiled_automata_as_dot("String", Path::new(TARGET_FOLDER))
+            .generate_compiled_automata_as_dot("String", std::path::Path::new(TARGET_FOLDER))
             .unwrap();
 
         // Check if the dot files are generated.

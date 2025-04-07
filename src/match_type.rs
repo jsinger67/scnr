@@ -1,3 +1,4 @@
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use crate::Position;
@@ -5,7 +6,8 @@ use crate::Position;
 use super::Span;
 
 /// A match in the haystack.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Match {
     /// The token type number associated with the match.
     token_type: usize,
@@ -87,7 +89,8 @@ impl From<regex_automata::Match> for Match {
 /// ```ignore
 /// let find_iter = scanner.find_iter(INPUT).with_positions();
 /// ```
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct MatchExt {
     /// The token type number associated with the match.
     token_type: usize,

@@ -435,38 +435,28 @@ impl std::fmt::Display for StateData {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs,
-        io::Write,
-        sync::{LazyLock, Once},
-    };
+    #[cfg(feature = "dot_writer")]
+    static INIT: std::sync::Once = std::sync::Once::new();
 
-    use log::trace;
-
-    use super::*;
-    use crate::{
-        internal::{character_class_registry::CharacterClassRegistry, parser::parse_regex_syntax},
-        Pattern, ScannerMode,
-    };
-
-    static INIT: Once = Once::new();
-
+    #[cfg(feature = "dot_writer")]
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/target/testout/compiled_dfa_tests"
     );
 
+    #[cfg(feature = "dot_writer")]
     fn init() {
         INIT.call_once(|| {
             let _ = env_logger::builder().is_test(true).try_init();
             // Delete all previously generated dot files.
-            let _ = fs::remove_dir_all(TARGET_FOLDER);
+            let _ = std::fs::remove_dir_all(TARGET_FOLDER);
             // Create the target folder.
-            fs::create_dir_all(TARGET_FOLDER).unwrap();
+            std::fs::create_dir_all(TARGET_FOLDER).unwrap();
         });
     }
 
     /// A macro that simplifies the rendering of a dot file for a NFA.
+    #[cfg(feature = "dot_writer")]
     macro_rules! nfa_render_to {
         ($nfa:expr, $label:expr) => {
             let mut f =
@@ -476,6 +466,7 @@ mod tests {
     }
 
     /// A macro that simplifies the rendering of a dot file for a CompiledDfa.
+    #[cfg(feature = "dot_writer")]
     macro_rules! compiled_dfa_render_to {
         ($compiled_dfa:expr, $label:expr, $character_class_registry:expr) => {
             let mut f =
@@ -490,14 +481,16 @@ mod tests {
         };
     }
 
+    #[cfg(feature = "dot_writer")]
     struct TestData {
         pattern: &'static str,
         name: &'static str,
-        end_states: Vec<(bool, TerminalID)>,
+        end_states: Vec<(bool, crate::internal::TerminalID)>,
         match_data: Vec<(&'static str, Option<(usize, usize)>)>,
     }
 
-    static TEST_DATA: LazyLock<Vec<TestData>> = LazyLock::new(|| {
+    #[cfg(feature = "dot_writer")]
+    static TEST_DATA: std::sync::LazyLock<Vec<TestData>> = std::sync::LazyLock::new(|| {
         vec![
             TestData {
                 pattern: "(A*B|AC)D",
@@ -582,16 +575,20 @@ mod tests {
         ]
     });
 
+    #[cfg(feature = "dot_writer")]
     #[test]
     fn test_find_from() {
+        use log::trace;
+
         init();
         for test in &*TEST_DATA {
-            let pattern = Pattern::new(test.pattern.to_string(), 0);
-            let mut character_class_registry = CharacterClassRegistry::new();
-            let ast = parse_regex_syntax(pattern.pattern()).unwrap();
-            let nfa: Nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
+            let pattern = crate::Pattern::new(test.pattern.to_string(), 0);
+            let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
+            let ast = crate::internal::parse_regex_syntax(pattern.pattern()).unwrap();
+            let nfa: crate::internal::Nfa =
+                crate::internal::Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
             nfa_render_to!(&nfa, test.name);
-            let mut compiled_dfa = CompiledDfa::from(nfa);
+            let mut compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::from(nfa);
             assert_eq!(
                 compiled_dfa.end_states, test.end_states,
                 "Test '{}', End states",
@@ -607,7 +604,7 @@ mod tests {
                 let matched = compiled_dfa.find_from(input, char_indices, &match_char_class);
                 assert_eq!(
                     matched,
-                    expected.map(|(start, end)| Match::new(0, Span::new(start, end))),
+                    expected.map(|(start, end)| crate::Match::new(0, crate::Span::new(start, end))),
                     "Test '{}', Match data #{}, input '{}'",
                     test.name,
                     id,
@@ -619,17 +616,19 @@ mod tests {
 
     /// A test that creates a CompiledDfa from a multi-pattern NFA and writes the dot files
     /// to the target directory.
+    #[cfg(feature = "serde")]
     #[test]
     fn test_multi_pattern_nfa_veryl() {
         init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
-        let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
-        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
+        let file =
+            std::fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
+        let scanner_modes: Vec<crate::ScannerMode> = serde_json::from_reader(file).unwrap();
         assert!(scanner_modes[0].patterns[17].lookahead().is_some());
         assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
-        let mut character_class_registry = CharacterClassRegistry::new();
+        let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
         for scanner_mode in &scanner_modes[0..3] {
-            let compiled_dfa = CompiledDfa::try_from_patterns(
+            let compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::try_from_patterns(
                 &scanner_mode.patterns,
                 &mut character_class_registry,
             )
@@ -648,14 +647,16 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_multi_pattern_nfa_parol() {
         init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/parol.json");
-        let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
-        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
-        let mut character_class_registry = CharacterClassRegistry::new();
-        let compiled_dfa = CompiledDfa::try_from_patterns(
+        let file =
+            std::fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
+        let scanner_modes: Vec<crate::ScannerMode> = serde_json::from_reader(file).unwrap();
+        let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
+        let compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )
@@ -666,16 +667,20 @@ mod tests {
         compiled_dfa_render_to!(&compiled_dfa, "Parol", &character_class_registry);
     }
 
+    #[cfg(feature = "serde")]
     #[test]
     fn test_character_class_registry_data() {
+        use std::io::Write;
+
         init();
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
-        let file = fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
-        let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file).unwrap();
+        let file =
+            std::fs::File::open(path).unwrap_or_else(|_| panic!("Failed to open file {}", path));
+        let scanner_modes: Vec<crate::ScannerMode> = serde_json::from_reader(file).unwrap();
         assert!(scanner_modes[0].patterns[17].lookahead().is_some());
         assert_eq!(scanner_modes[0].patterns[17].terminal_id(), 20);
-        let mut character_class_registry = CharacterClassRegistry::new();
-        let _compiled_dfa = CompiledDfa::try_from_patterns(
+        let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
+        let _compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )
@@ -688,6 +693,7 @@ mod tests {
     }
 
     /// This test failed until issue [#6](https://github.com/jsinger67/scnr/issues/6) was fixed.
+    #[cfg(feature = "serde")]
     #[test]
     fn test_match_with_positive_lookahead() {
         let json = r#"
@@ -705,9 +711,9 @@ mod tests {
                 "transitions": []
             }
             ]"#;
-        let scanner_modes: Vec<ScannerMode> = serde_json::from_str(json).unwrap();
-        let mut character_class_registry = CharacterClassRegistry::new();
-        let mut compiled_dfa = CompiledDfa::try_from_patterns(
+        let scanner_modes: Vec<crate::ScannerMode> = serde_json::from_str(json).unwrap();
+        let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
+        let mut compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )

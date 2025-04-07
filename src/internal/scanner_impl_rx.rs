@@ -156,12 +156,14 @@ impl ScannerImpl {
     /// Traces the compiled DFAs as dot format.
     /// The output is written to the log.
     /// This function is used for debugging purposes.
+    #[cfg(feature = "dot_writer")]
     pub(crate) fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
         unimplemented!("Regex automata does not support dot output yet.");
     }
 
     /// Generates the compiled DFAs as dot files.
     /// The dot files are written to the target folder.
+    #[cfg(feature = "dot_writer")]
     pub(crate) fn generate_compiled_automata_as_dot(
         &self,
         _prefix: &str,

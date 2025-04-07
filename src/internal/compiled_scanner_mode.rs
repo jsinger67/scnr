@@ -72,6 +72,7 @@ mod tests {
     }
 
     /// A macro that simplifies the rendering of a dot file for a DFA.
+    #[cfg(feature = "dot_writer")]
     macro_rules! compiled_dfa_render_to {
         ($nfa:expr, $label:expr, $reg:ident) => {
             let label = format!("{}Dfa", $label);
@@ -82,6 +83,7 @@ mod tests {
         };
     }
 
+    #[cfg(feature = "dot_writer")]
     #[test]
     fn test_compile_to_nfa() {
         init();
