@@ -23,6 +23,7 @@ new minor version numbers. Please note that this is no version handling covered 
     - [Fix match length calculations for terminals with lookahead #6](https://github.com/jsinger67/scnr/issues/6)
     - [Make dependency to dot-writer optional #4](https://github.com/jsinger67/scnr/issues/4)
     - [Make dependencies to serde and serde_json optional #3](https://github.com/jsinger67/scnr/issues/3)
+    - [Switch to a cargo workspace #5](https://github.com/jsinger67/scnr/issues/5)
 
 ## 0.8.0 - 2025-02-12
 
