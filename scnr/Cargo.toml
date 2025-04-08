@@ -1,18 +1,15 @@
-[workspace]
-members = ["scnr"]
-
 [package]
 name = "scnr"
-version = "0.9.0"
-edition = "2021"
-authors = ["Jörg Singer <singer.joerg@gmx.de>"]
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
 description = "Scanner/Lexer with regex patterns and multiple modes"
 documentation = "https://docs.rs/scnr"
 repository = "https://github.com/jsinger67/scnr"
 readme = "README.md"
-keywords = ["scanner", "lexer", "tokenizer"]
-categories = ["algorithms", "parsing"]
-license = "MIT/Apache-2.0"
 build = "build.rs"
 
 [dependencies]
@@ -41,8 +38,3 @@ regex_automata = ["dep:regex-automata"]
 scnr_unicode = ["dep:seshat-unicode"]
 dot_writer = ["dep:dot-writer"]
 serde = ["dep:serde", "dep:serde_json"]
-
-[profile.release]
-opt-level = 3
-lto = true
-debug = true
