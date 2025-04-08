@@ -1,6 +1,6 @@
 //! This module contains the implementation of the multi-pattern NFA.
 //! The multi-pattern NFA is used to find all matches of multiple patterns in a text.
-//! The implemenation is based on the nfa module. The Nfa there has only one end state, but the
+//! The implementation is based on the nfa module. The Nfa there has only one end state, but the
 //! multi-pattern NFA has one end state for each pattern.
 
 use super::{nfa::EpsilonTransition, CharClassID, Nfa, StateID};
