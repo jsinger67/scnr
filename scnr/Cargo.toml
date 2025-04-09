@@ -34,7 +34,7 @@ harness = false
 
 [features]
 default = ["scnr_unicode", "dot_writer", "serde"]
-regex_automata = ["dep:regex-automata"]
+regex_automata = ["dep:regex-automata", "serde"]
 scnr_unicode = ["dep:seshat-unicode"]
 dot_writer = ["dep:dot-writer"]
 serde = ["dep:serde", "dep:serde_json"]
