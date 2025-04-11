@@ -32,6 +32,10 @@ pub enum ScnrErrorKind {
     #[error("'{1}' {0}")]
     RegexSyntaxError(regex_syntax::ast::Error, String),
 
+    /// An error occurred during conversion to the regex HIR (high-level intermediate representation).
+    #[error("'{1}' {0}")]
+    RegexHirError(regex_syntax::hir::Error, String),
+
     /// An error occurred during the parsing of the regex syntax.
     #[cfg(feature = "regex_automata")]
     #[error(transparent)]

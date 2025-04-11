@@ -99,7 +99,7 @@ impl Nfa {
     ) {
         let char_class = char_class_registry.add_character_class(&chars);
         self.states[from].transitions.push(NfaTransition {
-            ast: ComparableAst(chars),
+            ast: ComparableAst::new(chars),
             char_class,
             target_state,
         });

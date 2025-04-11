@@ -182,15 +182,9 @@ impl CompiledDfa {
         let ast = parse_regex_syntax(pattern.pattern())?;
         let mut nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
         nfa.set_terminal_id(pattern.terminal_id());
-        let mut nfa: CompiledDfa = nfa.into();
-        nfa.lookaheads = FxHashMap::default();
-        if let Some(lookahead) = pattern.lookahead() {
-            let lookahead =
-                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
-            nfa.lookaheads
-                .insert((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
-        }
-        Ok(nfa)
+        let mut compiled_dfa: CompiledDfa = nfa.into();
+        Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
+        Ok(compiled_dfa)
     }
 
     pub(crate) fn try_from_patterns(
@@ -201,22 +195,19 @@ impl CompiledDfa {
         let mut compiled_dfa: CompiledDfa = mp_nfa.into();
         // Add the lookaheads to the compiled NFA.
         for pattern in patterns.iter() {
-            if let Some(lookahead) = pattern.lookahead() {
-                let lookahead =
-                    CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
-                compiled_dfa
-                    .add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
-            }
+            Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
         }
         Ok(compiled_dfa)
     }
 
     /// Add a lookahead for a given terminal_id to the compiled NFA.
+    #[inline(always)]
     pub(crate) fn add_lookahead(&mut self, terminal_id: TerminalID, lookahead: CompiledLookahead) {
         self.lookaheads.insert(terminal_id, lookahead);
     }
 
     /// Returns the pattern for the given terminal id.
+    #[inline(always)]
     pub(crate) fn pattern(&self, terminal_id: TerminalID) -> &str {
         &self.patterns[terminal_id]
     }
@@ -227,6 +218,20 @@ impl CompiledDfa {
             .iter()
             .position(|&id| id == terminal_id)
             .unwrap()
+    }
+
+    #[inline(always)]
+    fn add_lookahead_from_pattern(
+        pattern: &Pattern,
+        character_class_registry: &mut CharacterClassRegistry,
+        compiled_dfa: &mut CompiledDfa,
+    ) -> Result<()> {
+        if let Some(lookahead) = pattern.lookahead() {
+            let lookahead =
+                CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
+            compiled_dfa.add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
+        };
+        Ok(())
     }
 }
 

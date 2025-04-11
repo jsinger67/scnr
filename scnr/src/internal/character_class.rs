@@ -13,13 +13,18 @@ impl CharacterClass {
     pub(crate) fn new(id: CharClassID, ast: Ast) -> Self {
         CharacterClass {
             id,
-            ast: ComparableAst(ast),
+            ast: ComparableAst::new(ast),
         }
     }
 
     #[inline]
     pub(crate) fn ast(&self) -> &Ast {
-        &self.ast.0
+        &self.ast.ast
+    }
+
+    #[inline]
+    pub(crate) fn pattern(&self) -> &str {
+        self.ast.pattern()
     }
 }
 

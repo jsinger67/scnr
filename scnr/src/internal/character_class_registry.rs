@@ -26,7 +26,7 @@ impl CharacterClassRegistry {
 
     /// Adds a character class to the registry if it is not already present and returns its ID.
     pub(crate) fn add_character_class(&mut self, ast: &Ast) -> CharClassID {
-        let character_class = ComparableAst(ast.clone());
+        let character_class = ComparableAst::new(ast.clone());
         if let Some(id) = self
             .character_classes
             .iter()
@@ -36,7 +36,7 @@ impl CharacterClassRegistry {
         } else {
             let id = CharClassID::new(self.character_classes.len() as CharClassIDBase);
             self.character_classes
-                .push(CharacterClass::new(id, character_class.0));
+                .push(CharacterClass::new(id, character_class.ast));
             id
         }
     }
@@ -76,7 +76,7 @@ impl CharacterClassRegistry {
                 .iter()
                 .try_fold(Vec::new(), |mut acc, cc| {
                     // trace!("Create match function for char class {:?}", cc);
-                    let match_function: MatchFunction = cc.ast().try_into()?;
+                    let match_function: MatchFunction = (cc.ast(), cc.pattern()).try_into()?;
                     acc.push(match_function);
                     Ok::<Vec<MatchFunction>, ScnrError>(acc)
                 })?;

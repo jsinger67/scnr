@@ -60,6 +60,12 @@ impl MultiPatternNfa {
                     ScnrErrorKind::IoError(_) | ScnrErrorKind::EmptyToken => {
                         Err(result.unwrap_err())?
                     }
+                    ScnrErrorKind::RegexHirError(error, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexHirError(
+                            error.clone(),
+                            format!("Error in pattern #{} '{}'", index, pattern),
+                        )))?
+                    }
                 },
                 Ok(mut nfa) => {
                     nfa.set_terminal_id(pattern.terminal_id());
