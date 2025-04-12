@@ -30,11 +30,15 @@ impl std::fmt::Display for ScnrError {
 pub enum ScnrErrorKind {
     /// An error occurred during the parsing of the regex syntax.
     #[error("'{1}' {0}")]
-    RegexSyntaxError(regex_syntax::ast::Error, String),
+    RegexSyntaxError(regex_syntax::Error, String),
+
+    /// An error occurred during the parsing of the regex syntax.
+    #[error("'{1}' {0}")]
+    RegexSyntaxAstError(regex_syntax::ast::Error, String),
 
     /// An error occurred during conversion to the regex HIR (high-level intermediate representation).
     #[error("'{1}' {0}")]
-    RegexHirError(regex_syntax::hir::Error, String),
+    RegexSyntaxHirError(regex_syntax::hir::Error, String),
 
     /// An error occurred during the parsing of the regex syntax.
     #[cfg(feature = "regex_automata")]
@@ -55,9 +59,15 @@ pub enum ScnrErrorKind {
     EmptyToken,
 }
 
+impl From<regex_syntax::Error> for ScnrError {
+    fn from(error: regex_syntax::Error) -> Self {
+        ScnrError::new(ScnrErrorKind::RegexSyntaxError(error, "!".to_string()))
+    }
+}
+
 impl From<regex_syntax::ast::Error> for ScnrError {
     fn from(error: regex_syntax::ast::Error) -> Self {
-        ScnrError::new(ScnrErrorKind::RegexSyntaxError(error, "!".to_string()))
+        ScnrError::new(ScnrErrorKind::RegexSyntaxAstError(error, "!".to_string()))
     }
 }
 

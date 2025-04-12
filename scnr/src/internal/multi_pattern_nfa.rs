@@ -45,10 +45,12 @@ impl MultiPatternNfa {
         for (index, pattern) in patterns.iter().enumerate() {
             let ast = super::parse_regex_syntax(pattern.pattern())?;
             let result = Nfa::try_from_ast(ast, character_class_registry);
+            // Add the pattern information to a possible error message.
+            // This is done by wrapping the error in a new ScnrError with the pattern information.
             match result {
                 Err(ScnrError { ref source }) => match source.as_ref() {
-                    ScnrErrorKind::RegexSyntaxError(r, _) => {
-                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
+                    ScnrErrorKind::RegexSyntaxAstError(r, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxAstError(
                             r.clone(),
                             format!("Error in pattern #{} '{}'", index, pattern),
                         )))?
@@ -60,8 +62,14 @@ impl MultiPatternNfa {
                     ScnrErrorKind::IoError(_) | ScnrErrorKind::EmptyToken => {
                         Err(result.unwrap_err())?
                     }
-                    ScnrErrorKind::RegexHirError(error, _) => {
-                        Err(ScnrError::new(ScnrErrorKind::RegexHirError(
+                    ScnrErrorKind::RegexSyntaxHirError(error, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxHirError(
+                            error.clone(),
+                            format!("Error in pattern #{} '{}'", index, pattern),
+                        )))?
+                    }
+                    ScnrErrorKind::RegexSyntaxError(error, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
                             error.clone(),
                             format!("Error in pattern #{} '{}'", index, pattern),
                         )))?

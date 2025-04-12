@@ -117,7 +117,7 @@ impl TryFrom<(&ClassUnicode, &str)> for MatchFn {
                 &Ast::ClassUnicode(Box::new(unicode.clone())),
             )
             .map_err(|e| {
-                ScnrError::new(ScnrErrorKind::RegexHirError(
+                ScnrError::new(ScnrErrorKind::RegexSyntaxHirError(
                     e,
                     "Can't translate UnicodeClass".to_string(),
                 ))
@@ -269,28 +269,6 @@ impl TryFrom<(&ClassSetBinaryOp, bool, &str)> for MatchFn {
         })
     }
 }
-
-// impl TryFrom<&regex_syntax::hir::Hir> for MatchFn {
-//     type Error = ScnrError;
-
-//     #[inline(always)]
-//     fn try_from(hir: &regex_syntax::hir::Hir) -> Result<Self> {
-//         let hir = regex_syntax::hir::translate::TranslatorBuilder::new()
-//             .unicode(true)
-//             .build()
-//             .translate(hir.pattern(), hir)
-//             .map_err(|e| {
-//                 ScnrError::new(ScnrErrorKind::RegexHirError(
-//                     e,
-//                     "Can't translate Hir".to_string(),
-//                 ))
-//             })?;
-//         let match_function = MatchFunction {
-//             match_fn: hir.try_into()?,
-//         };
-//         Ok(match_function)
-//     }
-// }
 
 impl TryFrom<&AstWithPattern> for MatchFunction {
     type Error = ScnrError;

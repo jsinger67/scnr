@@ -28,6 +28,26 @@ pub(crate) fn parse_regex_syntax(input: &str) -> Result<Ast> {
         Err(e) => Err(e.into()),
     }
 }
+
+/// Parse the regex syntax into an high-level intermediate representation (HIR).
+/// The function returns an error if the regex syntax is invalid.
+/// # Arguments
+/// * `input` - A string slice that holds the regex syntax.
+/// # Returns
+/// An `Hir` that represents the high-level intermediate representation of the regex syntax.
+/// # Errors
+/// An error is returned if the regex syntax is invalid.
+pub(crate) fn parse_regex_syntax_hir(input: &str) -> Result<regex_syntax::hir::Hir> {
+    let now = Instant::now();
+    match regex_syntax::parse(input) {
+        Ok(hir) => {
+            let elapsed_time = now.elapsed();
+            trace!("Parsing took {} milliseconds.", elapsed_time.as_millis());
+            Ok(hir)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::error::Error;
@@ -55,7 +75,7 @@ mod tests {
         // Add assertions here to validate the error message or behavior
         assert!(matches!(
             result,
-            Err(ref e) if matches!(e, ScnrError{ source } if matches!(**source, ScnrErrorKind::RegexSyntaxError(_, _)))
+            Err(ref e) if matches!(e, ScnrError{ source } if matches!(**source, ScnrErrorKind::RegexSyntaxAstError(_, _)))
         ));
         assert_eq!(
             result.unwrap_err().source().unwrap().to_string(),
@@ -77,7 +97,7 @@ error: unclosed character class"#
     // This may hinder the use of the regex_syntax crate because it does not support lookaround
     // assertions. We'll have to evaluate if we can live with this limitation.
     #[test]
-    #[should_panic(expected = "RegexSyntaxError(Error { kind: UnsupportedLookAround")]
+    #[should_panic(expected = "RegexSyntaxAstError(Error { kind: UnsupportedLookAround")]
     fn test_a_only_if_followed_by_b() {
         // Scanner syntax that matches 'a' only if it is followed by 'b'
         let input = r"a(?=b)";

@@ -411,7 +411,7 @@ impl Nfa {
         let mut nfa = Nfa::new();
         nfa.set_pattern(&hir.to_string());
         match hir.kind() {
-            regex_syntax::hir::HirKind::Empty => Ok(nfa),
+            regex_syntax::hir::HirKind::Empty | regex_syntax::hir::HirKind::Look(_) => Ok(nfa),
             regex_syntax::hir::HirKind::Literal(_) | regex_syntax::hir::HirKind::Class(_) => {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
@@ -419,10 +419,45 @@ impl Nfa {
                 nfa.add_transition_hir(start_state, hir.clone(), end_state, char_class_registry);
                 Ok(nfa)
             }
-            _ => Err(unsupported!(format!(
-                "Unsupported HirKind: {:?}",
-                hir.kind()
-            ))),
+            regex_syntax::hir::HirKind::Repetition(repetition) => {
+                let nfa2: Nfa = Self::try_from_hir((*repetition.sub).clone(), char_class_registry)?;
+                // At least min repetitions
+                for _ in 0..repetition.min {
+                    nfa.concat(nfa2.clone());
+                }
+                let mut nfa_zero_or_one: Nfa = nfa2.clone();
+                nfa_zero_or_one.zero_or_one();
+                if let Some(max) = repetition.max {
+                    // At most max-min repetitions are optional
+                    for _ in repetition.min..max {
+                        nfa.concat(nfa_zero_or_one.clone());
+                    }
+                } else {
+                    // Unbounded repetition
+                    let mut nfa_zero_or_more: Nfa = nfa2.clone();
+                    nfa_zero_or_more.zero_or_more();
+                    nfa.concat(nfa_zero_or_more);
+                }
+                Ok(nfa)
+            }
+            regex_syntax::hir::HirKind::Capture(capture) => {
+                let nfa = Self::try_from_hir((*capture.sub).clone(), char_class_registry)?;
+                Ok(nfa)
+            }
+            regex_syntax::hir::HirKind::Concat(hirs) => {
+                for hir in hirs.iter() {
+                    let nfa2: Nfa = Self::try_from_hir(hir.clone(), char_class_registry)?;
+                    nfa.concat(nfa2);
+                }
+                Ok(nfa)
+            }
+            regex_syntax::hir::HirKind::Alternation(hirs) => {
+                for hir in hirs.iter() {
+                    let nfa2: Nfa = Self::try_from_hir(hir.clone(), char_class_registry)?;
+                    nfa.alternation(nfa2);
+                }
+                Ok(nfa)
+            }
         }
     }
 
