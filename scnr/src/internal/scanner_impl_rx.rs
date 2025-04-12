@@ -289,7 +289,7 @@ mod tests {
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/scanner_nfa_impl_rx_test"
+        "/../target/testout/scanner_nfa_impl_rx_test"
     );
 
     fn init() {

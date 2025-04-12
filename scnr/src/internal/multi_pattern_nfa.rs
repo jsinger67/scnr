@@ -74,6 +74,9 @@ impl MultiPatternNfa {
                             format!("Error in pattern #{} '{}'", index, pattern),
                         )))?
                     }
+                    ScnrErrorKind::InvalidUtf8(utf8_error) => {
+                        Err(ScnrError::new(ScnrErrorKind::InvalidUtf8(*utf8_error)))?
+                    }
                 },
                 Ok(mut nfa) => {
                     nfa.set_terminal_id(pattern.terminal_id());
@@ -260,7 +263,7 @@ mod tests {
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/multi_pattern_nfa_test"
+        "/../target/testout/multi_pattern_nfa_test"
     );
 
     fn init() {

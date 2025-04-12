@@ -446,7 +446,7 @@ mod tests {
     #[cfg(feature = "dot_writer")]
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/compiled_dfa_tests"
+        "/../target/testout/compiled_dfa_tests"
     );
 
     #[cfg(feature = "dot_writer")]

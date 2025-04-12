@@ -323,7 +323,7 @@ Id2
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/test_find_matches_impl"
+        "/../target/testout/test_find_matches_impl"
     );
 
     fn init() {

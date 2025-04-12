@@ -77,7 +77,7 @@ pub(crate) use nfa::Nfa;
 #[cfg(not(feature = "regex_automata"))]
 mod parser;
 #[cfg(not(feature = "regex_automata"))]
-pub(crate) use parser::parse_regex_syntax;
+pub(crate) use parser::{parse_regex_syntax, parse_regex_syntax_hir};
 
 mod scanner_cache;
 pub(crate) use scanner_cache::SCANNER_CACHE;

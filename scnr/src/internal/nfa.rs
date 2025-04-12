@@ -5,7 +5,7 @@ use std::vec;
 
 use regex_syntax::ast::{Ast, FlagsItemKind, GroupKind, RepetitionKind, RepetitionRange};
 
-use crate::{internal::HirWithPattern, Pattern, Result, ScnrError};
+use crate::{internal::HirWithPattern, Pattern, Result, ScnrError, ScnrErrorKind};
 
 use super::{
     character_class::AstOrHir, ids::StateIDBase, AstWithPattern, CharClassID,
@@ -328,7 +328,7 @@ impl Nfa {
                 let mut nfa2: Nfa = Self::try_from_ast((*r.ast).clone(), char_class_registry)?;
                 if !r.greedy {
                     Err(unsupported!(
-                        format!("{}: Non-greedy repetionions. Consider using different scanner modes instead.", ast)))?;
+                        format!("{}: Non-greedy repetitions. Consider using different scanner modes instead.", ast)))?;
                 }
                 match &r.op.kind {
                     RepetitionKind::ZeroOrOne => {
@@ -412,7 +412,28 @@ impl Nfa {
         nfa.set_pattern(&hir.to_string());
         match hir.kind() {
             regex_syntax::hir::HirKind::Empty | regex_syntax::hir::HirKind::Look(_) => Ok(nfa),
-            regex_syntax::hir::HirKind::Literal(_) | regex_syntax::hir::HirKind::Class(_) => {
+            regex_syntax::hir::HirKind::Literal(literal) => {
+                let mut start_state = nfa.end_state();
+                let chars = std::str::from_utf8(&literal.0)
+                    .map_err(|e| ScnrError::new(ScnrErrorKind::InvalidUtf8(e)))?;
+                chars.char_indices().for_each(|(_, c)| {
+                    let end_state = nfa.new_state();
+                    nfa.set_end_state(end_state);
+                    let mut buffer = [0; 4];
+                    let utf8_bytes = c.encode_utf8(&mut buffer);
+                    let hir = regex_syntax::hir::Hir::literal(utf8_bytes.as_bytes().to_vec());
+                    nfa.add_transition_hir(
+                        start_state,
+                        hir.clone(),
+                        end_state,
+                        char_class_registry,
+                    );
+                    start_state = end_state;
+                });
+                nfa.set_end_state(start_state);
+                Ok(nfa)
+            }
+            regex_syntax::hir::HirKind::Class(_) => {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
                 nfa.set_end_state(end_state);
@@ -1044,7 +1065,7 @@ mod tests_try_from {
     #[cfg(feature = "dot_writer")]
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/test_try_from_ast"
+        "/../target/testout/test_try_from_ast"
     );
 
     #[cfg(feature = "dot_writer")]
@@ -1068,12 +1089,22 @@ mod tests_try_from {
         };
     }
 
+    /// A macro that simplifies the rendering of a dot file for a NFA.
+    #[cfg(feature = "dot_writer")]
+    macro_rules! nfa_render_hir_to {
+        ($nfa:expr, $label:expr) => {
+            let mut f =
+                std::fs::File::create(format!("{}/{}NfaHir.dot", TARGET_FOLDER, $label)).unwrap();
+            $crate::internal::dot::nfa_render($nfa, $label, &mut f);
+        };
+    }
+
     #[cfg(feature = "dot_writer")]
     struct TestData {
         // Use pascal case for the name because the name is used also as dot file name.
         // Also, the name should be unique.
         name: &'static str,
-        input: &'static str,
+        pattern: &'static str,
         expected_states: usize,
         expected_start_state: usize,
         expected_end_state: usize,
@@ -1084,7 +1115,7 @@ mod tests_try_from {
     const TEST_DATA: &[TestData] = &[
         TestData {
             name: "SingleCharacter1",
-            input: "a",
+            pattern: "a",
             expected_states: 2,
             expected_start_state: 0,
             expected_end_state: 1,
@@ -1092,7 +1123,7 @@ mod tests_try_from {
         },
         TestData {
             name: "Concatenation",
-            input: "ab",
+            pattern: "ab",
             expected_states: 4,
             expected_start_state: 0,
             expected_end_state: 3,
@@ -1100,7 +1131,7 @@ mod tests_try_from {
         },
         TestData {
             name: "Alternation1",
-            input: "a|b",
+            pattern: "a|b",
             expected_states: 6,
             expected_start_state: 4,
             expected_end_state: 5,
@@ -1108,7 +1139,7 @@ mod tests_try_from {
         },
         TestData {
             name: "Repetition",
-            input: "a*",
+            pattern: "a*",
             expected_states: 4,
             expected_start_state: 2,
             expected_end_state: 3,
@@ -1116,7 +1147,7 @@ mod tests_try_from {
         },
         TestData {
             name: "ZeroOrOne",
-            input: "a?",
+            pattern: "a?",
             expected_states: 3,
             expected_start_state: 2,
             expected_end_state: 1,
@@ -1124,7 +1155,7 @@ mod tests_try_from {
         },
         TestData {
             name: "OneOrMore",
-            input: "a+",
+            pattern: "a+",
             expected_states: 4,
             expected_start_state: 2,
             expected_end_state: 3,
@@ -1132,7 +1163,7 @@ mod tests_try_from {
         },
         TestData {
             name: "Complex1",
-            input: "(a|b)*abb",
+            pattern: "(a|b)*abb",
             expected_states: 14,
             expected_start_state: 6,
             expected_end_state: 13,
@@ -1140,7 +1171,7 @@ mod tests_try_from {
         },
         TestData {
             name: "String",
-            input: r"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}",
+            pattern: r"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}",
             expected_states: 26,
             expected_start_state: 0,
             expected_end_state: 25,
@@ -1148,10 +1179,86 @@ mod tests_try_from {
         },
         TestData {
             name: "Example1",
-            input: "(A*B|AC)D",
+            pattern: "(A*B|AC)D",
             expected_states: 14,
             expected_start_state: 10,
             expected_end_state: 13,
+            expected_char_classes: 4,
+        },
+    ];
+
+    #[cfg(feature = "dot_writer")]
+    const TEST_DATA_HIR: &[TestData] = &[
+        TestData {
+            name: "SingleCharacter1",
+            pattern: "a",
+            expected_states: 2,
+            expected_start_state: 0,
+            expected_end_state: 1,
+            expected_char_classes: 1,
+        },
+        TestData {
+            name: "Concatenation",
+            pattern: "ab",
+            expected_states: 3,
+            expected_start_state: 0,
+            expected_end_state: 2,
+            expected_char_classes: 2,
+        },
+        TestData {
+            name: "Alternation1",
+            pattern: "a|b",
+            expected_states: 2,
+            expected_start_state: 0,
+            expected_end_state: 1,
+            expected_char_classes: 1,
+        },
+        TestData {
+            name: "Repetition",
+            pattern: "a*",
+            expected_states: 4,
+            expected_start_state: 2,
+            expected_end_state: 3,
+            expected_char_classes: 1,
+        },
+        TestData {
+            name: "ZeroOrOne",
+            pattern: "a?",
+            expected_states: 3,
+            expected_start_state: 2,
+            expected_end_state: 1,
+            expected_char_classes: 1,
+        },
+        TestData {
+            name: "OneOrMore",
+            pattern: "a+",
+            expected_states: 6,
+            expected_start_state: 0,
+            expected_end_state: 5,
+            expected_char_classes: 1,
+        },
+        TestData {
+            name: "Complex1",
+            pattern: "(a|b)*abb",
+            expected_states: 8,
+            expected_start_state: 2,
+            expected_end_state: 7,
+            expected_char_classes: 3,
+        },
+        TestData {
+            name: "String",
+            pattern: r"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}",
+            expected_states: 26,
+            expected_start_state: 0,
+            expected_end_state: 25,
+            expected_char_classes: 6,
+        },
+        TestData {
+            name: "Example1",
+            pattern: "(A*B|AC)D",
+            expected_states: 13,
+            expected_start_state: 9,
+            expected_end_state: 12,
             expected_char_classes: 4,
         },
     ];
@@ -1165,7 +1272,7 @@ mod tests_try_from {
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
             let nfa: Nfa = Nfa::try_from_ast(
-                crate::internal::parse_regex_syntax(data.input).unwrap(),
+                crate::internal::parse_regex_syntax(data.pattern).unwrap(),
                 &mut char_class_registry,
             )
             .unwrap();
@@ -1177,28 +1284,73 @@ mod tests_try_from {
                 data.expected_states,
                 "expected state count: {}:{}",
                 data.name,
-                data.input
+                data.pattern
             );
             assert_eq!(
                 nfa.start_state.as_usize(),
                 data.expected_start_state,
                 "expected start state: {}:{}",
                 data.name,
-                data.input
+                data.pattern
             );
             assert_eq!(
                 nfa.end_state.as_usize(),
                 data.expected_end_state,
                 "expected end state: {}:{}",
                 data.name,
-                data.input
+                data.pattern
             );
             assert_eq!(
                 char_class_registry.len(),
                 data.expected_char_classes,
                 "expected char classes: {}:{}",
                 data.name,
-                data.input
+                data.pattern
+            );
+        }
+    }
+
+    #[cfg(feature = "dot_writer")]
+    #[test]
+    fn test_try_from_hir() {
+        use crate::internal::{CharacterClassRegistry, Nfa};
+
+        init();
+        for data in TEST_DATA_HIR.iter() {
+            let mut char_class_registry = CharacterClassRegistry::new();
+            let hir = crate::internal::parse_regex_syntax_hir(data.pattern).unwrap();
+            eprintln!("{} => {:?}", data.pattern, hir);
+            let nfa: Nfa = Nfa::try_from_hir(hir, &mut char_class_registry).unwrap();
+
+            nfa_render_hir_to!(&nfa, data.name);
+
+            assert_eq!(
+                nfa.states.len(),
+                data.expected_states,
+                "expected state count: {}:{}",
+                data.name,
+                data.pattern
+            );
+            assert_eq!(
+                nfa.start_state.as_usize(),
+                data.expected_start_state,
+                "expected start state: {}:{}",
+                data.name,
+                data.pattern
+            );
+            assert_eq!(
+                nfa.end_state.as_usize(),
+                data.expected_end_state,
+                "expected end state: {}:{}",
+                data.name,
+                data.pattern
+            );
+            assert_eq!(
+                char_class_registry.len(),
+                data.expected_char_classes,
+                "expected char classes: {}:{}",
+                data.name,
+                data.pattern
             );
         }
     }

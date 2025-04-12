@@ -16,7 +16,7 @@ pub(crate) fn nfa_render<W: Write>(nfa: &Nfa, label: &str, output: &mut W) {
     writer.set_pretty_print(true);
     let mut digraph = writer.digraph();
     digraph
-        .set_label(format!("{}: {}", label, nfa.pattern()).as_str())
+        .set_label(format!("{}: {}", label, nfa.pattern().escape_default()).as_str())
         .set_rank_direction(RankDirection::LeftRight);
     for state in nfa.states() {
         let source_id = {

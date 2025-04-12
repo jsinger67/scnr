@@ -18,7 +18,7 @@ fn e2e_test() {
     let rx_newline: Regex = Regex::new(r"\r?\n|\r").unwrap();
 
     // Define the target folder for the generated dot files.
-    let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/target/testout/e2e_test");
+    let target_folder = concat!(env!("CARGO_MANIFEST_DIR"), "/../target/testout/e2e_test");
 
     // Delete all previously generated dot files.
     let _ = fs::remove_dir_all(target_folder);

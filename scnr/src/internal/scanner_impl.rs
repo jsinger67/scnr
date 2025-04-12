@@ -234,10 +234,8 @@ mod tests {
 
     static INIT: Once = Once::new();
 
-    const TARGET_FOLDER: &str = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/scanner_nfa_impl_test"
-    );
+    const TARGET_FOLDER: &str =
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../target/testout/scanner_nfa_impl_test");
 
     fn init() {
         INIT.call_once(|| {

@@ -53,6 +53,10 @@ pub enum ScnrErrorKind {
     #[error("Unsupported regex feature: {0}")]
     UnsupportedFeature(String),
 
+    /// An error occurred during the conversion of a regex syntax to a regex HIR.
+    #[error(transparent)]
+    InvalidUtf8(#[from] core::str::Utf8Error),
+
     /// An empty tokens is matched. This leads to an infinite loop. Avoid regexes that match empty
     /// tokens.
     #[error("Empty tokens are not allowed.")]

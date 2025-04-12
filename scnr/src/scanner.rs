@@ -148,7 +148,7 @@ mod tests {
 
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/target/testout/test_pathological_regular_expressions_dfa"
+        "/../target/testout/test_pathological_regular_expressions_dfa"
     );
 
     fn init() {
