@@ -1,18 +1,17 @@
 use regex_syntax::ast::{Ast, Position, Span};
 
-/// A comparable AST in regard of a character class.
-/// It only compares AST types that are relevant for handling of character classes.
+/// A comparable AST in regard of a character class with associated pattern string.
 #[derive(Clone, Eq)]
-pub(crate) struct ComparableAst {
+pub(crate) struct AstWithPattern {
     pub(crate) ast: Ast,
     pub(crate) pattern: String,
 }
 
-impl ComparableAst {
+impl AstWithPattern {
     /// Creates a new ComparableAst from an AST.
     pub(crate) fn new(ast: Ast) -> Self {
         let pattern = ast.to_string().escape_default().to_string();
-        ComparableAst { ast, pattern }
+        AstWithPattern { ast, pattern }
     }
 
     /// Returns the string representation of the AST.
@@ -21,7 +20,8 @@ impl ComparableAst {
     }
 }
 
-impl PartialEq for ComparableAst {
+/// It only compares AST types that are relevant for handling of character classes.
+impl PartialEq for AstWithPattern {
     fn eq(&self, other: &Self) -> bool {
         match (&self.ast, &other.ast) {
             (Ast::ClassUnicode(_), Ast::ClassUnicode(_))
@@ -41,16 +41,16 @@ impl PartialEq for ComparableAst {
     }
 }
 
-impl std::hash::Hash for ComparableAst {
+impl std::hash::Hash for AstWithPattern {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         // Hash the string representation of the AST.
         self.ast.to_string().hash(state);
     }
 }
 
-impl Default for ComparableAst {
+impl Default for AstWithPattern {
     fn default() -> Self {
-        ComparableAst {
+        AstWithPattern {
             ast: Ast::Empty(Box::new(Span {
                 start: Position {
                     offset: 0,
@@ -68,13 +68,13 @@ impl Default for ComparableAst {
     }
 }
 
-impl std::fmt::Display for ComparableAst {
+impl std::fmt::Display for AstWithPattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.ast.to_string().escape_default())
     }
 }
 
-impl std::fmt::Debug for ComparableAst {
+impl std::fmt::Debug for AstWithPattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.ast.to_string().escape_default())
     }

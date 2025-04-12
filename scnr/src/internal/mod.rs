@@ -28,9 +28,14 @@ pub(crate) mod compiled_scanner_mode;
 
 /// Module that provides functions and types related to comparable ASTs.
 #[cfg(not(feature = "regex_automata"))]
-pub(crate) mod comparable_ast;
+pub(crate) mod ast_with_pattern;
 #[cfg(not(feature = "regex_automata"))]
-pub(crate) use comparable_ast::ComparableAst;
+pub(crate) use ast_with_pattern::AstWithPattern;
+
+#[cfg(not(feature = "regex_automata"))]
+pub(crate) mod hir_with_pattern;
+#[cfg(not(feature = "regex_automata"))]
+pub(crate) use hir_with_pattern::HirWithPattern;
 
 /// Module with conversion to graphviz dot format
 #[cfg(feature = "dot_writer")]

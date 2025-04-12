@@ -45,7 +45,7 @@ pub(crate) fn nfa_render<W: Write>(nfa: &Nfa, label: &str, output: &mut W) {
                 )
                 .attributes()
                 .set_label(
-                    &format!("#{}:'{}'", transition.char_class(), transition.ast())
+                    &format!("#{}:'{}'", transition.char_class(), transition.ast_or_hir())
                         .escape_default()
                         .to_string(),
                 );
@@ -104,7 +104,7 @@ fn render_compiled_dfa(
                     "{} (C#{})",
                     character_class_registry.get_character_class(*cc).map_or(
                         "-".to_string(),
-                        |cc| cc.ast().to_string().escape_debug().to_string()
+                        |cc| cc.to_string().escape_debug().to_string()
                     ),
                     cc.id()
                 ));
@@ -241,7 +241,6 @@ pub(crate) fn multi_pattern_nfa_render<W: Write>(
                 character_class_registry
                     .get_character_class(char_class_id)
                     .map_or("-".to_string(), |cc| cc
-                        .ast()
                         .to_string()
                         .escape_default()
                         .to_string()),

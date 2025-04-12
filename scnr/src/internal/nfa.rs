@@ -5,9 +5,12 @@ use std::vec;
 
 use regex_syntax::ast::{Ast, FlagsItemKind, GroupKind, RepetitionKind, RepetitionRange};
 
-use crate::{Pattern, Result, ScnrError};
+use crate::{internal::HirWithPattern, Pattern, Result, ScnrError};
 
-use super::{ids::StateIDBase, CharClassID, CharacterClassRegistry, ComparableAst, StateID};
+use super::{
+    character_class::AstOrHir, ids::StateIDBase, AstWithPattern, CharClassID,
+    CharacterClassRegistry, StateID,
+};
 
 macro_rules! unsupported {
     ($feature:expr) => {
@@ -90,16 +93,34 @@ impl Nfa {
         self.end_state = state;
     }
 
-    pub(crate) fn add_transition(
+    pub(crate) fn add_transition_ast(
         &mut self,
         from: StateID,
         chars: Ast,
         target_state: StateID,
         char_class_registry: &mut CharacterClassRegistry,
     ) {
-        let char_class = char_class_registry.add_character_class(&chars);
+        let char_class = char_class_registry.add_character_class_ast(&chars);
         self.states[from].transitions.push(NfaTransition {
-            ast: ComparableAst::new(chars),
+            ast_or_hir: AstOrHir::Ast(AstWithPattern::new(chars)),
+            char_class,
+            target_state,
+        });
+        debug_assert!(
+            self.states[from].epsilon_transitions.len() + self.states[from].transitions.len() <= 2
+        );
+    }
+
+    pub(crate) fn add_transition_hir(
+        &mut self,
+        from: StateID,
+        chars: regex_syntax::hir::Hir,
+        target_state: StateID,
+        char_class_registry: &mut CharacterClassRegistry,
+    ) {
+        let char_class = char_class_registry.add_character_class_hir(&chars);
+        self.states[from].transitions.push(NfaTransition {
+            ast_or_hir: AstOrHir::Hir(HirWithPattern::new(chars)),
             char_class,
             target_state,
         });
@@ -275,7 +296,7 @@ impl Nfa {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
                 nfa.set_end_state(end_state);
-                nfa.add_transition(
+                nfa.add_transition_ast(
                     start_state,
                     Ast::Literal(l.clone()),
                     end_state,
@@ -287,7 +308,7 @@ impl Nfa {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
                 nfa.set_end_state(end_state);
-                nfa.add_transition(
+                nfa.add_transition_ast(
                     start_state,
                     Ast::Dot(d.clone()),
                     end_state,
@@ -300,7 +321,7 @@ impl Nfa {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
                 nfa.set_end_state(end_state);
-                nfa.add_transition(start_state, ast.clone(), end_state, char_class_registry);
+                nfa.add_transition_ast(start_state, ast.clone(), end_state, char_class_registry);
                 Ok(nfa)
             }
             Ast::Repetition(ref r) => {
@@ -380,6 +401,28 @@ impl Nfa {
                 }
                 Ok(nfa)
             }
+        }
+    }
+
+    pub(crate) fn try_from_hir(
+        hir: regex_syntax::hir::Hir,
+        char_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let mut nfa = Nfa::new();
+        nfa.set_pattern(&hir.to_string());
+        match hir.kind() {
+            regex_syntax::hir::HirKind::Empty => Ok(nfa),
+            regex_syntax::hir::HirKind::Literal(_) | regex_syntax::hir::HirKind::Class(_) => {
+                let start_state = nfa.end_state();
+                let end_state = nfa.new_state();
+                nfa.set_end_state(end_state);
+                nfa.add_transition_hir(start_state, hir.clone(), end_state, char_class_registry);
+                Ok(nfa)
+            }
+            _ => Err(unsupported!(format!(
+                "Unsupported HirKind: {:?}",
+                hir.kind()
+            ))),
         }
     }
 
@@ -503,7 +546,7 @@ pub(crate) struct NfaTransition {
     /// We will later generate a predicate from this that determines if a character matches this
     /// transition. It is used for debugging purposes mostly in the [crate::internal::dot] module.
     #[allow(unused)]
-    ast: ComparableAst,
+    ast_or_hir: AstOrHir,
     /// The next state to transition to
     target_state: StateID,
     /// The characters to match, is filled in after the all DFAs have been constructed and the
@@ -517,8 +560,8 @@ impl NfaTransition {
     }
 
     #[allow(unused)]
-    pub(crate) fn ast(&self) -> &ComparableAst {
-        &self.ast
+    pub(crate) fn ast_or_hir(&self) -> &AstOrHir {
+        &self.ast_or_hir
     }
 
     pub(crate) fn char_class(&self) -> CharClassID {
