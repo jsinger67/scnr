@@ -8,8 +8,9 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{Match, Pattern, Result, Span};
 
 use super::{
-    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, CharClassID, CharacterClassRegistry,
-    CompiledLookahead, MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
+    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, parse_regex_syntax_hir, CharClassID,
+    CharacterClassRegistry, CompiledLookahead, MultiPatternNfa, Nfa, StateID, StateIDBase,
+    TerminalID, TerminalIDBase,
 };
 
 /// A compiled DFA.
@@ -200,6 +201,38 @@ impl CompiledDfa {
         Ok(compiled_dfa)
     }
 
+    /// Create a compiled NFA from a pattern.
+    /// Used for testing and debugging purposes.
+    #[allow(dead_code)]
+    pub(crate) fn try_from_pattern_hir(
+        pattern: &Pattern,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let hir = parse_regex_syntax_hir(pattern.pattern())?;
+        let mut nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
+        nfa.set_terminal_id(pattern.terminal_id());
+        let mut compiled_dfa: CompiledDfa = nfa.into();
+        Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
+        Ok(compiled_dfa)
+    }
+
+    pub(crate) fn try_from_patterns_hir(
+        patterns: &[Pattern],
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let mp_nfa = MultiPatternNfa::try_from_patterns_hir(patterns, character_class_registry)?;
+        let mut compiled_dfa: CompiledDfa = mp_nfa.into();
+        // Add the lookaheads to the compiled NFA.
+        for pattern in patterns.iter() {
+            Self::add_lookahead_from_pattern_hir(
+                pattern,
+                character_class_registry,
+                &mut compiled_dfa,
+            )?;
+        }
+        Ok(compiled_dfa)
+    }
+
     /// Add a lookahead for a given terminal_id to the compiled NFA.
     #[inline(always)]
     pub(crate) fn add_lookahead(&mut self, terminal_id: TerminalID, lookahead: CompiledLookahead) {
@@ -229,6 +262,20 @@ impl CompiledDfa {
         if let Some(lookahead) = pattern.lookahead() {
             let lookahead =
                 CompiledLookahead::try_from_lookahead(lookahead, character_class_registry)?;
+            compiled_dfa.add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
+        };
+        Ok(())
+    }
+
+    #[inline(always)]
+    fn add_lookahead_from_pattern_hir(
+        pattern: &Pattern,
+        character_class_registry: &mut CharacterClassRegistry,
+        compiled_dfa: &mut CompiledDfa,
+    ) -> Result<()> {
+        if let Some(lookahead) = pattern.lookahead() {
+            let lookahead =
+                CompiledLookahead::try_from_lookahead_hir(lookahead, character_class_registry)?;
             compiled_dfa.add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
         };
         Ok(())

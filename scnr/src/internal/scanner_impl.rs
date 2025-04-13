@@ -155,6 +155,25 @@ impl ScannerImpl {
         }
         Ok(())
     }
+
+    pub(crate) fn new_hir(scanner_modes: &[ScannerMode]) -> Result<Self> {
+        let mut character_class_registry = CharacterClassRegistry::new();
+        let mut compiled_scanner_modes = Vec::with_capacity(scanner_modes.len());
+        for scanner_mode in scanner_modes {
+            let compiled_scanner_mode = CompiledScannerMode::try_from_scanner_mode_hir(
+                scanner_mode,
+                &mut character_class_registry,
+            )?;
+            compiled_scanner_modes.push(compiled_scanner_mode);
+        }
+        let match_char_class = Arc::new(character_class_registry.create_match_char_class()?);
+        Ok(Self {
+            character_classes: Arc::new(character_class_registry),
+            scanner_modes: compiled_scanner_modes,
+            match_char_class,
+            current_mode: 0,
+        })
+    }
 }
 
 impl ScannerModeSwitcher for ScannerImpl {
@@ -234,8 +253,10 @@ mod tests {
 
     static INIT: Once = Once::new();
 
-    const TARGET_FOLDER: &str =
-        concat!(env!("CARGO_MANIFEST_DIR"), "/../target/testout/scanner_nfa_impl_test");
+    const TARGET_FOLDER: &str = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../target/testout/scanner_nfa_impl_test"
+    );
 
     fn init() {
         INIT.call_once(|| {

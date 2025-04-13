@@ -34,6 +34,23 @@ impl CompiledScannerMode {
         })
     }
 
+    pub(crate) fn try_from_scanner_mode_hir(
+        scanner_mode: &ScannerMode,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let ScannerMode {
+            name,
+            patterns,
+            transitions,
+        } = scanner_mode;
+        let dfa = CompiledDfa::try_from_patterns_hir(patterns, character_class_registry)?;
+        Ok(Self {
+            name: name.clone(),
+            dfa,
+            transitions: transitions.clone(),
+        })
+    }
+
     /// Check if the scanner configuration has a transition on the given terminal index
     pub(crate) fn has_transition(&self, token_type: usize) -> Option<usize> {
         for (tok_type, scanner) in &self.transitions {

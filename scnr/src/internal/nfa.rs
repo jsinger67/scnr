@@ -411,7 +411,64 @@ impl Nfa {
         let mut nfa = Nfa::new();
         nfa.set_pattern(&hir.to_string());
         match hir.kind() {
-            regex_syntax::hir::HirKind::Empty | regex_syntax::hir::HirKind::Look(_) => Ok(nfa),
+            regex_syntax::hir::HirKind::Empty => Ok(nfa),
+            regex_syntax::hir::HirKind::Look(look) => match look {
+                regex_syntax::hir::Look::Start => {
+                    Err(unsupported!(format!("StartLine {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::End => {
+                    Err(unsupported!(format!("EndLine {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::StartLF => {
+                    Err(unsupported!(format!("StartLF {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::EndLF => {
+                    Err(unsupported!(format!("EndLF {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::StartCRLF => {
+                    Err(unsupported!(format!("StartCRLF {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::EndCRLF => {
+                    Err(unsupported!(format!("EndCRLF {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordAscii => {
+                    Err(unsupported!(format!("WordAscii {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordAsciiNegate => {
+                    Err(unsupported!(format!("WordAsciiNegate {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordUnicode => {
+                    Err(unsupported!(format!("WordUnicode {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordUnicodeNegate => {
+                    Err(unsupported!(format!("WordUnicodeNegate {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordStartAscii => {
+                    Err(unsupported!(format!("WordStartAscii {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordEndAscii => {
+                    Err(unsupported!(format!("WordEndAscii {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordStartUnicode => {
+                    Err(unsupported!(format!("WordStartUnicode {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordEndUnicode => {
+                    Err(unsupported!(format!("WordEndUnicode {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordStartHalfAscii => {
+                    Err(unsupported!(format!("WordStartHalfAscii {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordEndHalfAscii => {
+                    Err(unsupported!(format!("WordEndHalfAscii {:?}", hir.kind())))
+                }
+                regex_syntax::hir::Look::WordStartHalfUnicode => Err(unsupported!(format!(
+                    "WordStartHalfUnicode {:?}",
+                    hir.kind()
+                ))),
+                regex_syntax::hir::Look::WordEndHalfUnicode => {
+                    Err(unsupported!(format!("WordEndHalfUnicode {:?}", hir.kind())))
+                }
+            },
             regex_syntax::hir::HirKind::Literal(literal) => {
                 let mut start_state = nfa.end_state();
                 let chars = std::str::from_utf8(&literal.0)
@@ -441,6 +498,10 @@ impl Nfa {
                 Ok(nfa)
             }
             regex_syntax::hir::HirKind::Repetition(repetition) => {
+                if !repetition.greedy {
+                    Err(unsupported!(
+                        format!("{}: Non-greedy repetitions. Consider using different scanner modes instead.", hir)))?;
+                }
                 let nfa2: Nfa = Self::try_from_hir((*repetition.sub).clone(), char_class_registry)?;
                 // At least min repetitions
                 for _ in 0..repetition.min {

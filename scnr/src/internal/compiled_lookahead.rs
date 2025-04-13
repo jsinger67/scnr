@@ -3,7 +3,8 @@
 use crate::{Lookahead, Result};
 
 use super::{
-    compiled_dfa::CompiledDfa, parse_regex_syntax, CharClassID, CharacterClassRegistry, Nfa,
+    compiled_dfa::CompiledDfa, parse_regex_syntax, parse_regex_syntax_hir, CharClassID,
+    CharacterClassRegistry, Nfa,
 };
 
 #[derive(Debug, Clone)]
@@ -27,6 +28,24 @@ impl CompiledLookahead {
         } = lookahead;
         let ast = parse_regex_syntax(pattern)?;
         let nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
+        let nfa = Box::new(nfa.into());
+        Ok(Self {
+            nfa,
+            is_positive: *is_positive,
+        })
+    }
+
+    /// Create a new compiled lookahead from a lookahead.
+    pub(crate) fn try_from_lookahead_hir(
+        lookahead: &Lookahead,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        let Lookahead {
+            is_positive,
+            pattern,
+        } = lookahead;
+        let hir = parse_regex_syntax_hir(pattern)?;
+        let nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
         let nfa = Box::new(nfa.into());
         Ok(Self {
             nfa,

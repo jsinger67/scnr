@@ -96,6 +96,66 @@ impl MultiPatternNfa {
         Ok(multi_pattern_nfa)
     }
 
+    pub(crate) fn try_from_patterns_hir(
+        patterns: &[Pattern],
+        character_class_registry: &mut super::CharacterClassRegistry,
+    ) -> Result<Self> {
+        let mut multi_pattern_nfa = Self::new();
+        let mut next_state = 1;
+        for (index, pattern) in patterns.iter().enumerate() {
+            let hir = super::parse_regex_syntax_hir(pattern.pattern())?;
+            let result = Nfa::try_from_hir(hir, character_class_registry);
+            // Add the pattern information to a possible error message.
+            // This is done by wrapping the error in a new ScnrError with the pattern information.
+            match result {
+                Err(ScnrError { ref source }) => match source.as_ref() {
+                    ScnrErrorKind::RegexSyntaxAstError(r, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxAstError(
+                            r.clone(),
+                            format!("Error in pattern #{} '{}'", index, pattern),
+                        )))?
+                    }
+                    ScnrErrorKind::UnsupportedFeature(s) => Err(unsupported!(format!(
+                        "Error in pattern #{} '{}': {}",
+                        index, pattern, s
+                    )))?,
+                    ScnrErrorKind::IoError(_) | ScnrErrorKind::EmptyToken => {
+                        Err(result.unwrap_err())?
+                    }
+                    ScnrErrorKind::RegexSyntaxHirError(error, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxHirError(
+                            error.clone(),
+                            format!("Error in pattern #{} '{}'", index, pattern),
+                        )))?
+                    }
+                    ScnrErrorKind::RegexSyntaxError(error, _) => {
+                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
+                            error.clone(),
+                            format!("Error in pattern #{} '{}'", index, pattern),
+                        )))?
+                    }
+                    ScnrErrorKind::InvalidUtf8(utf8_error) => {
+                        Err(ScnrError::new(ScnrErrorKind::InvalidUtf8(*utf8_error)))?
+                    }
+                },
+                Ok(mut nfa) => {
+                    nfa.set_terminal_id(pattern.terminal_id());
+                    let (s, _) = nfa.shift_ids(next_state);
+
+                    next_state = nfa.highest_state_number() as usize + 1;
+
+                    multi_pattern_nfa
+                        .start_transitions
+                        .push(EpsilonTransition::new(s));
+
+                    multi_pattern_nfa.add_pattern(pattern.clone());
+                    multi_pattern_nfa.add_nfa(nfa);
+                }
+            }
+        }
+        Ok(multi_pattern_nfa)
+    }
+
     /// Returns the patterns as a slice of (pattern, terminal_id) tuples.
     /// Used for testing.
     #[allow(dead_code)]

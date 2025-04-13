@@ -6,6 +6,7 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct ScannerBuilder {
     scanner_modes: Vec<ScannerMode>,
+    use_hir: bool,
 }
 
 impl ScannerBuilder {
@@ -13,7 +14,14 @@ impl ScannerBuilder {
     pub fn new() -> Self {
         Self {
             scanner_modes: Vec::new(),
+            use_hir: false,
         }
+    }
+
+    /// Sets the use of HIR (High-level Intermediate Representation) for the scanner.
+    pub fn use_hir(mut self) -> Self {
+        self.use_hir = true;
+        self
     }
 
     /// Adds only patterns to the scanner builder.
@@ -31,7 +39,11 @@ impl ScannerBuilder {
             .enumerate()
             .map(|(i, pattern)| Pattern::new(pattern.as_ref().to_string(), i))
             .collect::<Vec<_>>();
-        SimpleScannerBuilder::new(patterns)
+        let mut simple_builder = SimpleScannerBuilder::new(patterns);
+        if self.use_hir {
+            simple_builder = simple_builder.use_hir();
+        }
+        simple_builder
     }
 
     /// Adds a scanner mode to the scanner builder.
@@ -49,7 +61,10 @@ impl ScannerBuilder {
     /// Builds the scanner from the scanner builder.
     pub fn build(self) -> Result<Scanner> {
         Ok(Scanner {
-            inner: SCANNER_CACHE.write().unwrap().get(&self.scanner_modes)?,
+            inner: SCANNER_CACHE
+                .write()
+                .unwrap()
+                .get(&self.scanner_modes, self.use_hir)?,
         })
     }
 
@@ -75,6 +90,7 @@ impl ScannerBuilder {
 #[derive(Debug, Clone)]
 pub struct SimpleScannerBuilder {
     scanner_mode: ScannerMode,
+    use_hir: bool,
 }
 
 impl SimpleScannerBuilder {
@@ -85,13 +101,23 @@ impl SimpleScannerBuilder {
     {
         Self {
             scanner_mode: ScannerMode::new("INITIAL", patterns, vec![]),
+            use_hir: false,
         }
+    }
+
+    /// Sets the use of HIR (High-level Intermediate Representation) for the scanner.
+    pub fn use_hir(mut self) -> Self {
+        self.use_hir = true;
+        self
     }
 
     /// Builds the scanner from the simple scanner builder.
     pub fn build(self) -> Result<Scanner> {
         Ok(Scanner {
-            inner: SCANNER_CACHE.write().unwrap().get(&[self.scanner_mode])?,
+            inner: SCANNER_CACHE
+                .write()
+                .unwrap()
+                .get(&[self.scanner_mode], self.use_hir)?,
         })
     }
 }
