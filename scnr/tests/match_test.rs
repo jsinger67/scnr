@@ -1584,10 +1584,7 @@ const TEST_DATA: &[TestData] = &[
 
 static INIT: std::sync::Once = std::sync::Once::new();
 
-const TARGET_FOLDER: &str = concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../target/testout/match_test_hir/",
-);
+const TARGET_FOLDER: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/../target/testout/match_test/",);
 
 fn init() {
     INIT.call_once(|| {
@@ -1600,7 +1597,7 @@ fn init() {
 }
 
 #[test]
-fn match_test_hir() {
+fn match_test() {
     init();
     for test_data in TEST_DATA.iter() {
         // Create a scanner from the scanner builder with a single pattern.
