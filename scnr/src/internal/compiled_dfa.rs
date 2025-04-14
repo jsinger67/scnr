@@ -8,9 +8,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use crate::{Match, Pattern, Result, Span};
 
 use super::{
-    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, parse_regex_syntax_hir, CharClassID,
-    CharacterClassRegistry, CompiledLookahead, MultiPatternNfa, Nfa, StateID, StateIDBase,
-    TerminalID, TerminalIDBase,
+    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, CharClassID, CharacterClassRegistry,
+    CompiledLookahead, MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
 /// A compiled DFA.
@@ -180,8 +179,8 @@ impl CompiledDfa {
         pattern: &Pattern,
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
-        let ast = parse_regex_syntax(pattern.pattern())?;
-        let mut nfa: Nfa = Nfa::try_from_ast(ast, character_class_registry)?;
+        let hir = parse_regex_syntax(pattern.pattern())?;
+        let mut nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
         nfa.set_terminal_id(pattern.terminal_id());
         let mut compiled_dfa: CompiledDfa = nfa.into();
         Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
@@ -193,34 +192,6 @@ impl CompiledDfa {
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
         let mp_nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
-        let mut compiled_dfa: CompiledDfa = mp_nfa.into();
-        // Add the lookaheads to the compiled NFA.
-        for pattern in patterns.iter() {
-            Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
-        }
-        Ok(compiled_dfa)
-    }
-
-    /// Create a compiled NFA from a pattern.
-    /// Used for testing and debugging purposes.
-    #[allow(dead_code)]
-    pub(crate) fn try_from_pattern_hir(
-        pattern: &Pattern,
-        character_class_registry: &mut CharacterClassRegistry,
-    ) -> Result<Self> {
-        let hir = parse_regex_syntax_hir(pattern.pattern())?;
-        let mut nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
-        nfa.set_terminal_id(pattern.terminal_id());
-        let mut compiled_dfa: CompiledDfa = nfa.into();
-        Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
-        Ok(compiled_dfa)
-    }
-
-    pub(crate) fn try_from_patterns_hir(
-        patterns: &[Pattern],
-        character_class_registry: &mut CharacterClassRegistry,
-    ) -> Result<Self> {
-        let mp_nfa = MultiPatternNfa::try_from_patterns_hir(patterns, character_class_registry)?;
         let mut compiled_dfa: CompiledDfa = mp_nfa.into();
         // Add the lookaheads to the compiled NFA.
         for pattern in patterns.iter() {
@@ -636,9 +607,9 @@ mod tests {
         for test in &*TEST_DATA {
             let pattern = crate::Pattern::new(test.pattern.to_string(), 0);
             let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
-            let ast = crate::internal::parse_regex_syntax(pattern.pattern()).unwrap();
+            let hir = crate::internal::parse_regex_syntax(pattern.pattern()).unwrap();
             let nfa: crate::internal::Nfa =
-                crate::internal::Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
+                crate::internal::Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
             nfa_render_to!(&nfa, test.name);
             let mut compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::from(nfa);
             assert_eq!(

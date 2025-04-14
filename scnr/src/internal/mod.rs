@@ -26,12 +26,7 @@ pub(crate) mod compiled_dfa;
 #[cfg(not(feature = "regex_automata"))]
 pub(crate) mod compiled_scanner_mode;
 
-/// Module that provides functions and types related to comparable ASTs.
-#[cfg(not(feature = "regex_automata"))]
-pub(crate) mod ast_with_pattern;
-#[cfg(not(feature = "regex_automata"))]
-pub(crate) use ast_with_pattern::AstWithPattern;
-
+/// Module with the type HirWithPattern.
 #[cfg(not(feature = "regex_automata"))]
 pub(crate) mod hir_with_pattern;
 #[cfg(not(feature = "regex_automata"))]
@@ -77,7 +72,7 @@ pub(crate) use nfa::Nfa;
 #[cfg(not(feature = "regex_automata"))]
 mod parser;
 #[cfg(not(feature = "regex_automata"))]
-pub(crate) use parser::{parse_regex_syntax, parse_regex_syntax_hir};
+pub(crate) use parser::parse_regex_syntax;
 
 mod scanner_cache;
 pub(crate) use scanner_cache::SCANNER_CACHE;

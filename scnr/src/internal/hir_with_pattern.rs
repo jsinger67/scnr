@@ -14,10 +14,10 @@ impl HirWithPattern {
         HirWithPattern { hir, pattern }
     }
 
-    /// Returns the string representation of the AST.
-    pub(crate) fn pattern(&self) -> &str {
-        &self.pattern
-    }
+    // Returns the string representation of the AST.
+    // pub(crate) fn pattern(&self) -> &str {
+    //     &self.pattern
+    // }
 }
 
 impl std::hash::Hash for HirWithPattern {

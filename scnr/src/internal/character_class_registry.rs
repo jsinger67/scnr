@@ -1,9 +1,4 @@
-use regex_syntax::ast::Ast;
-
-use super::{
-    character_class::AstOrHir, ids::CharClassIDBase, AstWithPattern, CharClassID, CharacterClass,
-    HirWithPattern,
-};
+use super::{ids::CharClassIDBase, CharClassID, CharacterClass, HirWithPattern};
 use crate::{internal::MatchFunction, Result, ScnrError};
 
 /// CharacterClassRegistry is a registry of character classes.
@@ -28,35 +23,18 @@ impl CharacterClassRegistry {
     }
 
     /// Adds a character class to the registry if it is not already present and returns its ID.
-    pub(crate) fn add_character_class_ast(&mut self, ast: &Ast) -> CharClassID {
-        let ast_with_pattern = AstWithPattern::new(ast.clone());
-        if let Some(id) = self
-            .character_classes
-            .iter()
-            .position(|cc| cc.ast_or_hir == AstOrHir::Ast(ast_with_pattern.clone()))
-        {
-            CharClassID::new(id as CharClassIDBase)
-        } else {
-            let id = CharClassID::new(self.character_classes.len() as CharClassIDBase);
-            self.character_classes
-                .push(CharacterClass::new_ast(id, ast_with_pattern));
-            id
-        }
-    }
-
-    /// Adds a character class to the registry if it is not already present and returns its ID.
     pub(crate) fn add_character_class_hir(&mut self, hir: &regex_syntax::hir::Hir) -> CharClassID {
         let hir_with_pattern = HirWithPattern::new(hir.clone());
         if let Some(id) = self
             .character_classes
             .iter()
-            .position(|cc| cc.ast_or_hir == AstOrHir::Hir(hir_with_pattern.clone()))
+            .position(|cc| cc.hir == hir_with_pattern.clone())
         {
             CharClassID::new(id as CharClassIDBase)
         } else {
             let id = CharClassID::new(self.character_classes.len() as CharClassIDBase);
             self.character_classes
-                .push(CharacterClass::new_hir(id, hir_with_pattern));
+                .push(CharacterClass::new(id, hir_with_pattern));
             id
         }
     }
@@ -96,10 +74,7 @@ impl CharacterClassRegistry {
                 .iter()
                 .try_fold(Vec::new(), |mut acc, cc| {
                     // trace!("Create match function for char class {:?}", cc);
-                    let match_function: MatchFunction = match cc.ast_or_hir {
-                        AstOrHir::Ast(ref ast) => ast.try_into(),
-                        AstOrHir::Hir(ref hir) => hir.try_into(),
-                    }?;
+                    let match_function: MatchFunction = (&cc.hir).try_into()?;
                     acc.push(match_function);
                     Ok::<Vec<MatchFunction>, ScnrError>(acc)
                 })?;

@@ -45,7 +45,7 @@ pub(crate) fn nfa_render<W: Write>(nfa: &Nfa, label: &str, output: &mut W) {
                 )
                 .attributes()
                 .set_label(
-                    &format!("#{}:'{}'", transition.char_class(), transition.ast_or_hir())
+                    &format!("#{}:'{}'", transition.char_class(), transition.hir())
                         .escape_default()
                         .to_string(),
                 );

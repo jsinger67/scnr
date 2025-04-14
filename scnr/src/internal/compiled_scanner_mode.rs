@@ -43,7 +43,7 @@ impl CompiledScannerMode {
             patterns,
             transitions,
         } = scanner_mode;
-        let dfa = CompiledDfa::try_from_patterns_hir(patterns, character_class_registry)?;
+        let dfa = CompiledDfa::try_from_patterns(patterns, character_class_registry)?;
         Ok(Self {
             name: name.clone(),
             dfa,

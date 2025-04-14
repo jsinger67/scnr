@@ -43,67 +43,7 @@ impl MultiPatternNfa {
         let mut multi_pattern_nfa = Self::new();
         let mut next_state = 1;
         for (index, pattern) in patterns.iter().enumerate() {
-            let ast = super::parse_regex_syntax(pattern.pattern())?;
-            let result = Nfa::try_from_ast(ast, character_class_registry);
-            // Add the pattern information to a possible error message.
-            // This is done by wrapping the error in a new ScnrError with the pattern information.
-            match result {
-                Err(ScnrError { ref source }) => match source.as_ref() {
-                    ScnrErrorKind::RegexSyntaxAstError(r, _) => {
-                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxAstError(
-                            r.clone(),
-                            format!("Error in pattern #{} '{}'", index, pattern),
-                        )))?
-                    }
-                    ScnrErrorKind::UnsupportedFeature(s) => Err(unsupported!(format!(
-                        "Error in pattern #{} '{}': {}",
-                        index, pattern, s
-                    )))?,
-                    ScnrErrorKind::IoError(_) | ScnrErrorKind::EmptyToken => {
-                        Err(result.unwrap_err())?
-                    }
-                    ScnrErrorKind::RegexSyntaxHirError(error, _) => {
-                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxHirError(
-                            error.clone(),
-                            format!("Error in pattern #{} '{}'", index, pattern),
-                        )))?
-                    }
-                    ScnrErrorKind::RegexSyntaxError(error, _) => {
-                        Err(ScnrError::new(ScnrErrorKind::RegexSyntaxError(
-                            error.clone(),
-                            format!("Error in pattern #{} '{}'", index, pattern),
-                        )))?
-                    }
-                    ScnrErrorKind::InvalidUtf8(utf8_error) => {
-                        Err(ScnrError::new(ScnrErrorKind::InvalidUtf8(*utf8_error)))?
-                    }
-                },
-                Ok(mut nfa) => {
-                    nfa.set_terminal_id(pattern.terminal_id());
-                    let (s, _) = nfa.shift_ids(next_state);
-
-                    next_state = nfa.highest_state_number() as usize + 1;
-
-                    multi_pattern_nfa
-                        .start_transitions
-                        .push(EpsilonTransition::new(s));
-
-                    multi_pattern_nfa.add_pattern(pattern.clone());
-                    multi_pattern_nfa.add_nfa(nfa);
-                }
-            }
-        }
-        Ok(multi_pattern_nfa)
-    }
-
-    pub(crate) fn try_from_patterns_hir(
-        patterns: &[Pattern],
-        character_class_registry: &mut super::CharacterClassRegistry,
-    ) -> Result<Self> {
-        let mut multi_pattern_nfa = Self::new();
-        let mut next_state = 1;
-        for (index, pattern) in patterns.iter().enumerate() {
-            let hir = super::parse_regex_syntax_hir(pattern.pattern())?;
+            let hir = super::parse_regex_syntax(pattern.pattern())?;
             let result = Nfa::try_from_hir(hir, character_class_registry);
             // Add the pattern information to a possible error message.
             // This is done by wrapping the error in a new ScnrError with the pattern information.
@@ -359,51 +299,48 @@ mod tests {
     fn test_epsilon_closure() {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
-        let ast = super::super::parse_regex_syntax("a|b").unwrap();
-        let nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
+        let hir = super::super::parse_regex_syntax("a|b").unwrap();
+        let nfa = Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
         let mut multi_pattern_nfa = MultiPatternNfa::new();
         multi_pattern_nfa.add_nfa(nfa);
 
         let epsilon_closure = multi_pattern_nfa.epsilon_closure(0.into());
-        assert_eq!(epsilon_closure, vec![0.into(), 2.into(), 4.into()]);
+        assert_eq!(epsilon_closure, vec![0.into()]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure(1.into());
-        assert_eq!(epsilon_closure, vec![1.into(), 5.into()]);
+        assert_eq!(epsilon_closure, vec![1.into()]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure(2.into());
-        assert_eq!(epsilon_closure, vec![2.into()]);
+        assert_eq!(epsilon_closure, vec![]);
     }
 
     #[test]
     fn test_epsilon_closure_set() {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
-        let ast = super::super::parse_regex_syntax("a|b").unwrap();
-        let nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
+        let hir = super::super::parse_regex_syntax("a|b").unwrap();
+        let nfa = Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
         let mut multi_pattern_nfa = MultiPatternNfa::new();
         multi_pattern_nfa.add_nfa(nfa);
 
         let epsilon_closure = multi_pattern_nfa.epsilon_closure_set(vec![0.into()]);
-        assert_eq!(epsilon_closure, vec![0.into(), 2.into(), 4.into()]);
+        assert_eq!(epsilon_closure, vec![0.into()]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure_set(vec![1.into()]);
-        assert_eq!(epsilon_closure, vec![1.into(), 5.into()]);
+        assert_eq!(epsilon_closure, vec![1.into()]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure_set(vec![2.into()]);
-        assert_eq!(epsilon_closure, vec![2.into()]);
+        assert_eq!(epsilon_closure, vec![]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure_set(vec![0.into(), 1.into()]);
-        assert_eq!(
-            epsilon_closure,
-            vec![0.into(), 1.into(), 2.into(), 4.into(), 5.into()]
-        );
+        assert_eq!(epsilon_closure, vec![0.into(), 1.into()]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure_set(vec![0.into(), 2.into()]);
-        assert_eq!(epsilon_closure, vec![0.into(), 2.into(), 4.into()]);
+        assert_eq!(epsilon_closure, vec![0.into()]);
         let epsilon_closure = multi_pattern_nfa.epsilon_closure_set(vec![1.into(), 2.into()]);
-        assert_eq!(epsilon_closure, vec![1.into(), 2.into(), 5.into()]);
+        assert_eq!(epsilon_closure, vec![1.into()]);
     }
 
     #[test]
     fn test_move_set() {
         init();
         let mut character_class_registry = CharacterClassRegistry::new();
-        let ast = super::super::parse_regex_syntax("a|b").unwrap();
-        let nfa = Nfa::try_from_ast(ast, &mut character_class_registry).unwrap();
+        let hir = super::super::parse_regex_syntax("a|b").unwrap();
+        let nfa = Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
         let mut multi_pattern_nfa = MultiPatternNfa::new();
         multi_pattern_nfa.add_nfa(nfa);
 

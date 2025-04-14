@@ -3,14 +3,9 @@
 
 use std::vec;
 
-use regex_syntax::ast::{Ast, FlagsItemKind, GroupKind, RepetitionKind, RepetitionRange};
-
 use crate::{internal::HirWithPattern, Pattern, Result, ScnrError, ScnrErrorKind};
 
-use super::{
-    character_class::AstOrHir, ids::StateIDBase, AstWithPattern, CharClassID,
-    CharacterClassRegistry, StateID,
-};
+use super::{ids::StateIDBase, CharClassID, CharacterClassRegistry, StateID};
 
 macro_rules! unsupported {
     ($feature:expr) => {
@@ -93,25 +88,7 @@ impl Nfa {
         self.end_state = state;
     }
 
-    pub(crate) fn add_transition_ast(
-        &mut self,
-        from: StateID,
-        chars: Ast,
-        target_state: StateID,
-        char_class_registry: &mut CharacterClassRegistry,
-    ) {
-        let char_class = char_class_registry.add_character_class_ast(&chars);
-        self.states[from].transitions.push(NfaTransition {
-            ast_or_hir: AstOrHir::Ast(AstWithPattern::new(chars)),
-            char_class,
-            target_state,
-        });
-        debug_assert!(
-            self.states[from].epsilon_transitions.len() + self.states[from].transitions.len() <= 2
-        );
-    }
-
-    pub(crate) fn add_transition_hir(
+    pub(crate) fn add_transition(
         &mut self,
         from: StateID,
         chars: regex_syntax::hir::Hir,
@@ -120,7 +97,7 @@ impl Nfa {
     ) {
         let char_class = char_class_registry.add_character_class_hir(&chars);
         self.states[from].transitions.push(NfaTransition {
-            ast_or_hir: AstOrHir::Hir(HirWithPattern::new(chars)),
+            hir: HirWithPattern::new(chars),
             char_class,
             target_state,
         });
@@ -234,23 +211,23 @@ impl Nfa {
         self.set_start_state(start_state);
     }
 
-    pub(crate) fn one_or_more(&mut self) {
-        // Create a new start state
-        let start_state = self.new_state();
-        // Connect the new start state to the start state of the current NFA
-        self.add_epsilon_transition(start_state, self.start_state);
+    // pub(crate) fn one_or_more(&mut self) {
+    //     // Create a new start state
+    //     let start_state = self.new_state();
+    //     // Connect the new start state to the start state of the current NFA
+    //     self.add_epsilon_transition(start_state, self.start_state);
 
-        // Create a new end state
-        let end_state = self.new_state();
-        // Connect the end state of the current NFA to the new end state
-        self.add_epsilon_transition(self.end_state, end_state);
-        // Connect the end state of the current NFA to the start state of the current NFA
-        self.add_epsilon_transition(self.end_state, self.start_state);
+    //     // Create a new end state
+    //     let end_state = self.new_state();
+    //     // Connect the end state of the current NFA to the new end state
+    //     self.add_epsilon_transition(self.end_state, end_state);
+    //     // Connect the end state of the current NFA to the start state of the current NFA
+    //     self.add_epsilon_transition(self.end_state, self.start_state);
 
-        // Update the start and end states of the current NFA
-        self.set_start_state(start_state);
-        self.set_end_state(end_state);
-    }
+    //     // Update the start and end states of the current NFA
+    //     self.set_start_state(start_state);
+    //     self.set_end_state(end_state);
+    // }
 
     pub(crate) fn zero_or_more(&mut self) {
         // Create a new start state
@@ -281,127 +258,6 @@ impl Nfa {
             .iter()
             .enumerate()
             .all(|(i, s)| s.id().as_usize() == i));
-    }
-
-    pub(crate) fn try_from_ast(
-        ast: Ast,
-        char_class_registry: &mut CharacterClassRegistry,
-    ) -> Result<Self> {
-        let mut nfa = Nfa::new();
-        nfa.set_pattern(&ast.to_string());
-        match ast {
-            Ast::Empty(_) => Ok(nfa),
-            Ast::Flags(ref f) => Err(unsupported!(format!("{:?}", f.flags.items))),
-            Ast::Literal(ref l) => {
-                let start_state = nfa.end_state();
-                let end_state = nfa.new_state();
-                nfa.set_end_state(end_state);
-                nfa.add_transition_ast(
-                    start_state,
-                    Ast::Literal(l.clone()),
-                    end_state,
-                    char_class_registry,
-                );
-                Ok(nfa)
-            }
-            Ast::Dot(ref d) => {
-                let start_state = nfa.end_state();
-                let end_state = nfa.new_state();
-                nfa.set_end_state(end_state);
-                nfa.add_transition_ast(
-                    start_state,
-                    Ast::Dot(d.clone()),
-                    end_state,
-                    char_class_registry,
-                );
-                Ok(nfa)
-            }
-            Ast::Assertion(ref a) => Err(unsupported!(format!("Assertion {:?}", a.kind))),
-            Ast::ClassUnicode(_) | Ast::ClassPerl(_) | Ast::ClassBracketed(_) => {
-                let start_state = nfa.end_state();
-                let end_state = nfa.new_state();
-                nfa.set_end_state(end_state);
-                nfa.add_transition_ast(start_state, ast.clone(), end_state, char_class_registry);
-                Ok(nfa)
-            }
-            Ast::Repetition(ref r) => {
-                let mut nfa2: Nfa = Self::try_from_ast((*r.ast).clone(), char_class_registry)?;
-                if !r.greedy {
-                    Err(unsupported!(
-                        format!("{}: Non-greedy repetitions. Consider using different scanner modes instead.", ast)))?;
-                }
-                match &r.op.kind {
-                    RepetitionKind::ZeroOrOne => {
-                        nfa2.zero_or_one();
-                        nfa = nfa2;
-                    }
-                    RepetitionKind::ZeroOrMore => {
-                        nfa2.zero_or_more();
-                        nfa = nfa2;
-                    }
-                    RepetitionKind::OneOrMore => {
-                        nfa2.one_or_more();
-                        nfa = nfa2;
-                    }
-                    RepetitionKind::Range(r) => match r {
-                        RepetitionRange::Exactly(c) => {
-                            for _ in 0..*c {
-                                nfa.concat(nfa2.clone());
-                            }
-                        }
-                        RepetitionRange::AtLeast(c) => {
-                            for _ in 0..*c {
-                                nfa.concat(nfa2.clone());
-                            }
-                            let mut nfa_zero_or_more: Nfa = nfa2.clone();
-                            nfa_zero_or_more.zero_or_more();
-                            nfa.concat(nfa_zero_or_more);
-                        }
-                        RepetitionRange::Bounded(least, most) => {
-                            for _ in 0..*least {
-                                nfa.concat(nfa2.clone());
-                            }
-                            let mut nfa_zero_or_one: Nfa = nfa2.clone();
-                            nfa_zero_or_one.zero_or_one();
-                            for _ in *least..*most {
-                                nfa.concat(nfa_zero_or_one.clone());
-                            }
-                        }
-                    },
-                }
-                Ok(nfa)
-            }
-            Ast::Group(ref g) => {
-                if let GroupKind::NonCapturing(flags) = &g.kind {
-                    if flags
-                        .items
-                        .iter()
-                        .any(|f| matches!(f.kind, FlagsItemKind::Flag(_)))
-                    {
-                        Err(unsupported!(format!(
-                            "{:?}: Flags in non-capturing group",
-                            flags.items
-                        )))?;
-                    }
-                }
-                nfa = Self::try_from_ast((*g.ast).clone(), char_class_registry)?;
-                Ok(nfa)
-            }
-            Ast::Alternation(ref a) => {
-                for ast in a.asts.iter() {
-                    let nfa2: Nfa = Self::try_from_ast(ast.clone(), char_class_registry)?;
-                    nfa.alternation(nfa2);
-                }
-                Ok(nfa)
-            }
-            Ast::Concat(ref c) => {
-                for ast in c.asts.iter() {
-                    let nfa2: Nfa = Self::try_from_ast(ast.clone(), char_class_registry)?;
-                    nfa.concat(nfa2);
-                }
-                Ok(nfa)
-            }
-        }
     }
 
     pub(crate) fn try_from_hir(
@@ -479,12 +335,7 @@ impl Nfa {
                     let mut buffer = [0; 4];
                     let utf8_bytes = c.encode_utf8(&mut buffer);
                     let hir = regex_syntax::hir::Hir::literal(utf8_bytes.as_bytes().to_vec());
-                    nfa.add_transition_hir(
-                        start_state,
-                        hir.clone(),
-                        end_state,
-                        char_class_registry,
-                    );
+                    nfa.add_transition(start_state, hir.clone(), end_state, char_class_registry);
                     start_state = end_state;
                 });
                 nfa.set_end_state(start_state);
@@ -494,7 +345,7 @@ impl Nfa {
                 let start_state = nfa.end_state();
                 let end_state = nfa.new_state();
                 nfa.set_end_state(end_state);
-                nfa.add_transition_hir(start_state, hir.clone(), end_state, char_class_registry);
+                nfa.add_transition(start_state, hir.clone(), end_state, char_class_registry);
                 Ok(nfa)
             }
             regex_syntax::hir::HirKind::Repetition(repetition) => {
@@ -663,7 +514,7 @@ pub(crate) struct NfaTransition {
     /// We will later generate a predicate from this that determines if a character matches this
     /// transition. It is used for debugging purposes mostly in the [crate::internal::dot] module.
     #[allow(unused)]
-    ast_or_hir: AstOrHir,
+    hir: HirWithPattern,
     /// The next state to transition to
     target_state: StateID,
     /// The characters to match, is filled in after the all DFAs have been constructed and the
@@ -677,8 +528,8 @@ impl NfaTransition {
     }
 
     #[allow(unused)]
-    pub(crate) fn ast_or_hir(&self) -> &AstOrHir {
-        &self.ast_or_hir
+    pub(crate) fn hir(&self) -> &HirWithPattern {
+        &self.hir
     }
 
     pub(crate) fn char_class(&self) -> CharClassID {
@@ -718,415 +569,13 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_nfa_from_ast() {
-        // Create an example AST
-        let ast = crate::internal::parse_regex_syntax("a").unwrap();
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-
-        // Convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(ast, &mut char_class_registry).unwrap();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 2);
-        assert_eq!(nfa.start_state.as_usize(), 0);
-        assert_eq!(nfa.end_state.as_usize(), 1);
-    }
-
-    #[test]
-    fn test_nfa_from_ast_concat() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("ab").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 4);
-        assert_eq!(nfa.start_state.as_usize(), 0);
-        assert_eq!(nfa.end_state.as_usize(), 3);
-    }
-
-    #[test]
-    fn test_nfa_concat() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create two example ASTs and convert them to an NFAs
-        let mut nfa1: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        let nfa2: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("b").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        nfa1.concat(nfa2);
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa1.states.len(), 4);
-        assert_eq!(nfa1.start_state.as_usize(), 0);
-        assert_eq!(nfa1.end_state.as_usize(), 3);
-    }
-
-    #[test]
-    fn test_nfa_alternation() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create two example ASTs and convert them to an NFAs
-        let mut nfa1: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        let nfa2: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("b").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        nfa1.alternation(nfa2);
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa1.states.len(), 6);
-        assert_eq!(nfa1.start_state.as_usize(), 4);
-        assert_eq!(nfa1.end_state.as_usize(), 5);
-    }
-
-    #[test]
-    fn test_nfa_repetition() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let mut nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        nfa.zero_or_more();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 4);
-        assert_eq!(nfa.start_state.as_usize(), 2);
-        assert_eq!(nfa.end_state.as_usize(), 3);
-    }
-
-    #[test]
-    fn test_nfa_zero_or_one() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let mut nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        nfa.zero_or_one();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 3);
-        assert_eq!(nfa.start_state.as_usize(), 2);
-        assert_eq!(nfa.end_state.as_usize(), 1);
-    }
-
-    #[test]
-    fn test_nfa_one_or_more() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let mut nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        nfa.one_or_more();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 4);
-        assert_eq!(nfa.start_state.as_usize(), 2);
-        assert_eq!(nfa.end_state.as_usize(), 3);
-    }
-
-    #[test]
-    fn test_nfa_zero_or_more() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let mut nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        nfa.zero_or_more();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 4);
-        assert_eq!(nfa.start_state.as_usize(), 2);
-        assert_eq!(nfa.end_state.as_usize(), 3);
-    }
-
-    #[test]
-    fn test_complex_nfa() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("(a|b)*abb").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 14);
-        assert_eq!(nfa.start_state.as_usize(), 6);
-        assert_eq!(nfa.end_state.as_usize(), 13);
-    }
-
-    #[test]
-    fn test_nfa_offset_states() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let mut nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-        nfa.shift_ids(10);
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 2);
-        assert_eq!(nfa.start_state.as_usize(), 10);
-        assert_eq!(nfa.end_state.as_usize(), 11);
-    }
-
-    #[test]
-    fn test_nfa_repetition_at_least() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a{3,}").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 10);
-        assert_eq!(nfa.start_state.as_usize(), 0);
-        assert_eq!(nfa.end_state.as_usize(), 9);
-    }
-
-    #[test]
-    fn test_nfa_repetition_bounded() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a{3,5}").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 12);
-        assert_eq!(nfa.start_state.as_usize(), 0);
-        assert_eq!(nfa.end_state.as_usize(), 10);
-    }
-
-    // Ascii character class are not yet implemented
-    #[test]
-    fn test_character_class_expression() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax(r"[[:digit:]]").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        // Add assertions here to validate the NFA
-        assert_eq!(nfa.states.len(), 2);
-        assert_eq!(nfa.start_state.as_usize(), 0);
-        assert_eq!(nfa.end_state.as_usize(), 1);
-    }
-
-    #[test]
-    fn test_closure_of_states() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let nfa: Nfa = Nfa::try_from_ast(
-            // SecondLastBitIs1
-            crate::internal::parse_regex_syntax(r"(0|1)*1(0|1)").unwrap(),
-            &mut char_class_registry,
-        )
-        .unwrap();
-
-        // Calculate the epsilon closure of the start state
-        let closure = nfa.epsilon_closure(nfa.start_state);
-
-        // Validate the NFA closure
-        assert_eq!(closure.len(), 7);
-        assert_eq!(BTreeSet::<StateID>::from_iter(closure.iter().cloned()), {
-            let mut set = BTreeSet::new();
-            set.insert(StateID::new(0));
-            set.insert(StateID::new(2));
-            set.insert(StateID::new(4));
-            set.insert(StateID::new(5));
-            set.insert(StateID::new(6));
-            set.insert(StateID::new(7));
-            set.insert(StateID::new(8));
-            set
-        });
-
-        // Calculate the transitions on a character classes in the closure
-        let matching_states = closure.iter().fold(BTreeSet::new(), |mut set, state| {
-            for transition in nfa.states()[*state].transitions() {
-                set.insert((transition.char_class(), transition.target_state()));
-            }
-            set
-        });
-
-        // Validate the transitions from the closure of the start state
-        assert_eq!(matching_states.len(), 3);
-        assert_eq!(matching_states, {
-            let mut set = BTreeSet::new();
-            set.insert((CharClassID::new(0), StateID::new(1)));
-            set.insert((CharClassID::new(1), StateID::new(3)));
-            set.insert((CharClassID::new(1), StateID::new(9)));
-            set
-        });
-
-        // Calculate the epsilon closure of each target state of the transitions
-        let closures = matching_states.iter().fold(
-            Vec::<(CharClassID, BTreeSet<StateID>)>::new(),
-            |mut set, (char_class, state)| {
-                let closure = nfa.epsilon_closure(*state);
-                set.push((*char_class, BTreeSet::from_iter(closure.iter().cloned())));
-                set
-            },
-        );
-
-        eprintln!("{:?}", closures);
-
-        // Validate the epsilon closures of the target states
-        assert_eq!(closures.len(), 3);
-        assert_eq!(closures, {
-            let mut vec = Vec::new();
-            vec.push((CharClassID::new(0), {
-                BTreeSet::from_iter(vec![
-                    StateID::new(0),
-                    StateID::new(1),
-                    StateID::new(2),
-                    StateID::new(4),
-                    StateID::new(5),
-                    StateID::new(7),
-                    StateID::new(8),
-                ])
-            }));
-            vec.push((CharClassID::new(1), {
-                BTreeSet::from_iter(vec![
-                    StateID::new(0),
-                    StateID::new(2),
-                    StateID::new(3),
-                    StateID::new(4),
-                    StateID::new(5),
-                    StateID::new(7),
-                    StateID::new(8),
-                ])
-            }));
-            vec.push((CharClassID::new(1), {
-                BTreeSet::from_iter(vec![
-                    StateID::new(9),
-                    StateID::new(10),
-                    StateID::new(12),
-                    StateID::new(14),
-                ])
-            }));
-            vec
-        });
-
-        // Calculate the transitions on a character classes in the closures
-        let matching_states = closures
-            .iter()
-            .fold(Vec::new(), |mut vec, (char_class, closure)| {
-                for state in closure {
-                    for transition in nfa.states()[*state].transitions() {
-                        vec.push((
-                            *char_class,
-                            transition.char_class(),
-                            transition.target_state(),
-                        ));
-                    }
-                }
-                vec
-            });
-
-        // Validate the transitions from the closures of the target states
-        assert_eq!(matching_states.len(), 8);
-        assert_eq!(
-            BTreeSet::<(CharClassID, CharClassID, StateID)>::from_iter(
-                matching_states.iter().cloned()
-            ),
-            {
-                let mut set = BTreeSet::new();
-                set.insert((CharClassID::new(0), CharClassID::new(0), StateID::new(1)));
-                set.insert((CharClassID::new(0), CharClassID::new(1), StateID::new(3)));
-                set.insert((CharClassID::new(0), CharClassID::new(1), StateID::new(9)));
-                set.insert((CharClassID::new(1), CharClassID::new(0), StateID::new(1)));
-                set.insert((CharClassID::new(1), CharClassID::new(1), StateID::new(3)));
-                set.insert((CharClassID::new(1), CharClassID::new(0), StateID::new(11)));
-                set.insert((CharClassID::new(1), CharClassID::new(1), StateID::new(9)));
-                set.insert((CharClassID::new(1), CharClassID::new(1), StateID::new(13)));
-                set
-            }
-        );
-    }
-
-    // Test error on greedy repetition
-    #[test]
-    fn test_nfa_repetition_non_greedy() {
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let result = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a*?").unwrap(),
-            &mut char_class_registry,
-        );
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Non-greedy"));
-
-        // Create a character class registry
-        let mut char_class_registry = CharacterClassRegistry::new();
-        // Create an example AST and convert the AST to an NFA
-        let result = Nfa::try_from_ast(
-            crate::internal::parse_regex_syntax("a+?").unwrap(),
-            &mut char_class_registry,
-        );
-
-        assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Non-greedy"));
-    }
-}
-
-#[cfg(test)]
-mod tests_try_from {
-
     #[cfg(feature = "dot_writer")]
     static INIT: std::sync::Once = std::sync::Once::new();
 
     #[cfg(feature = "dot_writer")]
     const TARGET_FOLDER: &str = concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../target/testout/test_try_from_ast"
+        "/../target/testout/test_try_from_hir"
     );
 
     #[cfg(feature = "dot_writer")]
@@ -1150,14 +599,366 @@ mod tests_try_from {
         };
     }
 
-    /// A macro that simplifies the rendering of a dot file for a NFA.
-    #[cfg(feature = "dot_writer")]
-    macro_rules! nfa_render_hir_to {
-        ($nfa:expr, $label:expr) => {
-            let mut f =
-                std::fs::File::create(format!("{}/{}NfaHir.dot", TARGET_FOLDER, $label)).unwrap();
-            $crate::internal::dot::nfa_render($nfa, $label, &mut f);
-        };
+    #[test]
+    fn test_nfa_from_ast() {
+        // Create an example AST
+        let hir = crate::internal::parse_regex_syntax("a").unwrap();
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+
+        // Convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(hir, &mut char_class_registry).unwrap();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 2);
+        assert_eq!(nfa.start_state.as_usize(), 0);
+        assert_eq!(nfa.end_state.as_usize(), 1);
+    }
+
+    #[test]
+    fn test_nfa_from_hir_concat() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("ab").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        #[cfg(feature = "dot_writer")]
+        nfa_render_to!(&nfa, "test_nfa_from_hir_concat");
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 3);
+        assert_eq!(nfa.start_state.as_usize(), 0);
+        assert_eq!(nfa.end_state.as_usize(), 2);
+    }
+
+    #[test]
+    fn test_nfa_concat() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create two example ASTs and convert them to an NFAs
+        let mut nfa1: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        let nfa2: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("b").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        nfa1.concat(nfa2);
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa1.states.len(), 4);
+        assert_eq!(nfa1.start_state.as_usize(), 0);
+        assert_eq!(nfa1.end_state.as_usize(), 3);
+    }
+
+    #[test]
+    fn test_nfa_alternation() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create two example ASTs and convert them to an NFAs
+        let mut nfa1: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        let nfa2: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("b").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        nfa1.alternation(nfa2);
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa1.states.len(), 6);
+        assert_eq!(nfa1.start_state.as_usize(), 4);
+        assert_eq!(nfa1.end_state.as_usize(), 5);
+    }
+
+    #[test]
+    fn test_nfa_repetition() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let mut nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        nfa.zero_or_more();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 4);
+        assert_eq!(nfa.start_state.as_usize(), 2);
+        assert_eq!(nfa.end_state.as_usize(), 3);
+    }
+
+    #[test]
+    fn test_nfa_zero_or_one() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let mut nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        nfa.zero_or_one();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 3);
+        assert_eq!(nfa.start_state.as_usize(), 2);
+        assert_eq!(nfa.end_state.as_usize(), 1);
+    }
+
+    #[test]
+    fn test_nfa_zero_or_more() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let mut nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        nfa.zero_or_more();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 4);
+        assert_eq!(nfa.start_state.as_usize(), 2);
+        assert_eq!(nfa.end_state.as_usize(), 3);
+    }
+
+    #[test]
+    fn test_complex_nfa() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("(a|b)*abb").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        #[cfg(feature = "dot_writer")]
+        nfa_render_to!(&nfa, "test_complex_nfa");
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 8);
+        assert_eq!(nfa.start_state.as_usize(), 2);
+        assert_eq!(nfa.end_state.as_usize(), 7);
+    }
+
+    #[test]
+    fn test_nfa_offset_states() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let mut nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+        nfa.shift_ids(10);
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 2);
+        assert_eq!(nfa.start_state.as_usize(), 10);
+        assert_eq!(nfa.end_state.as_usize(), 11);
+    }
+
+    #[test]
+    fn test_nfa_repetition_at_least() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a{3,}").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 10);
+        assert_eq!(nfa.start_state.as_usize(), 0);
+        assert_eq!(nfa.end_state.as_usize(), 9);
+    }
+
+    #[test]
+    fn test_nfa_repetition_bounded() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a{3,5}").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 12);
+        assert_eq!(nfa.start_state.as_usize(), 0);
+        assert_eq!(nfa.end_state.as_usize(), 10);
+    }
+
+    // Ascii character class are not yet implemented
+    #[test]
+    fn test_character_class_expression() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax(r"[[:digit:]]").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        // Add assertions here to validate the NFA
+        assert_eq!(nfa.states.len(), 2);
+        assert_eq!(nfa.start_state.as_usize(), 0);
+        assert_eq!(nfa.end_state.as_usize(), 1);
+    }
+
+    #[test]
+    fn test_closure_of_states() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let nfa: Nfa = Nfa::try_from_hir(
+            // SecondLastBitIs1
+            crate::internal::parse_regex_syntax(r"(0|1)*1(0|1)").unwrap(),
+            &mut char_class_registry,
+        )
+        .unwrap();
+
+        #[cfg(feature = "dot_writer")]
+        nfa_render_to!(&nfa, "test_closure_of_states");
+
+        // Calculate the epsilon closure of the start state
+        let closure = nfa.epsilon_closure(nfa.start_state);
+
+        // Validate the NFA closure
+        assert_eq!(closure.len(), 5);
+        assert_eq!(BTreeSet::<StateID>::from_iter(closure.iter().cloned()), {
+            let mut set = BTreeSet::new();
+            set.insert(StateID::new(0));
+            set.insert(StateID::new(1));
+            set.insert(StateID::new(2));
+            set.insert(StateID::new(3));
+            set.insert(StateID::new(4));
+            set
+        });
+
+        // Calculate the transitions on a character classes in the closure
+        let matching_states = closure.iter().fold(BTreeSet::new(), |mut set, state| {
+            for transition in nfa.states()[*state].transitions() {
+                set.insert((transition.char_class(), transition.target_state()));
+            }
+            set
+        });
+
+        // Validate the transitions from the closure of the start state
+        assert_eq!(matching_states.len(), 2);
+        assert_eq!(matching_states, {
+            let mut set = BTreeSet::new();
+            set.insert((CharClassID::new(0), StateID::new(1)));
+            set.insert((CharClassID::new(1), StateID::new(5)));
+            set
+        });
+
+        // Calculate the epsilon closure of each target state of the transitions
+        let closures = matching_states.iter().fold(
+            Vec::<(CharClassID, BTreeSet<StateID>)>::new(),
+            |mut set, (char_class, state)| {
+                let closure = nfa.epsilon_closure(*state);
+                set.push((*char_class, BTreeSet::from_iter(closure.iter().cloned())));
+                set
+            },
+        );
+
+        eprintln!("{:?}", closures);
+
+        // Validate the epsilon closures of the target states
+        assert_eq!(closures.len(), 2);
+        assert_eq!(closures, {
+            let mut vec = Vec::new();
+            vec.push((CharClassID::new(0), {
+                BTreeSet::from_iter(vec![
+                    StateID::new(0),
+                    StateID::new(1),
+                    StateID::new(3),
+                    StateID::new(4),
+                ])
+            }));
+            vec.push((CharClassID::new(1), {
+                BTreeSet::from_iter(vec![StateID::new(5), StateID::new(6)])
+            }));
+            vec
+        });
+
+        // Calculate the transitions on a character classes in the closures
+        let matching_states = closures
+            .iter()
+            .fold(Vec::new(), |mut vec, (char_class, closure)| {
+                for state in closure {
+                    for transition in nfa.states()[*state].transitions() {
+                        vec.push((
+                            *char_class,
+                            transition.char_class(),
+                            transition.target_state(),
+                        ));
+                    }
+                }
+                vec
+            });
+
+        // Validate the transitions from the closures of the target states
+        assert_eq!(matching_states.len(), 3);
+        assert_eq!(
+            BTreeSet::<(CharClassID, CharClassID, StateID)>::from_iter(
+                matching_states.iter().cloned()
+            ),
+            {
+                let mut set = BTreeSet::new();
+                set.insert((CharClassID::new(0), CharClassID::new(0), StateID::new(1)));
+                set.insert((CharClassID::new(0), CharClassID::new(1), StateID::new(5)));
+                set.insert((CharClassID::new(1), CharClassID::new(0), StateID::new(7)));
+                set
+            }
+        );
+    }
+
+    // Test error on greedy repetition
+    #[test]
+    fn test_nfa_repetition_non_greedy() {
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let result = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a*?").unwrap(),
+            &mut char_class_registry,
+        );
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Non-greedy"));
+
+        // Create a character class registry
+        let mut char_class_registry = CharacterClassRegistry::new();
+        // Create an example AST and convert the AST to an NFA
+        let result = Nfa::try_from_hir(
+            crate::internal::parse_regex_syntax("a+?").unwrap(),
+            &mut char_class_registry,
+        );
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Non-greedy"));
     }
 
     #[cfg(feature = "dot_writer")]
@@ -1174,82 +975,6 @@ mod tests_try_from {
 
     #[cfg(feature = "dot_writer")]
     const TEST_DATA: &[TestData] = &[
-        TestData {
-            name: "SingleCharacter1",
-            pattern: "a",
-            expected_states: 2,
-            expected_start_state: 0,
-            expected_end_state: 1,
-            expected_char_classes: 1,
-        },
-        TestData {
-            name: "Concatenation",
-            pattern: "ab",
-            expected_states: 4,
-            expected_start_state: 0,
-            expected_end_state: 3,
-            expected_char_classes: 2,
-        },
-        TestData {
-            name: "Alternation1",
-            pattern: "a|b",
-            expected_states: 6,
-            expected_start_state: 4,
-            expected_end_state: 5,
-            expected_char_classes: 2,
-        },
-        TestData {
-            name: "Repetition",
-            pattern: "a*",
-            expected_states: 4,
-            expected_start_state: 2,
-            expected_end_state: 3,
-            expected_char_classes: 1,
-        },
-        TestData {
-            name: "ZeroOrOne",
-            pattern: "a?",
-            expected_states: 3,
-            expected_start_state: 2,
-            expected_end_state: 1,
-            expected_char_classes: 1,
-        },
-        TestData {
-            name: "OneOrMore",
-            pattern: "a+",
-            expected_states: 4,
-            expected_start_state: 2,
-            expected_end_state: 3,
-            expected_char_classes: 1,
-        },
-        TestData {
-            name: "Complex1",
-            pattern: "(a|b)*abb",
-            expected_states: 14,
-            expected_start_state: 6,
-            expected_end_state: 13,
-            expected_char_classes: 2,
-        },
-        TestData {
-            name: "String",
-            pattern: r"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}",
-            expected_states: 26,
-            expected_start_state: 0,
-            expected_end_state: 25,
-            expected_char_classes: 6,
-        },
-        TestData {
-            name: "Example1",
-            pattern: "(A*B|AC)D",
-            expected_states: 14,
-            expected_start_state: 10,
-            expected_end_state: 13,
-            expected_char_classes: 4,
-        },
-    ];
-
-    #[cfg(feature = "dot_writer")]
-    const TEST_DATA_HIR: &[TestData] = &[
         TestData {
             name: "SingleCharacter1",
             pattern: "a",
@@ -1326,64 +1051,18 @@ mod tests_try_from {
 
     #[cfg(feature = "dot_writer")]
     #[test]
-    fn test_try_from_ast() {
+    fn test_try_from_hir() {
         use crate::internal::{CharacterClassRegistry, Nfa};
 
         init();
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
-            let nfa: Nfa = Nfa::try_from_ast(
-                crate::internal::parse_regex_syntax(data.pattern).unwrap(),
-                &mut char_class_registry,
-            )
-            .unwrap();
-
-            nfa_render_to!(&nfa, data.name);
-
-            assert_eq!(
-                nfa.states.len(),
-                data.expected_states,
-                "expected state count: {}:{}",
-                data.name,
-                data.pattern
-            );
-            assert_eq!(
-                nfa.start_state.as_usize(),
-                data.expected_start_state,
-                "expected start state: {}:{}",
-                data.name,
-                data.pattern
-            );
-            assert_eq!(
-                nfa.end_state.as_usize(),
-                data.expected_end_state,
-                "expected end state: {}:{}",
-                data.name,
-                data.pattern
-            );
-            assert_eq!(
-                char_class_registry.len(),
-                data.expected_char_classes,
-                "expected char classes: {}:{}",
-                data.name,
-                data.pattern
-            );
-        }
-    }
-
-    #[cfg(feature = "dot_writer")]
-    #[test]
-    fn test_try_from_hir() {
-        use crate::internal::{CharacterClassRegistry, Nfa};
-
-        init();
-        for data in TEST_DATA_HIR.iter() {
-            let mut char_class_registry = CharacterClassRegistry::new();
-            let hir = crate::internal::parse_regex_syntax_hir(data.pattern).unwrap();
+            let hir = crate::internal::parse_regex_syntax(data.pattern).unwrap();
             eprintln!("{} => {:?}", data.pattern, hir);
             let nfa: Nfa = Nfa::try_from_hir(hir, &mut char_class_registry).unwrap();
 
-            nfa_render_hir_to!(&nfa, data.name);
+            #[cfg(feature = "dot_writer")]
+            nfa_render_to!(&nfa, data.name);
 
             assert_eq!(
                 nfa.states.len(),
