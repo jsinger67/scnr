@@ -1614,13 +1614,13 @@ fn match_test_hir() {
         // }
         match scanner {
             Ok(scanner) => {
-                #[cfg(feature = "dot_writer")]
-                scanner
-                    .generate_compiled_automata_as_dot(
-                        &test_data.test_number.to_string(),
-                        std::path::Path::new(TARGET_FOLDER),
-                    )
-                    .expect("Failed to generate compiled automata as dot");
+                // #[cfg(feature = "dot_writer")]
+                // scanner
+                //     .generate_compiled_automata_as_dot(
+                //         &test_data.test_number.to_string(),
+                //         std::path::Path::new(TARGET_FOLDER),
+                //     )
+                //     .expect("Failed to generate compiled automata as dot");
                 assert!(
                     test_data.error_msg.is_none(),
                     "#{}: Parsing regex should fail",
