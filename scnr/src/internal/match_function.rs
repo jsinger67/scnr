@@ -1,11 +1,6 @@
-use regex_syntax::ast::{
-    Ast, ClassAscii, ClassAsciiKind, ClassBracketed, ClassPerl, ClassPerlKind, ClassSet,
-    ClassSetBinaryOp, ClassSetBinaryOpKind, ClassSetItem, ClassSetRange, ClassSetUnion,
-    ClassUnicode, Literal,
-};
-use seshat::unicode::{props::Gc, Ucd};
+use regex_syntax::hir::ClassUnicodeRange;
 
-use crate::{Result, ScnrError, ScnrErrorKind};
+use crate::{Result, ScnrError};
 
 use super::HirWithPattern;
 
@@ -58,218 +53,6 @@ impl MatchFunction {
     }
 }
 
-impl TryFrom<&Literal> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from(l: &Literal) -> Result<Self> {
-        let Literal {
-            ref c, ref kind, ..
-        } = *l;
-        let c = *c;
-        if c == '.' && *kind == regex_syntax::ast::LiteralKind::Verbatim {
-            Ok(MatchFn::new(|ch| ch != '\n' && ch != '\r'))
-        } else {
-            Ok(MatchFn::new(move |ch| ch == c))
-        }
-    }
-}
-
-impl TryFrom<(&ClassSetUnion, &str)> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from((union, pattern): (&ClassSetUnion, &str)) -> Result<Self> {
-        union
-            .items
-            .iter()
-            .try_fold(MatchFn::new(|_| false), |acc, s| {
-                (s, false, pattern)
-                    .try_into()
-                    .map(|f: MatchFn| MatchFn::new(move |ch| acc.inner()(ch) || f.inner()(ch)))
-            })
-    }
-}
-
-impl TryFrom<(&ClassBracketed, &str)> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from((bracketed, pattern): (&ClassBracketed, &str)) -> Result<Self> {
-        let negated = bracketed.negated;
-        match &bracketed.kind {
-            ClassSet::Item(item) => (item, negated, pattern).try_into(),
-            ClassSet::BinaryOp(bin_op) => (bin_op, negated, pattern).try_into(),
-        }
-    }
-}
-
-impl TryFrom<(&ClassUnicode, &str)> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from((unicode, pattern): (&ClassUnicode, &str)) -> Result<Self> {
-        let hir = regex_syntax::hir::translate::TranslatorBuilder::new()
-            .unicode(true)
-            .build()
-            .translate(
-                &pattern[unicode.span.start.offset..unicode.span.end.offset],
-                &Ast::ClassUnicode(Box::new(unicode.clone())),
-            )
-            .map_err(|e| {
-                ScnrError::new(ScnrErrorKind::RegexSyntaxHirError(
-                    e,
-                    "Can't translate UnicodeClass".to_string(),
-                ))
-            })?;
-        // Create a match function that evaluates the unicode ranges provided by the ClassUnicode.
-        if let regex_syntax::hir::HirKind::Class(regex_syntax::hir::Class::Unicode(u)) = hir.kind()
-        {
-            let match_function = u
-                .ranges()
-                .iter()
-                .map(|r| {
-                    let start = r.start();
-                    let end = r.end();
-                    MatchFn::new(move |ch| start <= ch && ch <= end)
-                })
-                .reduce(|acc, f| MatchFn::new(move |ch| acc.inner()(ch) || f.inner()(ch)))
-                .unwrap_or_else(|| MatchFn::new(|_| false));
-            Ok(if unicode.is_negated() {
-                MatchFn::new(move |ch| !match_function.inner()(ch))
-            } else {
-                match_function
-            })
-        } else {
-            Err(unsupported!(format!(
-                "Unicode class {:?} not supported",
-                unicode.kind
-            )))
-        }
-    }
-}
-
-impl TryFrom<&ClassPerl> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from(perl: &ClassPerl) -> Result<Self> {
-        let ClassPerl { negated, kind, .. } = perl;
-        let match_function = match kind {
-            ClassPerlKind::Digit => MatchFn::new(|ch| ch.is_numeric()),
-            ClassPerlKind::Space => MatchFn::new(|ch| ch.is_whitespace()),
-            ClassPerlKind::Word => MatchFn::new(|ch| {
-                ch.is_alphanumeric() || ch.join_c() || ch.gc() == Gc::Pc || ch.gc() == Gc::Mn
-            }),
-        };
-        Ok(if *negated {
-            MatchFn::new(move |ch| !match_function.inner()(ch))
-        } else {
-            match_function
-        })
-    }
-}
-
-impl TryFrom<(&ClassSet, &str)> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from((set, pattern): (&ClassSet, &str)) -> Result<Self> {
-        let negated = false;
-        match set {
-            ClassSet::Item(item) => (item, negated, pattern).try_into(),
-            ClassSet::BinaryOp(bin_op) => (bin_op, negated, pattern).try_into(),
-        }
-    }
-}
-
-impl TryFrom<(&ClassSetItem, bool, &str)> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from((item, negated, pattern): (&ClassSetItem, bool, &str)) -> Result<Self> {
-        let match_function = match item {
-            ClassSetItem::Empty(_) => MatchFn::new(|_| false),
-            ClassSetItem::Literal(ref l) => l.try_into()?,
-            ClassSetItem::Range(ref r) => {
-                let ClassSetRange {
-                    ref start, ref end, ..
-                } = *r;
-                let start = start.c;
-                let end = end.c;
-                MatchFn::new(move |ch| start <= ch && ch <= end)
-            }
-            ClassSetItem::Ascii(ref a) => {
-                let ClassAscii {
-                    ref kind, negated, ..
-                } = *a;
-                let match_function = match kind {
-                    ClassAsciiKind::Alnum => MatchFn::new(|ch| ch.is_alphanumeric()),
-                    ClassAsciiKind::Alpha => MatchFn::new(|ch| ch.is_alphabetic()),
-                    ClassAsciiKind::Ascii => MatchFn::new(|ch| ch.is_ascii()),
-                    ClassAsciiKind::Blank => MatchFn::new(|ch| ch.is_ascii_whitespace()),
-                    ClassAsciiKind::Cntrl => MatchFn::new(|ch| ch.is_ascii_control()),
-                    ClassAsciiKind::Digit => MatchFn::new(|ch| ch.is_numeric()),
-                    ClassAsciiKind::Graph => MatchFn::new(|ch| ch.is_ascii_graphic()),
-                    ClassAsciiKind::Lower => MatchFn::new(|ch| ch.is_lowercase()),
-                    ClassAsciiKind::Print => MatchFn::new(|ch| ch.is_ascii_graphic()),
-                    ClassAsciiKind::Punct => MatchFn::new(|ch| ch.is_ascii_punctuation()),
-                    ClassAsciiKind::Space => MatchFn::new(|ch| ch.is_whitespace()),
-                    ClassAsciiKind::Upper => MatchFn::new(|ch| ch.is_uppercase()),
-                    ClassAsciiKind::Word => MatchFn::new(|ch| {
-                        ch.is_alphanumeric()
-                            || ch.join_c()
-                            || ch.gc() == Gc::Pc
-                            || ch.gc() == Gc::Mn
-                    }),
-                    ClassAsciiKind::Xdigit => MatchFn::new(|ch| ch.is_ascii_hexdigit()),
-                };
-                if negated {
-                    MatchFn::new(move |ch| !match_function.inner()(ch))
-                } else {
-                    match_function
-                }
-            }
-            ClassSetItem::Unicode(ref c) => (c, pattern).try_into()?,
-            ClassSetItem::Perl(ref c) => c.try_into()?,
-            ClassSetItem::Bracketed(ref c) => (c.as_ref(), pattern).try_into()?,
-            ClassSetItem::Union(ref c) => (c, pattern).try_into()?,
-        };
-        Ok(if negated {
-            MatchFn::new(move |ch| !match_function.inner()(ch))
-        } else {
-            match_function
-        })
-    }
-}
-
-impl TryFrom<(&ClassSetBinaryOp, bool, &str)> for MatchFn {
-    type Error = ScnrError;
-
-    #[inline(always)]
-    fn try_from((bin_op, negated, pattern): (&ClassSetBinaryOp, bool, &str)) -> Result<Self> {
-        let ClassSetBinaryOp { kind, lhs, rhs, .. } = bin_op;
-        let lhs: MatchFn = (lhs.as_ref(), pattern).try_into()?;
-        let rhs: MatchFn = (rhs.as_ref(), pattern).try_into()?;
-        let match_function = match kind {
-            ClassSetBinaryOpKind::Intersection => {
-                MatchFn::new(move |ch| lhs.inner()(ch) && rhs.inner()(ch))
-            }
-            ClassSetBinaryOpKind::Difference => {
-                MatchFn::new(move |ch| lhs.inner()(ch) && !rhs.inner()(ch))
-            }
-            ClassSetBinaryOpKind::SymmetricDifference => {
-                MatchFn::new(move |ch| lhs.inner()(ch) != rhs.inner()(ch))
-            }
-        };
-        Ok(if negated {
-            MatchFn::new(move |ch| !match_function.inner()(ch))
-        } else {
-            match_function
-        })
-    }
-}
-
 impl TryFrom<&HirWithPattern> for MatchFunction {
     type Error = ScnrError;
 
@@ -293,29 +76,31 @@ impl TryFrom<&HirWithPattern> for MatchFunction {
             }
             regex_syntax::hir::HirKind::Class(class) => match class {
                 regex_syntax::hir::Class::Unicode(class_unicode) => {
-                    let match_fn = class_unicode
-                        .ranges()
-                        .iter()
-                        .map(|r| {
-                            let start = r.start();
-                            let end = r.end();
-                            MatchFn::new(move |ch| start <= ch && ch <= end)
-                        })
-                        .reduce(|acc, f| MatchFn::new(move |ch| acc.inner()(ch) || f.inner()(ch)))
-                        .unwrap_or_else(|| MatchFn::new(|_| false));
+                    let ranges = class_unicode.ranges().to_vec();
+                    let match_fn = MatchFn::new(move |ch| {
+                        for range in &ranges {
+                            if range.start() <= ch && ch <= range.end() {
+                                return true;
+                            }
+                        }
+                        false
+                    });
                     Self { match_fn }
                 }
                 regex_syntax::hir::Class::Bytes(class_bytes) => {
-                    let match_fn = class_bytes
+                    let ranges: Vec<ClassUnicodeRange> = class_bytes
                         .ranges()
                         .iter()
-                        .map(|r| {
-                            let start: char = r.start().into();
-                            let end: char = r.end().into();
-                            MatchFn::new(move |ch| start <= ch && ch <= end)
-                        })
-                        .reduce(|acc, f| MatchFn::new(move |ch| acc.inner()(ch) || f.inner()(ch)))
-                        .unwrap_or_else(|| MatchFn::new(|_| false));
+                        .map(|r| ClassUnicodeRange::new(r.start().into(), r.end().into()))
+                        .collect();
+                    let match_fn = MatchFn::new(move |ch| {
+                        for range in &ranges {
+                            if range.start() <= ch && ch <= range.end() {
+                                return true;
+                            }
+                        }
+                        false
+                    });
                     Self { match_fn }
                 }
             },
@@ -560,7 +345,6 @@ mod tests {
 
     #[test]
     fn test_evaluate_general_category() {
-        assert_eq!('_'.gc(), Gc::Pc);
         let pattern = r"\w";
         let hir = HirWithPattern::new(parse_regex_syntax(pattern).unwrap());
         let match_function = MatchFunction::try_from(&hir).unwrap();
