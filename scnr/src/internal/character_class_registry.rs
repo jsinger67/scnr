@@ -83,6 +83,27 @@ impl CharacterClassRegistry {
             unsafe { match_functions.get_unchecked(char_class.as_usize()).call(c) }
         }))
     }
+
+    pub(crate) fn generate(&self, name: &str) -> proc_macro2::TokenStream {
+        let name = syn::Ident::new(name, proc_macro2::Span::call_site()); // Convert name to an Ident
+        let mut match_functions = Vec::new();
+        for cc in &self.character_classes {
+            match_functions.push(cc.generate());
+        }
+        quote::quote! {
+            pub const #name: fn(CharClassID, char) -> bool = |char_class, c| {
+                // trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
+                match char_class.as_usize() {
+                    #(
+                        #match_functions,
+                    )*
+                    _ => |_c: char| -> bool {
+                        false
+                    }
+                }
+            };
+        }
+    }
 }
 
 impl std::fmt::Display for CharacterClassRegistry {

@@ -614,6 +614,25 @@ mod tests {
                     ("", None),
                 ],
             },
+            TestData {
+                pattern: r"abc",
+                name: "Concatenation",
+                end_states: vec![
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (false, 0.into()),
+                    (true, 0.into()),
+                ],
+                match_data: vec![
+                    ("a", None),
+                    ("b", None),
+                    ("c", None),
+                    ("abc", Some((0, 3))),
+                    ("ab", None),
+                    ("aab", None),
+                    ("aabc", None),
+                ],
+            },
         ]
     });
 

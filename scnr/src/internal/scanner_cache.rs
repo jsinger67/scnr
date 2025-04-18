@@ -47,7 +47,7 @@ impl ScannerCache {
             Ok(cloned_scanner)
         } else {
             let scanner_impl: ScannerImpl = if use_hir {
-                ScannerImpl::new_hir(modes)?
+                ScannerImpl::new(modes)?
             } else {
                 modes.try_into()? // This is a conversion from &[ScannerMode] to ScannerImpl
             };

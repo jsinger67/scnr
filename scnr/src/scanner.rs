@@ -102,6 +102,16 @@ impl Scanner {
         self.inner
             .generate_compiled_automata_as_dot(prefix, target_folder)
     }
+
+    /// Generates the code for the match function.
+    /// The code is written to the target file.
+    /// The code is generated in Rust and can be used to create a scanner that is able to match the
+    /// input string.
+    #[cfg(not(feature = "regex_automata"))]
+    pub fn generate_match_function_code<T: AsRef<Path>>(&self, target_file: T) -> Result<()> {
+        self.inner
+            .generate_match_function_code(target_file.as_ref())
+    }
 }
 
 impl ScannerModeSwitcher for Scanner {

@@ -58,14 +58,14 @@ impl TryFrom<&HirWithPattern> for MatchFunction {
 
     #[inline(always)]
     fn try_from(hir: &HirWithPattern) -> Result<Self> {
-        // Translate the AST to a Hir and create a match function from it.
+        // Translate the HIR to a Hir and create a match function from it.
         let match_function = match &hir.hir.kind() {
             regex_syntax::hir::HirKind::Empty => {
-                // An empty AST matches everything.
+                // An empty HIR matches everything.
                 Self::new(|_| true)
             }
             regex_syntax::hir::HirKind::Literal(literal) => {
-                // A literal AST matches a single character.
+                // A literal HIR matches a single character.
                 // We need to clone the bytes because the Hir is borrowed.
                 let bytes = literal.0.clone();
                 Self::new(move |ch| {

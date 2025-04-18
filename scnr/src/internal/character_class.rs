@@ -21,6 +21,99 @@ impl CharacterClass {
     // pub(crate) fn pattern(&self) -> &str {
     //     self.hir.pattern()
     // }
+
+    pub(crate) fn generate(&self) -> proc_macro2::TokenStream {
+        let id = self.id.as_usize();
+        match &self.hir.hir.kind() {
+            regex_syntax::hir::HirKind::Empty => {
+                quote::quote! {
+                    #id => |_c: char| -> bool {
+                        // An empty Hir matches everything.
+                        true
+                    }
+                }
+            }
+            regex_syntax::hir::HirKind::Literal(literal) => {
+                // Literals here are separated into single characters.
+                let bytes = literal.0.clone();
+                // We convert the first 4 bytes to a u32.
+                // If the literal is smaller than 4 bytes, take will ensure we only take the bytes
+                // that exist.
+                let lit: u32 = bytes
+                    .iter()
+                    .take(4)
+                    .fold(0, |acc, &b| (acc << 8) | b as u32);
+                quote::quote! {
+                     #id => |c: char| -> bool {
+                        #lit == c as u32
+                    }
+                }
+            }
+            regex_syntax::hir::HirKind::Class(class) => match class {
+                regex_syntax::hir::Class::Unicode(class_unicode) => {
+                    let ranges = class_unicode.ranges().iter().fold(
+                        proc_macro2::TokenStream::new(),
+                        |mut acc, r| {
+                            let start: char = r.start();
+                            let end: char = r.end();
+                            if start == end {
+                                acc.extend(quote::quote! {
+                                    if c == #start {
+                                        return true;
+                                    }
+                                });
+                            } else {
+                                acc.extend(quote::quote! {
+                                    if c >= #start && c <= #end {
+                                        return true;
+                                    }
+                                });
+                            }
+                            acc
+                        },
+                    );
+                    quote::quote! {
+                        #id => |c: char| -> bool {
+                            #ranges
+                            false
+                        }
+                    }
+                }
+                regex_syntax::hir::Class::Bytes(class_bytes) => {
+                    let ranges = class_bytes.ranges().iter().fold(
+                        proc_macro2::TokenStream::new(),
+                        |mut acc, r| {
+                            let start: char = r.start().into();
+                            let end: char = r.end().into();
+                            if start == end {
+                                acc.extend(quote::quote! {
+                                    if c == #start {
+                                        return true;
+                                    }
+                                });
+                            } else {
+                                acc.extend(quote::quote! {
+                                    if c >= #start && c <= #end {
+                                        return true;
+                                    }
+                                });
+                            }
+                            acc
+                        },
+                    );
+                    quote::quote! {
+                        #id => |c: char| -> bool {
+                            #ranges
+                            false
+                        }
+                    }
+                }
+            },
+            _ => {
+                panic!("Unsupported Hir kind: {:?}", self.hir.hir.kind())
+            }
+        }
+    }
 }
 
 impl std::fmt::Debug for CharacterClass {

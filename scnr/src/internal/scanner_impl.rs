@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{io::Write, sync::Arc};
 
 use log::trace;
 
@@ -156,12 +156,12 @@ impl ScannerImpl {
         Ok(())
     }
 
-    pub(crate) fn new_hir(scanner_modes: &[ScannerMode]) -> Result<Self> {
+    pub(crate) fn new(scanner_modes: &[ScannerMode]) -> Result<Self> {
         let mut character_class_registry = CharacterClassRegistry::new();
         let mut compiled_scanner_modes = Vec::with_capacity(scanner_modes.len());
         for scanner_mode in scanner_modes {
-            let compiled_scanner_mode = CompiledScannerMode::try_from_scanner_mode_hir(
-                scanner_mode,
+            let compiled_scanner_mode = CompiledScannerMode::try_from_scanner_mode(
+                scanner_mode.clone(),
                 &mut character_class_registry,
             )?;
             compiled_scanner_modes.push(compiled_scanner_mode);
@@ -173,6 +173,21 @@ impl ScannerImpl {
             match_char_class,
             current_mode: 0,
         })
+    }
+
+    pub(crate) fn generate_match_function_code(&self, out_file: &std::path::Path) -> Result<()> {
+        // TODO: Make the function name configurable, e.g. as a parameter to the function.
+        {
+            let mut file = std::fs::File::create(out_file)?;
+            let code = self
+                .character_classes
+                .generate("MATCH_FUNCTIONS")
+                .to_string();
+            file.write_all(code.as_bytes())?;
+            file.write_all(b"\n")?;
+        }
+        crate::internal::rust_code_formatter::try_format(out_file)?;
+        Ok(())
     }
 }
 
