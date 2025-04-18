@@ -8,8 +8,8 @@ use super::{
     compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry, TerminalIDBase,
 };
 
-/// ScannerImpl instances are always created by the Scanner::try_new method and of course by
-/// the clone method.
+/// ScannerImpl instances are always created by `TryFrom<Vec<ScannerMode>>` or
+/// `TryFrom<&[ScannerMode]>` and of course by the clone method.
 #[derive(Clone)]
 pub(crate) struct ScannerImpl {
     pub(crate) character_classes: Arc<CharacterClassRegistry>,
