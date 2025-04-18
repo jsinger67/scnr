@@ -217,18 +217,15 @@ impl Minimizer {
             states: _,
             end_states,
             lookaheads,
-            current_states,
-            next_states,
+            ..
         } = dfa;
-        let mut dfa = CompiledDfa {
+        let mut dfa = CompiledDfa::new(
             patterns,
             terminal_ids,
-            states: vec![StateData::new(); partition.len()],
-            end_states: vec![(false, 0.into()); partition.len()],
+            vec![StateData::new(); partition.len()],
+            vec![(false, 0.into()); partition.len()],
             lookaheads,
-            current_states,
-            next_states,
-        };
+        );
 
         // Reorder the groups so that the start state is in the first group (0).
         // The representative state of the first group must be the start state of the minimized DFA,
@@ -439,21 +436,19 @@ mod tests {
 
     #[test]
     fn test_calculate_initial_partition() {
-        let dfa = CompiledDfa {
-            patterns: vec![],
-            terminal_ids: vec![0.into(), 1.into(), 2.into()],
-            states: vec![StateData::new(); 5],
-            end_states: vec![
+        let dfa = CompiledDfa::new(
+            vec![],
+            vec![0.into(), 1.into(), 2.into()],
+            vec![StateData::new(); 5],
+            vec![
                 (true, 0.into()),
                 (true, 1.into()),
                 (false, 0.into()),
                 (false, 0.into()),
                 (true, 2.into()),
             ],
-            lookaheads: FxHashMap::default(),
-            current_states: vec![],
-            next_states: vec![],
-        };
+            FxHashMap::default(),
+        );
 
         let partition = Minimizer::calculate_initial_partition(&dfa);
         assert_eq!(partition.len(), 4);
@@ -465,21 +460,19 @@ mod tests {
 
     #[test]
     fn test_calculate_new_partition() {
-        let dfa = CompiledDfa {
-            patterns: vec![],
-            terminal_ids: vec![0.into(), 1.into(), 2.into()],
-            states: vec![StateData::new(); 5],
-            end_states: vec![
+        let dfa = CompiledDfa::new(
+            vec![],
+            vec![0.into(), 1.into(), 2.into()],
+            vec![StateData::new(); 5],
+            vec![
                 (true, 0.into()),
                 (true, 1.into()),
                 (false, 0.into()),
                 (false, 0.into()),
                 (true, 2.into()),
             ],
-            lookaheads: FxHashMap::default(),
-            current_states: vec![],
-            next_states: vec![],
-        };
+            FxHashMap::default(),
+        );
 
         let transitions: TransitionMap = vec![
             (

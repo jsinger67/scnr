@@ -41,11 +41,30 @@ pub(crate) struct CompiledDfa {
     /// Current and next states of the DFA. They are used during the simulation of the DFA.
     /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
     /// drop them again during the simulation.
-    pub(crate) current_states: Vec<StateSetID>,
-    pub(crate) next_states: Vec<StateSetID>,
+    current_states: Vec<StateSetID>,
+    next_states: Vec<StateSetID>,
 }
 
 impl CompiledDfa {
+    /// Creates a new CompiledDfa from the given patterns and character class registry.
+    pub(crate) fn new(
+        patterns: Vec<String>,
+        terminal_ids: Vec<TerminalID>,
+        states: Vec<StateData>,
+        end_states: Vec<(bool, TerminalID)>,
+        lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
+    ) -> Self {
+        Self {
+            patterns,
+            terminal_ids,
+            states,
+            end_states,
+            lookaheads,
+            current_states: Vec::new(),
+            next_states: Vec::new(),
+        }
+    }
+
     /// Simulates the DFA on the given input.
     /// Returns a match starting at the current position. No try on next character is done.
     /// The caller must do that.
