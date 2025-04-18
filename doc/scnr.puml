@@ -147,7 +147,7 @@ package internal {
     }
     struct ScannerImpl {
         - current_mode: usize
-        ~ match_char_class(char_class_id: CharClassID, c: char) -> bool
+        ~ {field} match_char_class(char_class_id: CharClassID, c: char) -> bool
         ~ mode_name(&self, index: usize) -> Option<&str>
         + reset(&mut self)
         + find_from(&mut self, char_indices: std::str::CharIndices) -> Option<Match>
