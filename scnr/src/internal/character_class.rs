@@ -27,7 +27,7 @@ impl CharacterClass {
         match &self.hir.hir.kind() {
             regex_syntax::hir::HirKind::Empty => {
                 quote::quote! {
-                    #id => |_c: char| -> bool {
+                    #id => {
                         // An empty Hir matches everything.
                         true
                     }
@@ -44,7 +44,7 @@ impl CharacterClass {
                     .take(4)
                     .fold(0, |acc, &b| (acc << 8) | b as u32);
                 quote::quote! {
-                     #id => |c: char| -> bool {
+                     #id => {
                         #lit == c as u32
                     }
                 }
@@ -64,7 +64,7 @@ impl CharacterClass {
                                 });
                             } else {
                                 acc.extend(quote::quote! {
-                                    if c >= #start && c <= #end {
+                                    if (#start..=#end).contains(&c) {
                                         return true;
                                     }
                                 });
@@ -73,7 +73,7 @@ impl CharacterClass {
                         },
                     );
                     quote::quote! {
-                        #id => |c: char| -> bool {
+                        #id => {
                             #ranges
                             false
                         }
@@ -93,7 +93,7 @@ impl CharacterClass {
                                 });
                             } else {
                                 acc.extend(quote::quote! {
-                                    if c >= #start && c <= #end {
+                                    if (#start..=#end).contains(&c) {
                                         return true;
                                     }
                                 });
@@ -102,7 +102,7 @@ impl CharacterClass {
                         },
                     );
                     quote::quote! {
-                        #id => |c: char| -> bool {
+                        #id => {
                             #ranges
                             false
                         }

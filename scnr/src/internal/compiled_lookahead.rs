@@ -2,9 +2,7 @@
 
 use crate::{Lookahead, Result};
 
-use super::{
-    compiled_dfa::CompiledDfa, parse_regex_syntax, CharClassID, CharacterClassRegistry, Nfa,
-};
+use super::{compiled_dfa::CompiledDfa, parse_regex_syntax, CharacterClassRegistry, Nfa};
 
 #[derive(Debug, Clone)]
 pub(crate) struct CompiledLookahead {
@@ -65,7 +63,7 @@ impl CompiledLookahead {
         &mut self,
         input: &str,
         char_indices: std::str::CharIndices,
-        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
+        match_char_class: &(dyn Fn(usize, char) -> bool + 'static),
     ) -> (bool, usize) {
         if let Some(ma) = self.nfa.find_from(input, char_indices, match_char_class) {
             (self.is_positive, ma.len())

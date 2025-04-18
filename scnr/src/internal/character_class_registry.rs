@@ -68,7 +68,7 @@ impl CharacterClassRegistry {
     ///     of the registry.
     pub(crate) fn create_match_char_class(
         &self,
-    ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
+    ) -> Result<Box<dyn (Fn(usize, char) -> bool) + 'static + Send + Sync>> {
         let match_functions =
             self.character_classes
                 .iter()
@@ -80,7 +80,7 @@ impl CharacterClassRegistry {
                 })?;
         Ok(Box::new(move |char_class, c| {
             // trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
-            unsafe { match_functions.get_unchecked(char_class.as_usize()).call(c) }
+            unsafe { match_functions.get_unchecked(char_class).call(c) }
         }))
     }
 
@@ -91,17 +91,15 @@ impl CharacterClassRegistry {
             match_functions.push(cc.generate());
         }
         quote::quote! {
-            pub const #name: fn(CharClassID, char) -> bool = |char_class, c| {
-                // trace!("Match char class #{} '{}' -> {:?}", char_class.id(), c, res);
-                match char_class.as_usize() {
+            #[allow(clippy::manual_is_ascii_check)]
+            pub(crate) fn #name(char_class: usize, c: char) -> bool {
+                match char_class {
                     #(
                         #match_functions,
                     )*
-                    _ => |_c: char| -> bool {
-                        false
-                    }
+                    _ => false
                 }
-            };
+            }
         }
     }
 }

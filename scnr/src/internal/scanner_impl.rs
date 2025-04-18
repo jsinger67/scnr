@@ -4,9 +4,7 @@ use log::trace;
 
 use crate::{Match, Result, ScannerMode, ScannerModeSwitcher};
 
-use super::{
-    compiled_scanner_mode::CompiledScannerMode, CharClassID, CharacterClassRegistry, TerminalIDBase,
-};
+use super::{compiled_scanner_mode::CompiledScannerMode, CharacterClassRegistry, TerminalIDBase};
 
 /// ScannerImpl instances are always created by `TryFrom<Vec<ScannerMode>>` or
 /// `TryFrom<&[ScannerMode]>` and of course by the clone method.
@@ -15,7 +13,7 @@ pub(crate) struct ScannerImpl {
     pub(crate) character_classes: Arc<CharacterClassRegistry>,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     // The function used to match characters against character classes.
-    pub(crate) match_char_class: Arc<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>,
+    pub(crate) match_char_class: Arc<dyn (Fn(usize, char) -> bool) + 'static + Send + Sync>,
     // The current mode is private and thereby makes the free creation of ScannerImpl instances
     // impossible.
     current_mode: usize,
@@ -41,7 +39,7 @@ impl ScannerImpl {
     #[allow(dead_code)]
     pub(crate) fn create_match_char_class(
         &self,
-    ) -> Result<Box<dyn (Fn(CharClassID, char) -> bool) + 'static + Send + Sync>> {
+    ) -> Result<Box<dyn (Fn(usize, char) -> bool) + 'static + Send + Sync>> {
         self.character_classes.create_match_char_class()
     }
 
@@ -181,13 +179,17 @@ impl ScannerImpl {
             let mut file = std::fs::File::create(out_file)?;
             let code = self
                 .character_classes
-                .generate("MATCH_FUNCTIONS")
+                .generate("match_function")
                 .to_string();
             file.write_all(code.as_bytes())?;
             file.write_all(b"\n")?;
         }
         crate::internal::rust_code_formatter::try_format(out_file)?;
         Ok(())
+    }
+
+    pub(crate) fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
+        self.match_char_class = Arc::new(match_function);
     }
 }
 
@@ -304,12 +306,12 @@ mod tests {
         ];
         let scanner_impl: ScannerImpl = scanner_modes.try_into().unwrap();
         let match_char_class = scanner_impl.create_match_char_class().unwrap();
-        assert!(match_char_class((0).into(), 'a'));
-        assert!(!match_char_class((0).into(), 'b'));
-        assert!(!match_char_class((0).into(), 'c'));
-        assert!(!match_char_class((1).into(), 'a'));
-        assert!(match_char_class((1).into(), 'b'));
-        assert!(!match_char_class((1).into(), 'c'));
+        assert!(match_char_class(0, 'a'));
+        assert!(!match_char_class(0, 'b'));
+        assert!(!match_char_class(0, 'c'));
+        assert!(!match_char_class(1, 'a'));
+        assert!(match_char_class(1, 'b'));
+        assert!(!match_char_class(1, 'c'));
     }
 
     #[cfg(feature = "serde")]

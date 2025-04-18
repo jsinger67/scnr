@@ -92,7 +92,7 @@ impl CompiledDfa {
         &mut self,
         input: &str,
         char_indices: std::str::CharIndices,
-        match_char_class: &(dyn Fn(CharClassID, char) -> bool + 'static),
+        match_char_class: &(dyn Fn(usize, char) -> bool + 'static),
     ) -> Option<Match> {
         self.current_states.clear();
         // Push the start state to the current states.
@@ -112,16 +112,17 @@ impl CompiledDfa {
                 if match_end.is_none() && self.end_states[*state].0 {
                     match_end = Some(index);
                 }
-                for (cc, next) in &self.states[*state].transitions {
-                    if match_char_class(*cc, c) {
+                let state_data = &self.states[*state];
+                for (cc, next) in &state_data.transitions {
+                    if match_char_class(cc.as_usize(), c) {
                         if !self.next_states.contains(next) {
                             self.next_states.push(*next);
                         }
-                        if self.end_states[*next].0 {
+                        let next_end_state = self.end_states[*next];
+                        if next_end_state.0 {
                             let mut lookahead_len = 0;
                             // Check if a lookahead is present and if it is satisfied.
-                            if let Some(lookahead) = self.lookaheads.get(&self.end_states[*next].1)
-                            {
+                            if let Some(lookahead) = self.lookaheads.get(&next_end_state.1) {
                                 // Create a CharIndices iterator starting from the current position.
                                 if let Some((_, next_slice)) =
                                     input.split_at_checked(index + c.len_utf8())
@@ -153,24 +154,23 @@ impl CompiledDfa {
                                 {
                                     std::cmp::Ordering::Greater => {
                                         match_end = Some(index + c.len_utf8());
-                                        match_terminal_id = Some(self.end_states[*next].1);
+                                        match_terminal_id = Some(next_end_state.1);
                                     }
                                     std::cmp::Ordering::Equal => {
-                                        let terminal_id =
-                                            self.priority_of(self.end_states[*next].1);
+                                        let terminal_id = self.priority_of(next_end_state.1);
                                         if terminal_id
                                             < self.priority_of(match_terminal_id.unwrap())
                                         {
-                                            match_terminal_id = Some(self.end_states[*next].1);
+                                            match_terminal_id = Some(next_end_state.1);
                                         }
                                     }
                                     std::cmp::Ordering::Less => {
-                                        match_terminal_id = Some(self.end_states[*next].1);
+                                        match_terminal_id = Some(next_end_state.1);
                                     }
                                 }
                             } else {
                                 match_end = Some(index + c.len_utf8());
-                                match_terminal_id = Some(self.end_states[*next].1);
+                                match_terminal_id = Some(next_end_state.1);
                             }
                         }
                     }
