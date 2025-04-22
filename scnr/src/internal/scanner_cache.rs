@@ -36,7 +36,7 @@ impl ScannerCache {
     /// This function uses `unsafe` because it dereferences a raw pointer.
     /// The Arc assures that the pointer is valid because it holds a reference to the object as
     /// long as the Arc is in the cache and thus alive.
-    pub(crate) fn get(&mut self, modes: &[ScannerMode], use_hir: bool) -> Result<ScannerImpl> {
+    pub(crate) fn get(&mut self, modes: &[ScannerMode]) -> Result<ScannerImpl> {
         if let Some(scanner) = self.cache.get(modes) {
             // We need to clone the scanner because we need to return a new instance of the scanner.
             // This is because the scanner is mutable and we need to have a unique instance of the
@@ -46,13 +46,11 @@ impl ScannerCache {
                 unsafe { (*std::sync::Arc::<ScannerImpl>::as_ptr(scanner)).clone() };
             Ok(cloned_scanner)
         } else {
-            let scanner_impl: ScannerImpl = if use_hir {
-                ScannerImpl::new(modes)?
-            } else {
-                modes.try_into()? // This is a conversion from &[ScannerMode] to ScannerImpl
-            };
+            // This is a conversion from &[ScannerMode] to ScannerImpl
+            let scanner_impl: ScannerImpl = modes.try_into()?;
+
             self.cache.insert(modes.to_vec(), Arc::new(scanner_impl));
-            Ok(self.get(modes, use_hir).unwrap())
+            Ok(self.get(modes).unwrap())
         }
     }
 }

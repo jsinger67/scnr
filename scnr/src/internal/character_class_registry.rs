@@ -91,13 +91,20 @@ impl CharacterClassRegistry {
             match_functions.push(cc.generate());
         }
         quote::quote! {
-            #[allow(clippy::manual_is_ascii_check)]
+            #[allow(clippy::manual_is_ascii_check, dead_code)]
             pub(crate) fn #name(char_class: usize, c: char) -> bool {
-                match char_class {
-                    #(
-                        #match_functions,
-                    )*
-                    _ => false
+                // Define a table of closures for each char_class
+                static CHAR_CLASS_TABLE: &[fn(char) -> bool] = &[
+                                #(
+                                    #match_functions,
+                                )*
+                ];
+
+                // Check if char_class is within bounds
+                if let Some(func) = CHAR_CLASS_TABLE.get(char_class) {
+                    func(c)
+                } else {
+                    false
                 }
             }
         }

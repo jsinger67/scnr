@@ -23,11 +23,10 @@ impl CharacterClass {
     // }
 
     pub(crate) fn generate(&self) -> proc_macro2::TokenStream {
-        let id = self.id.as_usize();
         match &self.hir.hir.kind() {
             regex_syntax::hir::HirKind::Empty => {
                 quote::quote! {
-                    #id => {
+                    |_c| {
                         // An empty Hir matches everything.
                         true
                     }
@@ -43,10 +42,9 @@ impl CharacterClass {
                     .iter()
                     .take(4)
                     .fold(0, |acc, &b| (acc << 8) | b as u32);
+                let c = char::from_u32(lit).unwrap_or('\0');
                 quote::quote! {
-                     #id => {
-                        #lit == c as u32
-                    }
+                     |c| c == #c
                 }
             }
             regex_syntax::hir::HirKind::Class(class) => match class {
@@ -54,28 +52,30 @@ impl CharacterClass {
                     let ranges = class_unicode.ranges().iter().fold(
                         proc_macro2::TokenStream::new(),
                         |mut acc, r| {
+                            if !acc.is_empty() {
+                                acc.extend(quote::quote! {
+                                    |
+                                });
+                            }
                             let start: char = r.start();
                             let end: char = r.end();
                             if start == end {
                                 acc.extend(quote::quote! {
-                                    if c == #start {
-                                        return true;
-                                    }
+                                    #start
                                 });
                             } else {
                                 acc.extend(quote::quote! {
-                                    if (#start..=#end).contains(&c) {
-                                        return true;
-                                    }
+                                    #start..=#end
                                 });
                             }
                             acc
                         },
                     );
                     quote::quote! {
-                        #id => {
-                            #ranges
-                            false
+                        |c| {
+                            matches!(c,
+                                #ranges
+                            )
                         }
                     }
                 }
@@ -83,28 +83,30 @@ impl CharacterClass {
                     let ranges = class_bytes.ranges().iter().fold(
                         proc_macro2::TokenStream::new(),
                         |mut acc, r| {
+                            if !acc.is_empty() {
+                                acc.extend(quote::quote! {
+                                    |
+                                });
+                            }
                             let start: char = r.start().into();
                             let end: char = r.end().into();
                             if start == end {
                                 acc.extend(quote::quote! {
-                                    if c == #start {
-                                        return true;
-                                    }
+                                    #start
                                 });
                             } else {
                                 acc.extend(quote::quote! {
-                                    if (#start..=#end).contains(&c) {
-                                        return true;
-                                    }
+                                    #start..=#end
                                 });
                             }
                             acc
                         },
                     );
                     quote::quote! {
-                        #id => {
-                            #ranges
-                            false
+                        |c| {
+                            matches!(c,
+                                #ranges
+                            )
                         }
                     }
                 }

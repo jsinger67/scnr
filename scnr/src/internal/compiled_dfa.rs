@@ -30,19 +30,8 @@ pub(crate) struct CompiledDfa {
     pub(crate) terminal_ids: Vec<TerminalID>,
     /// The states of the DFA.
     pub(crate) states: Vec<StateData>,
-    /// The accepting states of the DFA are represented by a vector of booleans and terminal ids.
-    /// The index of the vector is the state id.
-    /// If the value is true, the state is an accepting state.
-    /// This is an optimization to avoid the need to search the end states during the simulation.
-    pub(crate) end_states: Vec<(bool, TerminalID)>,
     /// An optional lookahead that is used to check if the DFA should match the input.
     pub(crate) lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
-
-    /// Current and next states of the DFA. They are used during the simulation of the DFA.
-    /// For performance reasons we hold them here. This avoids the need to repeatedly allocate and
-    /// drop them again during the simulation.
-    current_states: Vec<StateSetID>,
-    next_states: Vec<StateSetID>,
 }
 
 impl CompiledDfa {
@@ -51,17 +40,13 @@ impl CompiledDfa {
         patterns: Vec<String>,
         terminal_ids: Vec<TerminalID>,
         states: Vec<StateData>,
-        end_states: Vec<(bool, TerminalID)>,
         lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
     ) -> Self {
         Self {
             patterns,
             terminal_ids,
             states,
-            end_states,
             lookaheads,
-            current_states: Vec::new(),
-            next_states: Vec::new(),
         }
     }
 
@@ -89,18 +74,22 @@ impl CompiledDfa {
     ///
     #[inline(always)]
     pub(crate) fn find_from(
-        &mut self,
+        &self,
         input: &str,
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(usize, char) -> bool + 'static),
     ) -> Option<Match> {
-        self.current_states.clear();
+        let mut current_states = Vec::with_capacity(self.states.len());
+        let mut next_states = Vec::with_capacity(self.states.len());
+
         // Push the start state to the current states.
-        self.current_states.push(StateSetID::new(0));
-        self.next_states.clear();
+        current_states.push(StateSetID::new(0));
+
+        // Initialize the match variables.
         let mut match_start = None;
         let mut match_end = None;
         let mut match_terminal_id = None;
+
         for (index, c) in char_indices {
             if match_start.is_none() {
                 // A potential match starts always at the first position.
@@ -108,27 +97,27 @@ impl CompiledDfa {
                 match_start = Some(index);
             }
 
-            for state in self.current_states.iter() {
-                if match_end.is_none() && self.end_states[*state].0 {
+            for state in current_states.iter() {
+                let state_data = &self.states[*state];
+                if match_end.is_none() && state_data.terminal_id.is_some() {
                     match_end = Some(index);
                 }
-                let state_data = &self.states[*state];
                 for (cc, next) in &state_data.transitions {
                     if match_char_class(cc.as_usize(), c) {
-                        if !self.next_states.contains(next) {
-                            self.next_states.push(*next);
+                        if !next_states.contains(next) {
+                            next_states.push(*next);
                         }
-                        let next_end_state = self.end_states[*next];
-                        if next_end_state.0 {
+                        let next_state = &self.states[*next];
+                        if let Some(accepted_terminal) = next_state.terminal_id {
                             let mut lookahead_len = 0;
                             // Check if a lookahead is present and if it is satisfied.
-                            if let Some(lookahead) = self.lookaheads.get(&next_end_state.1) {
+                            if let Some(lookahead) = self.lookaheads.get(&accepted_terminal) {
                                 // Create a CharIndices iterator starting from the current position.
                                 if let Some((_, next_slice)) =
                                     input.split_at_checked(index + c.len_utf8())
                                 {
                                     let char_indices = next_slice.char_indices();
-                                    let mut lookahead = lookahead.clone();
+                                    let lookahead = lookahead.clone();
                                     let (satisfied, len) = lookahead.satisfies_lookahead(
                                         next_slice,
                                         char_indices,
@@ -154,31 +143,32 @@ impl CompiledDfa {
                                 {
                                     std::cmp::Ordering::Greater => {
                                         match_end = Some(index + c.len_utf8());
-                                        match_terminal_id = Some(next_end_state.1);
+                                        match_terminal_id = Some(accepted_terminal);
                                     }
                                     std::cmp::Ordering::Equal => {
-                                        let terminal_id = self.priority_of(next_end_state.1);
-                                        if terminal_id
+                                        let terminal_id_priority =
+                                            self.priority_of(accepted_terminal);
+                                        if terminal_id_priority
                                             < self.priority_of(match_terminal_id.unwrap())
                                         {
-                                            match_terminal_id = Some(next_end_state.1);
+                                            match_terminal_id = Some(accepted_terminal);
                                         }
                                     }
                                     std::cmp::Ordering::Less => {
-                                        match_terminal_id = Some(next_end_state.1);
+                                        match_terminal_id = Some(accepted_terminal);
                                     }
                                 }
                             } else {
                                 match_end = Some(index + c.len_utf8());
-                                match_terminal_id = Some(next_end_state.1);
+                                match_terminal_id = Some(accepted_terminal);
                             }
                         }
                     }
                 }
             }
-            self.current_states.clear();
-            std::mem::swap(&mut self.current_states, &mut self.next_states);
-            if self.current_states.is_empty() {
+            current_states.clear();
+            std::mem::swap(&mut current_states, &mut next_states);
+            if current_states.is_empty() {
                 break;
             }
         }
@@ -337,21 +327,15 @@ impl From<Nfa> for CompiledDfa {
             states[from].transitions.push((cc, to));
         }
 
-        let current_states = Vec::with_capacity(states.len());
-        let next_states = Vec::with_capacity(states.len());
-        let mut end_states = vec![(false, TerminalID::new(0)); states.len()];
         for (state, term) in accepting_states {
-            end_states[state] = (true, TerminalID::new(term as TerminalIDBase));
+            states[state].set_terminal_id(TerminalID::new(term as TerminalIDBase));
         }
 
         Minimizer::minimize(Self {
             patterns: vec![nfa.pattern.pattern().to_string()],
             terminal_ids: vec![(nfa.pattern.terminal_id() as TerminalIDBase).into()],
             states,
-            end_states,
             lookaheads: FxHashMap::default(),
-            current_states,
-            next_states,
         })
     }
 }
@@ -410,11 +394,8 @@ impl From<MultiPatternNfa> for CompiledDfa {
             states[from].transitions.push((cc, to));
         }
 
-        let current_states = Vec::with_capacity(states.len());
-        let next_states = Vec::with_capacity(states.len());
-        let mut end_states = vec![(false, TerminalID::new(0)); states.len()];
         for (state, term) in accepting_states {
-            end_states[state] = (true, TerminalID::new(term as TerminalIDBase));
+            states[state].set_terminal_id(TerminalID::new(term as TerminalIDBase));
         }
 
         Minimizer::minimize(Self {
@@ -425,10 +406,7 @@ impl From<MultiPatternNfa> for CompiledDfa {
                 .map(|p| (p.terminal_id() as TerminalIDBase).into())
                 .collect(),
             states,
-            end_states,
             lookaheads: FxHashMap::default(),
-            current_states,
-            next_states,
         })
     }
 }
@@ -437,7 +415,6 @@ impl std::fmt::Display for CompiledDfa {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Pattern: {}", self.patterns.join("|"))?;
         writeln!(f, "Start state: 0")?;
-        writeln!(f, "End states: {:?}", self.end_states)?;
         for (i, state) in self.states.iter().enumerate() {
             writeln!(f, "State {}: {}", i, state)?;
         }
@@ -454,6 +431,10 @@ pub(crate) struct StateData {
     /// A list of transitions from this state.
     /// The state ids are numbers of sets of states.
     pub(crate) transitions: Vec<(CharClassID, StateSetID)>,
+
+    /// A possible terminal id of the state.
+    /// It is set only if the state is an accepting state.
+    pub(crate) terminal_id: Option<TerminalID>,
 }
 
 impl StateData {
@@ -462,7 +443,14 @@ impl StateData {
             // Most states have only one or two transitions.
             // Only the start state has many transitions.
             transitions: Vec::with_capacity(2),
+            terminal_id: None,
         }
+    }
+
+    /// Sets the terminal id of the state.
+    /// This is used to mark the state as an accepting state.
+    pub(crate) fn set_terminal_id(&mut self, terminal_id: TerminalID) {
+        self.terminal_id = Some(terminal_id);
     }
 }
 
@@ -470,6 +458,9 @@ impl std::fmt::Display for StateData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (cc, next) in &self.transitions {
             writeln!(f, "Transition: {:?} -> {}", cc, next)?;
+            if let Some(terminal_id) = self.terminal_id {
+                writeln!(f, "  Terminal id: {}", terminal_id)?;
+            }
         }
         Ok(())
     }
@@ -527,7 +518,7 @@ mod tests {
     struct TestData {
         pattern: &'static str,
         name: &'static str,
-        end_states: Vec<(bool, crate::internal::TerminalID)>,
+        end_states: Vec<(usize, crate::internal::TerminalID)>,
         match_data: Vec<(&'static str, Option<(usize, usize)>)>,
     }
 
@@ -537,13 +528,7 @@ mod tests {
             TestData {
                 pattern: "(A*B|AC)D",
                 name: "Sedgewick",
-                end_states: vec![
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (true, 0.into()),
-                ],
+                end_states: vec![(4, 0.into())],
                 match_data: vec![
                     ("AAABD", Some((0, 5))),
                     ("ACD", Some((0, 3))),
@@ -554,16 +539,7 @@ mod tests {
             TestData {
                 pattern: r#"\u{0022}(\\[\u{0022}\\/bfnrt]|u[0-9a-fA-F]{4}|[^\u{0022}\\\u0000-\u001F])*\u{0022}"#,
                 name: "JsonString",
-                end_states: vec![
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (true, 0.into()),
-                ],
+                end_states: vec![(7, 0.into())],
                 match_data: vec![
                     (r#""autumn""#, Some((0, 8))),
                     (r#""au0075tumn""#, Some((0, 12))),
@@ -573,7 +549,7 @@ mod tests {
             TestData {
                 pattern: r"[a-zA-Z_]\w*",
                 name: "Identifier",
-                end_states: vec![(false, 0.into()), (true, 0.into())],
+                end_states: vec![(1, 0.into())],
                 match_data: vec![
                     ("_a", Some((0, 2))),
                     ("a", Some((0, 1))),
@@ -586,7 +562,7 @@ mod tests {
             TestData {
                 pattern: r"(0|1)*1(0|1)",
                 name: "SecondLastBitIs1",
-                end_states: vec![(false, 0.into()), (false, 0.into()), (true, 0.into())],
+                end_states: vec![(2, 0.into())],
                 match_data: vec![
                     ("11010", Some((0, 5))),
                     ("11011", Some((0, 5))),
@@ -603,7 +579,7 @@ mod tests {
             TestData {
                 pattern: r"a*(a|b)b*",
                 name: "MinimalMatch",
-                end_states: vec![(false, 0.into()), (true, 0.into())],
+                end_states: vec![(1, 0.into())],
                 match_data: vec![
                     ("a", Some((0, 1))),
                     ("b", Some((0, 1))),
@@ -617,12 +593,7 @@ mod tests {
             TestData {
                 pattern: r"abc",
                 name: "Concatenation",
-                end_states: vec![
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (false, 0.into()),
-                    (true, 0.into()),
-                ],
+                end_states: vec![(3, 0.into())],
                 match_data: vec![
                     ("a", None),
                     ("b", None),
@@ -649,9 +620,15 @@ mod tests {
             let nfa: crate::internal::Nfa =
                 crate::internal::Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
             nfa_render_to!(&nfa, test.name);
-            let mut compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::from(nfa);
+            let compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::from(nfa);
+            let end_states = compiled_dfa
+                .states
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| s.terminal_id.map(|terminal_id| (i, terminal_id)))
+                .collect::<Vec<_>>();
             assert_eq!(
-                compiled_dfa.end_states, test.end_states,
+                end_states, test.end_states,
                 "Test '{}', End states",
                 test.name
             );
@@ -774,7 +751,7 @@ mod tests {
             ]"#;
         let scanner_modes: Vec<crate::ScannerMode> = serde_json::from_str(json).unwrap();
         let mut character_class_registry = crate::internal::CharacterClassRegistry::new();
-        let mut compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::try_from_patterns(
+        let compiled_dfa = crate::internal::compiled_dfa::CompiledDfa::try_from_patterns(
             &scanner_modes[0].patterns,
             &mut character_class_registry,
         )

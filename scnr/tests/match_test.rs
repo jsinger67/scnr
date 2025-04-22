@@ -1603,7 +1603,6 @@ fn match_test() {
         // Create a scanner from the scanner builder with a single pattern.
         let scanner = ScannerBuilder::new()
             .add_patterns(vec![test_data.pattern])
-            .use_hir()
             .build();
         // if test_data.test_number != 343 {
         //     // Skip the test if the test number is not 343.

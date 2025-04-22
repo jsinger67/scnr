@@ -80,12 +80,12 @@ fn render_compiled_dfa(
                 .set_color(dot_writer::Color::Blue)
                 .set_pen_width(3.0);
             source_node.set_label(&id.to_string());
-        } else if compiled_dfa.end_states[id].0 {
+        } else if let Some(terminal_id) = compiled_dfa.states[id].terminal_id {
             source_node
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Red)
                 .set_pen_width(3.0);
-            source_node.set_label(&format!("{} T{}", id, compiled_dfa.end_states[id].1));
+            source_node.set_label(&format!("{} T{}", id, terminal_id));
         } else {
             source_node.set_label(&id.to_string());
         }

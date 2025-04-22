@@ -90,23 +90,22 @@ impl Minimizer {
     ///
     /// The partitions are stored in a vector of vectors.
     fn calculate_initial_partition(dfa: &CompiledDfa) -> Partition {
-        let mut terminal_map = dfa
-            .end_states
+        let mut accepted_terminals = dfa
+            .states
             .iter()
-            .filter_map(|(accept, id)| if *accept { Some(*id) } else { None })
+            .filter_map(|state| state.terminal_id)
             .collect::<Vec<_>>();
-        terminal_map.sort();
-        terminal_map.dedup();
-        let number_of_end_states = terminal_map.len();
+        accepted_terminals.sort();
+        accepted_terminals.dedup();
+        let number_of_end_states = accepted_terminals.len();
         let mut initial_partition = vec![StateGroup::new(); number_of_end_states + 1];
 
         for state in 0..dfa.states.len() {
             let state: StateID = (state as u32).into();
-            if dfa.end_states[state].0 {
-                let terminal_id = dfa.end_states[state].1;
-                let index = terminal_map
+            if let Some(terminal_id) = &dfa.states[state].terminal_id {
+                let index = accepted_terminals
                     .iter()
-                    .position(|id| *id == terminal_id)
+                    .position(|id| id == terminal_id)
                     .unwrap();
                 initial_partition[index + 1].insert(state);
             } else {
@@ -214,8 +213,7 @@ impl Minimizer {
         let CompiledDfa {
             patterns,
             terminal_ids,
-            states: _,
-            end_states,
+            states,
             lookaheads,
             ..
         } = dfa;
@@ -223,9 +221,19 @@ impl Minimizer {
             patterns,
             terminal_ids,
             vec![StateData::new(); partition.len()],
-            vec![(false, 0.into()); partition.len()],
             lookaheads,
         );
+        // Calculate the end states of the DFA.
+        let end_states = states
+            .iter()
+            .map(|state| {
+                if let Some(terminal_id) = state.terminal_id {
+                    (true, terminal_id)
+                } else {
+                    (false, 0.into())
+                }
+            })
+            .collect::<Vec<_>>();
 
         // Reorder the groups so that the start state is in the first group (0).
         // The representative state of the first group must be the start state of the minimized DFA,
@@ -274,6 +282,7 @@ impl Minimizer {
     ) -> StateID {
         let state_id = StateID::new(group_id.id() as StateIDBase);
         let state = StateData::new();
+        dfa.states[state_id] = state;
 
         // First state in group is the representative state.
         let representative_state_id = group.first().unwrap();
@@ -288,11 +297,10 @@ impl Minimizer {
         // an accepting state.
         for state_in_group in group.iter() {
             if end_states[*state_in_group].0 {
-                dfa.end_states[state_id] = (true, end_states[*state_in_group].1);
+                dfa.states[state_id].set_terminal_id(end_states[*state_in_group].1);
             }
         }
 
-        dfa.states[state_id] = state;
         state_id
     }
 
@@ -436,19 +444,15 @@ mod tests {
 
     #[test]
     fn test_calculate_initial_partition() {
-        let dfa = CompiledDfa::new(
+        let mut dfa = CompiledDfa::new(
             vec![],
             vec![0.into(), 1.into(), 2.into()],
             vec![StateData::new(); 5],
-            vec![
-                (true, 0.into()),
-                (true, 1.into()),
-                (false, 0.into()),
-                (false, 0.into()),
-                (true, 2.into()),
-            ],
             FxHashMap::default(),
         );
+        [(0, 0), (1, 1), (4, 2)].iter().for_each(|(i, t)| {
+            dfa.states[*i].set_terminal_id((*t).into());
+        });
 
         let partition = Minimizer::calculate_initial_partition(&dfa);
         assert_eq!(partition.len(), 4);
@@ -460,19 +464,15 @@ mod tests {
 
     #[test]
     fn test_calculate_new_partition() {
-        let dfa = CompiledDfa::new(
+        let mut dfa = CompiledDfa::new(
             vec![],
             vec![0.into(), 1.into(), 2.into()],
             vec![StateData::new(); 5],
-            vec![
-                (true, 0.into()),
-                (true, 1.into()),
-                (false, 0.into()),
-                (false, 0.into()),
-                (true, 2.into()),
-            ],
             FxHashMap::default(),
         );
+        [(0, 0), (1, 1), (4, 2)].iter().for_each(|(i, t)| {
+            dfa.states[*i].set_terminal_id((*t).into());
+        });
 
         let transitions: TransitionMap = vec![
             (

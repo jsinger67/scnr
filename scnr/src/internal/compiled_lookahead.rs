@@ -60,7 +60,7 @@ impl CompiledLookahead {
     /// Otherwise if the lookahead is negative, the value is true if the input does not match the
     /// lookahead.
     pub(crate) fn satisfies_lookahead(
-        &mut self,
+        &self,
         input: &str,
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(usize, char) -> bool + 'static),

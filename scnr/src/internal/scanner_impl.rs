@@ -72,11 +72,11 @@ impl ScannerImpl {
     /// It is called by the `peek_n` method of the `FindMatches` iterator on a copy of the
     /// `CharIndices` iterator. Thus, the original `CharIndices` iterator is not advanced.
     pub(crate) fn peek_from(
-        &mut self,
+        &self,
         input: &str,
         char_indices: std::str::CharIndices,
     ) -> Option<crate::Match> {
-        let dfa = &mut self.scanner_modes[self.current_mode].dfa;
+        let dfa = &self.scanner_modes[self.current_mode].dfa;
 
         if let Some(matched) = dfa.find_from(input, char_indices, &*self.match_char_class) {
             debug_assert!(
@@ -152,25 +152,6 @@ impl ScannerImpl {
             );
         }
         Ok(())
-    }
-
-    pub(crate) fn new(scanner_modes: &[ScannerMode]) -> Result<Self> {
-        let mut character_class_registry = CharacterClassRegistry::new();
-        let mut compiled_scanner_modes = Vec::with_capacity(scanner_modes.len());
-        for scanner_mode in scanner_modes {
-            let compiled_scanner_mode = CompiledScannerMode::try_from_scanner_mode(
-                scanner_mode.clone(),
-                &mut character_class_registry,
-            )?;
-            compiled_scanner_modes.push(compiled_scanner_mode);
-        }
-        let match_char_class = Arc::new(character_class_registry.create_match_char_class()?);
-        Ok(Self {
-            character_classes: Arc::new(character_class_registry),
-            scanner_modes: compiled_scanner_modes,
-            match_char_class,
-            current_mode: 0,
-        })
     }
 
     pub(crate) fn generate_match_function_code(&self, out_file: &std::path::Path) -> Result<()> {

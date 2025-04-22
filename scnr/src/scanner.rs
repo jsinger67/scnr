@@ -114,6 +114,7 @@ impl Scanner {
     }
 
     /// Sets the match function for the scanner.
+    #[cfg(not(feature = "regex_automata"))]
     pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
         self.inner.set_match_function(match_function)
     }
