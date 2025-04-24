@@ -9,7 +9,7 @@ use super::{compiled_scanner_mode::CompiledScannerMode, CharacterClassRegistry, 
 /// ScannerImpl instances are always created by `TryFrom<Vec<ScannerMode>>` or
 /// `TryFrom<&[ScannerMode]>` and of course by the clone method.
 #[derive(Clone)]
-pub(crate) struct ScannerImpl {
+pub struct ScannerImpl {
     pub(crate) character_classes: Arc<CharacterClassRegistry>,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     // The function used to match characters against character classes.
@@ -103,7 +103,7 @@ impl ScannerImpl {
     /// The output is written to the log.
     /// This function is used for debugging purposes.
     #[cfg(feature = "dot_writer")]
-    pub(crate) fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
+    pub fn log_compiled_automata_as_dot(&self) -> crate::Result<()> {
         use log::debug;
         use std::io::Read;
 
@@ -129,7 +129,7 @@ impl ScannerImpl {
     /// Generates the compiled DFAs as dot files.
     /// The dot files are written to the target folder.
     #[cfg(feature = "dot_writer")]
-    pub(crate) fn generate_compiled_automata_as_dot(
+    pub fn generate_compiled_automata_as_dot(
         &self,
         prefix: &str,
         target_folder: &std::path::Path,
@@ -154,7 +154,7 @@ impl ScannerImpl {
         Ok(())
     }
 
-    pub(crate) fn generate_match_function_code(&self, out_file: &std::path::Path) -> Result<()> {
+    pub fn generate_match_function_code(&self, out_file: &std::path::Path) -> Result<()> {
         // TODO: Make the function name configurable, e.g. as a parameter to the function.
         {
             let mut file = std::fs::File::create(out_file)?;
@@ -165,11 +165,11 @@ impl ScannerImpl {
             file.write_all(code.as_bytes())?;
             file.write_all(b"\n")?;
         }
-        crate::internal::rust_code_formatter::try_format(out_file)?;
+        crate::rust_code_formatter::try_format(out_file)?;
         Ok(())
     }
 
-    pub(crate) fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
+    pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
         self.match_char_class = Arc::new(match_function);
     }
 }
@@ -299,7 +299,10 @@ mod tests {
     #[test]
     fn test_generate_dot_files() {
         init();
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/data/string.json");
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "../../scnr/tests/data/string.json"
+        );
         let file = fs::File::open(path).unwrap();
 
         let scanner_modes: Vec<ScannerMode> = serde_json::from_reader(file)

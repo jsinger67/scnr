@@ -1,6 +1,6 @@
-use crate::{
-    internal::SCANNER_CACHE, scanner::Scanner, scanner_mode::ScannerMode, Pattern, Result,
-};
+use scnr_generate::{Pattern, ScannerMode};
+
+use crate::{scanner::Scanner, Result, SCANNER_CACHE};
 
 /// A builder for creating a scanner.
 #[derive(Debug, Clone, Default)]
@@ -98,7 +98,7 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Pattern, ScannerModeSwitcher};
+    use crate::ScannerModeSwitcher;
 
     use super::*;
 

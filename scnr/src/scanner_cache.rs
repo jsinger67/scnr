@@ -10,8 +10,9 @@
 //! The global scanner cache is implemented as a `RwLock<ScannerCache>`.
 //!
 
-use crate::{scanner_mode::ScannerMode, Result};
+use crate::Result;
 use rustc_hash::FxHashMap;
+use scnr_generate::ScannerMode;
 
 use std::sync::Arc;
 

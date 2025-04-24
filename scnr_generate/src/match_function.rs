@@ -118,7 +118,7 @@ impl std::fmt::Debug for MatchFunction {
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::parse_regex_syntax;
+    use crate::parse_regex_syntax;
 
     use super::*;
 

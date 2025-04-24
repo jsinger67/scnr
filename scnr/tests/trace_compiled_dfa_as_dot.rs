@@ -13,7 +13,7 @@ fn trace_compiled_dfa_as_dot() {
     let _ = env_logger::builder()
         .is_test(true)
         .parse_env(
-            env_logger::Env::default().default_filter_or("scnr::internal::scanner_impl=trace"),
+            env_logger::Env::default().default_filter_or("scnr::scanner_impl=trace"),
         )
         .try_init();
 

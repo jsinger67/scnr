@@ -1,5 +1,5 @@
 use super::{ids::CharClassIDBase, CharClassID, CharacterClass, HirWithPattern};
-use crate::{internal::MatchFunction, Result, ScnrError};
+use crate::{MatchFunction, Result, ScnrError};
 
 /// CharacterClassRegistry is a registry of character classes.
 #[derive(Debug, Clone, Default)]
@@ -40,7 +40,7 @@ impl CharacterClassRegistry {
     }
 
     /// Returns the character class with the given ID.
-    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    /// It is used for debugging purposes mostly in the [crate::dot] module.
     #[allow(unused)]
     pub(crate) fn get_character_class(&self, id: CharClassID) -> Option<&CharacterClass> {
         self.character_classes.get(id.as_usize())

@@ -79,7 +79,7 @@ mod tests {
             let mut f =
                 std::fs::File::create(format!("{}/{}CompiledDfa.dot", TARGET_FOLDER, $label))
                     .unwrap();
-            $crate::internal::dot::compiled_dfa_render($nfa, &label, &$reg, &mut f);
+            $crate::dot::compiled_dfa_render($nfa, &label, &$reg, &mut f);
         };
     }
 

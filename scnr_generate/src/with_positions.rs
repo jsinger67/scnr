@@ -1,4 +1,4 @@
-use crate::{scanner::ScannerModeSwitcher, Match, MatchExt, Position, PositionProvider};
+use crate::{Match, MatchExt, Position, PositionProvider, ScannerModeSwitcher};
 
 /// An iterator over all non-overlapping matches with positions.
 #[derive(Debug)]

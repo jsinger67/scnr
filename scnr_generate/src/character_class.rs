@@ -148,7 +148,7 @@ impl Ord for CharacterClass {
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::parser::parse_regex_syntax;
+    use crate::parser::parse_regex_syntax;
 
     use super::*;
 
@@ -158,7 +158,7 @@ mod tests {
             let mut buffer = [0; 4];
             let utf8_bytes = $c.encode_utf8(&mut buffer);
 
-            $crate::internal::hir_with_pattern::HirWithPattern::new(
+            $crate::hir_with_pattern::HirWithPattern::new(
                 regex_syntax::hir::Hir::literal(utf8_bytes.as_bytes().to_vec()),
             )
         }};

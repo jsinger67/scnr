@@ -5,7 +5,7 @@ use std::{
 
 use log::trace;
 
-use crate::internal::compiled_dfa::StateData;
+use crate::compiled_dfa::StateData;
 
 use super::{
     compiled_dfa::CompiledDfa,
@@ -440,7 +440,7 @@ mod tests {
     use rustc_hash::FxHashMap;
 
     use super::*;
-    use crate::internal::compiled_dfa::StateData;
+    use crate::compiled_dfa::StateData;
 
     #[test]
     fn test_calculate_initial_partition() {

@@ -71,16 +71,6 @@ impl Match {
     }
 }
 
-#[cfg(feature = "regex_automata")]
-impl From<regex_automata::Match> for Match {
-    fn from(value: regex_automata::Match) -> Self {
-        Self {
-            token_type: value.pattern().as_usize(),
-            span: Span::new(value.start(), value.end()),
-        }
-    }
-}
-
 /// A match with line and column information for start and end positions.
 ///
 /// You can create a `MatchExt` iterator from a `Match` iterator by calling the `with_positions`
@@ -104,7 +94,7 @@ pub struct MatchExt {
 }
 
 impl MatchExt {
-    pub(crate) fn new(
+    pub fn new(
         token_type: usize,
         span: Span,
         start_position: Position,

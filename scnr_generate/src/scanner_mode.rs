@@ -1,6 +1,5 @@
 use crate::{
-    internal::{ScannerModeID, TerminalID, TerminalIDBase},
-    Pattern,
+    Pattern, {ScannerModeID, TerminalID, TerminalIDBase},
 };
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

@@ -5,7 +5,7 @@ use std::io::Write;
 
 use dot_writer::{Attributes, DotWriter, RankDirection, Scope};
 
-use crate::internal::compiled_dfa::CompiledDfa;
+use crate::compiled_dfa::CompiledDfa;
 
 use super::{nfa::Nfa, CharClassID, CharacterClassRegistry, MultiPatternNfa, StateID};
 

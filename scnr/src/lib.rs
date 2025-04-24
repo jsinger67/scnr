@@ -68,7 +68,8 @@
 //! ```rust
 //! use std::sync::LazyLock;
 //!
-//! use scnr::{MatchExtIterator, Pattern, ScannerBuilder, ScannerMode};
+//! use scnr::{MatchExtIterator, ScannerBuilder, ScannerMode};
+//! use scnr_generate::Pattern;
 //!
 //! static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
 //!     vec![
@@ -136,45 +137,34 @@
 //! slower at compiling the regexes. This depends on the size of your scanner modes, i.e. the number
 //! of regexes you use.
 
-/// Module with error definitions
-mod errors;
-pub use errors::{Result, ScnrError, ScnrErrorKind};
-
 /// Module that provides a FindMatches type
 mod find_matches;
-pub use find_matches::{FindMatches, PeekResult};
-
-/// The module with internal implementation details.
-mod internal;
-
-/// Module that provides a Match type
-mod match_type;
-pub use match_type::{Match, MatchExt};
-
-/// Module that provides a Pattern type and a Lookahead type
-mod pattern;
-pub use pattern::{Lookahead, Pattern};
-
-/// Module that provides a position type
-mod position;
-pub use position::{Position, PositionProvider};
+pub use find_matches::FindMatches;
 
 /// The module with the scanner.
 mod scanner;
-pub use scanner::{Scanner, ScannerModeSwitcher};
+pub use scanner::Scanner;
 
 /// The module with the scanner builder.
 mod scanner_builder;
 pub use scanner_builder::ScannerBuilder;
 
-/// The module with the scanner mode.
-mod scanner_mode;
-pub use scanner_mode::ScannerMode;
+/// Module that provides a scanner cache type
+mod scanner_cache;
+pub(crate) use scanner_cache::SCANNER_CACHE;
 
-/// Module that provides a Span type
-mod span;
-pub use span::Span;
+/// Module that provides functions and types related to scanner implementations using regex_automata.
+#[cfg(feature = "regex_automata")]
+pub(crate) use scanner_impl_rx::ScannerImpl;
+/// Module that provides functions and types related to scanner implementations.
+#[cfg(not(feature = "regex_automata"))]
+pub(crate) use scnr_generate::ScannerImpl;
 
-/// Module that provides a WithPositions type
-mod with_positions;
-pub use with_positions::{MatchExtIterator, WithPositions};
+/// The result type for the `scrn` crate.
+pub type Result<T> = std::result::Result<T, scnr_generate::ScnrError>;
+
+/// Re-imports from the `scnr_generate` crate.
+pub use scnr_generate::{
+    Match, MatchExt, MatchExtIterator, Position, PositionProvider, ScannerMode,
+    ScannerModeSwitcher, Span,
+};

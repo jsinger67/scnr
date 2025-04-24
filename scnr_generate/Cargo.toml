@@ -8,6 +8,23 @@ categories.workspace = true
 license.workspace = true
 
 [dependencies]
+dot-writer = { version = "0.1.4", optional = true }
+log = "0.4.25"
 proc-macro2 = "1.0.95"
 quote = "1.0.40"
+regex-syntax = "0.8.5"
+rustc-hash = "2.1.0"
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
 syn = { version = "2.0.100", features = ["full"] }
+thiserror = "2"
+
+[dev-dependencies]
+# criterion = "0.5.1"
+env_logger = "0.11.6"
+# regex = "1.11.1"
+
+[features]
+default = ["dot_writer", "serde"]
+dot_writer = ["dep:dot-writer"]
+serde = ["dep:serde", "dep:serde_json"]

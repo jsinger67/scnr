@@ -3,7 +3,7 @@
 
 use std::vec;
 
-use crate::{internal::HirWithPattern, Pattern, Result, ScnrError, ScnrErrorKind};
+use crate::{HirWithPattern, Pattern, Result, ScnrError, ScnrErrorKind};
 
 use super::{ids::StateIDBase, CharClassID, CharacterClassRegistry, StateID};
 
@@ -45,7 +45,7 @@ impl Nfa {
     }
 
     /// Returns the start state of the NFA.
-    /// It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    /// It is used for debugging purposes mostly in the [crate::dot] module.
     #[allow(unused)]
     pub(crate) fn start_state(&self) -> StateID {
         self.start_state
@@ -512,7 +512,7 @@ impl NfaState {
 pub(crate) struct NfaTransition {
     /// This can be a Literal or a CharacterClass
     /// We will later generate a predicate from this that determines if a character matches this
-    /// transition. It is used for debugging purposes mostly in the [crate::internal::dot] module.
+    /// transition. It is used for debugging purposes mostly in the [crate::dot] module.
     #[allow(unused)]
     hir: HirWithPattern,
     /// The next state to transition to
@@ -595,14 +595,14 @@ mod tests {
         ($nfa:expr, $label:expr) => {
             let mut f =
                 std::fs::File::create(format!("{}/{}Nfa.dot", TARGET_FOLDER, $label)).unwrap();
-            $crate::internal::dot::nfa_render($nfa, $label, &mut f);
+            $crate::dot::nfa_render($nfa, $label, &mut f);
         };
     }
 
     #[test]
     fn test_nfa_from_ast() {
         // Create an example AST
-        let hir = crate::internal::parse_regex_syntax("a").unwrap();
+        let hir = crate::parse_regex_syntax("a").unwrap();
         // Create a character class registry
         let mut char_class_registry = CharacterClassRegistry::new();
 
@@ -621,7 +621,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("ab").unwrap(),
+            crate::parse_regex_syntax("ab").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -641,12 +641,12 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create two example ASTs and convert them to an NFAs
         let mut nfa1: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a").unwrap(),
+            crate::parse_regex_syntax("a").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
         let nfa2: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("b").unwrap(),
+            crate::parse_regex_syntax("b").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -664,12 +664,12 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create two example ASTs and convert them to an NFAs
         let mut nfa1: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a").unwrap(),
+            crate::parse_regex_syntax("a").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
         let nfa2: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("b").unwrap(),
+            crate::parse_regex_syntax("b").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -687,7 +687,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let mut nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a").unwrap(),
+            crate::parse_regex_syntax("a").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -706,7 +706,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let mut nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a").unwrap(),
+            crate::parse_regex_syntax("a").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -724,7 +724,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let mut nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a").unwrap(),
+            crate::parse_regex_syntax("a").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -742,7 +742,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("(a|b)*abb").unwrap(),
+            crate::parse_regex_syntax("(a|b)*abb").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -762,7 +762,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let mut nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a").unwrap(),
+            crate::parse_regex_syntax("a").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -780,7 +780,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a{3,}").unwrap(),
+            crate::parse_regex_syntax("a{3,}").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -797,7 +797,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a{3,5}").unwrap(),
+            crate::parse_regex_syntax("a{3,5}").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -815,7 +815,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let nfa: Nfa = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax(r"[[:digit:]]").unwrap(),
+            crate::parse_regex_syntax(r"[[:digit:]]").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -833,7 +833,7 @@ mod tests {
         // Create an example AST and convert the AST to an NFA
         let nfa: Nfa = Nfa::try_from_hir(
             // SecondLastBitIs1
-            crate::internal::parse_regex_syntax(r"(0|1)*1(0|1)").unwrap(),
+            crate::parse_regex_syntax(r"(0|1)*1(0|1)").unwrap(),
             &mut char_class_registry,
         )
         .unwrap();
@@ -942,7 +942,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let result = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a*?").unwrap(),
+            crate::parse_regex_syntax("a*?").unwrap(),
             &mut char_class_registry,
         );
 
@@ -953,7 +953,7 @@ mod tests {
         let mut char_class_registry = CharacterClassRegistry::new();
         // Create an example AST and convert the AST to an NFA
         let result = Nfa::try_from_hir(
-            crate::internal::parse_regex_syntax("a+?").unwrap(),
+            crate::parse_regex_syntax("a+?").unwrap(),
             &mut char_class_registry,
         );
 
@@ -1052,12 +1052,12 @@ mod tests {
     #[cfg(feature = "dot_writer")]
     #[test]
     fn test_try_from_hir() {
-        use crate::internal::{CharacterClassRegistry, Nfa};
+        use crate::{CharacterClassRegistry, Nfa};
 
         init();
         for data in TEST_DATA.iter() {
             let mut char_class_registry = CharacterClassRegistry::new();
-            let hir = crate::internal::parse_regex_syntax(data.pattern).unwrap();
+            let hir = crate::parse_regex_syntax(data.pattern).unwrap();
             eprintln!("{} => {:?}", data.pattern, hir);
             let nfa: Nfa = Nfa::try_from_hir(hir, &mut char_class_registry).unwrap();
 

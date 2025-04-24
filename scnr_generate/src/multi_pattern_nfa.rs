@@ -257,7 +257,7 @@ impl MultiPatternNfa {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::internal::character_class_registry::CharacterClassRegistry;
+    use crate::character_class_registry::CharacterClassRegistry;
 
     static INIT: std::sync::Once = std::sync::Once::new();
 
@@ -283,14 +283,17 @@ mod tests {
             let label = format!("{}MpNfa", $label);
             let mut f =
                 std::fs::File::create(format!("{}/{}MpNfa.dot", TARGET_FOLDER, $label)).unwrap();
-            $crate::internal::dot::multi_pattern_nfa_render($nfa, &label, &$char_class, &mut f);
+            $crate::dot::multi_pattern_nfa_render($nfa, &label, &$char_class, &mut f);
         };
     }
 
     #[cfg(feature = "serde")]
     static SCANNER_MODES: std::sync::LazyLock<Vec<crate::ScannerMode>> =
         std::sync::LazyLock::new(|| {
-            let path = concat!(env!("CARGO_MANIFEST_DIR"), "/benches/veryl_modes.json");
+            let path = concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "../../scnr/benches/veryl_modes.json"
+            );
             let file = std::fs::File::open(path).unwrap();
             serde_json::from_reader(file).unwrap()
         });
