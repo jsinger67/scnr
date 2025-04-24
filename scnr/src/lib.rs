@@ -153,11 +153,7 @@ pub use scanner_builder::ScannerBuilder;
 mod scanner_cache;
 pub(crate) use scanner_cache::SCANNER_CACHE;
 
-/// Module that provides functions and types related to scanner implementations using regex_automata.
-#[cfg(feature = "regex_automata")]
-pub(crate) use scanner_impl_rx::ScannerImpl;
 /// Module that provides functions and types related to scanner implementations.
-#[cfg(not(feature = "regex_automata"))]
 pub(crate) use scnr_generate::ScannerImpl;
 
 /// The result type for the `scrn` crate.

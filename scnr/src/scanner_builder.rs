@@ -176,7 +176,6 @@ mod tests {
         // Line comment2
         "#;
 
-        #[cfg(not(feature = "regex_automata"))]
         #[cfg(feature = "dot_writer")]
         scanner
             .generate_compiled_automata_as_dot("LineComment", std::path::Path::new(TARGET_FOLDER))

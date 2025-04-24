@@ -1,4 +1,3 @@
-#![cfg(not(feature = "regex_automata"))]
 /// This file contains a hopefully increasing number of match tests to verify the correctness of the
 /// scanner.
 ///

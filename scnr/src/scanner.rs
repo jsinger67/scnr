@@ -64,14 +64,12 @@ impl Scanner {
     /// The code is written to the target file.
     /// The code is generated in Rust and can be used to create a scanner that is able to match the
     /// input string.
-    #[cfg(not(feature = "regex_automata"))]
     pub fn generate_match_function_code<T: AsRef<Path>>(&self, target_file: T) -> Result<()> {
         self.inner
             .generate_match_function_code(target_file.as_ref())
     }
 
     /// Sets the match function for the scanner.
-    #[cfg(not(feature = "regex_automata"))]
     pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
         self.inner.set_match_function(match_function)
     }

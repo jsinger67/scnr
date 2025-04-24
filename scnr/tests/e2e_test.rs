@@ -3,7 +3,6 @@
 // Run with `cargo test --test e2e_test`
 
 use std::fs;
-#[cfg(not(feature = "regex_automata"))]
 use std::path::Path;
 
 use regex::Regex;
@@ -60,7 +59,6 @@ fn e2e_test() {
             .build()
             .unwrap();
 
-        #[cfg(not(feature = "regex_automata"))]
         scanner
             .generate_compiled_automata_as_dot(
                 path.file_stem().unwrap().to_str().unwrap(),
