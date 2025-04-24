@@ -1,0 +1,15 @@
+[package]
+name = "scnr_derive"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+keywords.workspace = true
+categories.workspace = true
+license.workspace = true
+
+[dependencies]
+scnr_generate = { version = "0.9.0", path = "../scnr_generate" }
+
+[lib]
+bench = false
+proc-macro = true
