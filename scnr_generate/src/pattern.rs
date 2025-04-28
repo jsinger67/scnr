@@ -2,6 +2,17 @@
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+macro_rules! parse_ident {
+    ($input:ident, $name:ident) => {
+        $input.parse().map_err(|e| {
+            syn::Error::new(
+                e.span(),
+                concat!("expected identifier `", stringify!($name), "`"),
+            )
+        })?
+    };
+}
+
 /// A lookahead is a regular expression that restricts a match of a pattern so that it must be
 /// matched after the pattern.
 ///
@@ -57,6 +68,37 @@ impl std::fmt::Display for Lookahead {
         } else {
             write!(f, "(?!{})", self.pattern.escape_default())
         }
+    }
+}
+
+/// This is used to create a lookahead from a part of a macro input.
+/// The macro input looks like this:
+/// ```text
+/// with lookahead positive r"!";
+/// ```
+/// where the `positive` term can also be `negative`.
+impl syn::parse::Parse for Lookahead {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let with: syn::Ident = parse_ident!(input, with);
+        let with = with.to_string();
+        if with != "with" {
+            return Err(input.error("expected 'with'"));
+        }
+        let lookahead: syn::Ident = parse_ident!(input, lookahead);
+        let lookahead = lookahead.to_string();
+        if lookahead != "lookahead" {
+            return Err(input.error("expected 'lookahead'"));
+        }
+        let pos_or_neg: syn::Ident = parse_ident!(input, pos_or_neg);
+        let pos_or_neg = pos_or_neg.to_string();
+        let is_positive = match pos_or_neg.as_str() {
+            "positive" => true,
+            "negative" => false,
+            _ => return Err(input.error("expected 'positive' or 'negative'")),
+        };
+        let pattern: syn::LitStr = input.parse()?;
+        let pattern = pattern.value();
+        Ok(Lookahead::new(is_positive, pattern))
     }
 }
 
@@ -129,5 +171,91 @@ impl std::fmt::Display for Pattern {
 impl AsRef<str> for Pattern {
     fn as_ref(&self) -> &str {
         &self.pattern
+    }
+}
+
+/// This is used to create a pattern from a part of a macro input.
+/// The macro input looks like this:
+/// ```text
+/// token r"World" => 11 with lookahead positive r"!";
+/// ```
+/// where the lookahead part is optional. The `with lookahead` part should be parsed with the help
+/// of the `Lookahead` struct's `parse` method.
+///
+/// Note that the `token` keyword is not part of the pattern, but it is used to identify the
+/// pattern.
+impl syn::parse::Parse for Pattern {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let pattern: syn::LitStr = input.parse()?;
+        let pattern = pattern.value();
+        input.parse::<syn::Token![=>]>()?;
+        let token_type: syn::LitInt = input.parse()?;
+        let token_type = token_type.base10_parse()?;
+        let mut pattern = Pattern::new(pattern, token_type);
+        // Check if there is a lookahead and parse it.
+        if input.peek(syn::Ident) {
+            // The parse implementation of the Lookahead struct will check if the ident is `with`.
+            // If it is not, it will return an error.
+            let lookahead: Lookahead = input.parse()?;
+            pattern = pattern.with_lookahead(lookahead);
+        }
+        // Parse the semicolon at the end of the pattern.
+        if input.peek(syn::Token![;]) {
+            input.parse::<syn::Token![;]>()?;
+        } else {
+            return Err(input.error("expected ';'"));
+        }
+        Ok(pattern)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[rstest]
+    #[case::without_lookahead(
+        // input
+        quote::quote! {
+            token r"Hello" => 0;
+        },
+        // expected_pattern
+        "Hello",
+        // expected_token_type
+        0,
+        // lookahead
+        None)]
+    #[case::with_positive_lookahead(
+        // input
+        quote::quote! {
+            token r"Hello" => 1 with lookahead positive r"!";
+        },
+        // expected_pattern
+        "Hello",
+        // expected_token_type
+        1,
+        // lookahead
+        Some(Lookahead { is_positive: true, pattern: "!".to_string() }),)]
+    #[case::with_negative_lookahead(
+        // input
+        quote::quote! {
+            token r#"""# => 8 with lookahead negative r#"\\[\"\\bfnt]"#;
+        },
+        // expected_pattern
+        r#"""#,
+        // expected_token_type
+        8,
+        // lookahead
+        Some(Lookahead { is_positive: false, pattern: r#"\\[\"\\bfnt]"#.to_string() }),)]
+    fn test_parse_pattern(
+        #[case] input: proc_macro2::TokenStream,
+        #[case] expected_pattern: &str,
+        #[case] expected_token_type: usize,
+        #[case] lookahead: Option<Lookahead>,
+    ) {
+        let pattern: Pattern = syn::parse2(input).unwrap();
+        assert_eq!(pattern.pattern(), expected_pattern);
+        assert_eq!(pattern.terminal_id(), expected_token_type);
+        assert_eq!(pattern.lookahead(), lookahead.as_ref());
     }
 }

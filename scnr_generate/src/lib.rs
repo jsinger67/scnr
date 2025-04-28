@@ -1,3 +1,7 @@
+#[cfg(test)]
+#[macro_use]
+extern crate rstest;
+
 /// Module with error definitions
 mod errors;
 pub use errors::{Result, ScnrError, ScnrErrorKind};
@@ -80,6 +84,9 @@ pub(crate) mod rust_code_formatter;
 /// Module that provides functions and types related to NFA scanner implementations.
 pub(crate) mod scanner_impl;
 pub use scanner_impl::ScannerImpl;
+
+/// Module that provides helper types to parse the scanner.
+pub(crate) mod scanner_data;
 
 /// The module with the scanner mode.
 mod scanner_mode;
