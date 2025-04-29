@@ -40,7 +40,7 @@ pub(crate) struct ScannerModeWithNamedTransitions {
 ///     token r#"""# => 8;
 ///     token r"Hello" => 9;
 ///     token r"World" => 10;
-///     token r"World" => 11 with lookahead positive r"!";
+///     token r"World" => 11 followed by r"!";
 ///     token r"!" => 12;
 ///     token r"[a-zA-Z_]\w*" => 13;
 ///     token r"." => 14;
@@ -57,7 +57,6 @@ pub(crate) struct ScannerModeWithNamedTransitions {
 impl syn::parse::Parse for ScannerModeWithNamedTransitions {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let mode: syn::Ident = parse_ident!(input, mode);
-        let mode = mode.to_string();
         if mode != "mode" {
             return Err(input.error("expected 'mode'"));
         }
@@ -72,7 +71,6 @@ impl syn::parse::Parse for ScannerModeWithNamedTransitions {
         let mut transitions = Vec::new();
         while !content.is_empty() {
             let token_or_transition: syn::Ident = parse_ident!(content, token_or_transition);
-            let token_or_transition = token_or_transition.to_string();
             if token_or_transition == "token" {
                 let pattern: Pattern = content.parse()?;
                 patterns.push(pattern);
@@ -121,7 +119,6 @@ pub(crate) struct ScannerData {
 impl syn::parse::Parse for ScannerData {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let scanner: syn::Ident = parse_ident!(input, scanner);
-        let scanner = scanner.to_string();
         if scanner != "scanner" {
             return Err(input.error("expected 'scanner'"));
         }
@@ -160,8 +157,8 @@ mod tests {
                     token r#"""# => 8;
                     token r"Hello" => 9;
                     token r"World" => 10;
-                    token r"World" => 11 with lookahead positive r"!";
-                    token r"!" => 12;
+                    token r"World" => 11 followed by r"!";
+                    token r"!" => 12 not followed by r"!";
                     token r"[a-zA-Z_]\w*" => 13;
                     token r"." => 14;
 
@@ -225,7 +222,14 @@ mod tests {
             })
             .as_ref()
         );
-        assert_eq!(mode_initial_patterns[8].lookahead(), None);
+        assert_eq!(
+            mode_initial_patterns[8].lookahead(),
+            Some(crate::Lookahead {
+                is_positive: false,
+                pattern: "!".to_string(),
+            })
+            .as_ref()
+        );
         assert_eq!(mode_initial_patterns[9].lookahead(), None);
         assert_eq!(mode_initial_patterns[10].lookahead(), None);
 

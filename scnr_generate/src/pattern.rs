@@ -74,29 +74,41 @@ impl std::fmt::Display for Lookahead {
 /// This is used to create a lookahead from a part of a macro input.
 /// The macro input looks like this:
 /// ```text
-/// with lookahead positive r"!";
+/// followed by r"!";
 /// ```
-/// where the `positive` term can also be `negative`.
+/// for positive lookahead
+/// or
+/// ```text
+/// not followed by r"!";
+/// ```
+/// for negative lookahead.
 impl syn::parse::Parse for Lookahead {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let with: syn::Ident = parse_ident!(input, with);
-        let with = with.to_string();
-        if with != "with" {
-            return Err(input.error("expected 'with'"));
+        let followed_or_not: syn::Ident = parse_ident!(input, followed_or_not);
+        if followed_or_not != "followed" && followed_or_not != "not" {
+            return Err(input.error("expected 'followed' or 'not'"));
         }
-        let lookahead: syn::Ident = parse_ident!(input, lookahead);
-        let lookahead = lookahead.to_string();
-        if lookahead != "lookahead" {
-            return Err(input.error("expected 'lookahead'"));
+        let mut is_positive = true;
+        if followed_or_not == "not" {
+            is_positive = false;
+            let followed: syn::Ident = parse_ident!(input, followed);
+            if followed != "followed" {
+                return Err(input.error("expected 'followed'"));
+            }
         }
-        let pos_or_neg: syn::Ident = parse_ident!(input, pos_or_neg);
-        let pos_or_neg = pos_or_neg.to_string();
-        let is_positive = match pos_or_neg.as_str() {
-            "positive" => true,
-            "negative" => false,
-            _ => return Err(input.error("expected 'positive' or 'negative'")),
-        };
-        let pattern: syn::LitStr = input.parse()?;
+        // Otherwise followed_or_not is "followed" and we are in the positive case.
+        // Now we have to parse the "by" keyword.
+        let by: syn::Ident = parse_ident!(input, by);
+        if by != "by" {
+            return Err(input.error("expected 'by'"));
+        }
+        // And finally the pattern.
+        let pattern: syn::LitStr = input.parse().map_err(|e| {
+            syn::Error::new(
+                e.span(),
+                "expected a string literal for the lookahead pattern",
+            )
+        })?;
         let pattern = pattern.value();
         Ok(Lookahead::new(is_positive, pattern))
     }
@@ -177,16 +189,27 @@ impl AsRef<str> for Pattern {
 /// This is used to create a pattern from a part of a macro input.
 /// The macro input looks like this:
 /// ```text
-/// token r"World" => 11 with lookahead positive r"!";
+/// token r"World" => 11 followed by r"!";
 /// ```
-/// where the lookahead part is optional. The `with lookahead` part should be parsed with the help
-/// of the `Lookahead` struct's `parse` method.
+/// where the lookahead part can be either
+/// ```text
+/// followed by r"!";
+/// ```text
+/// or
+/// ```text
+/// not followed by r"!";
+/// ```text
+/// or it can be omitted completely.
+///
+/// The lookahead part should be parsed with the help of the `Lookahead` struct's `parse` method.
 ///
 /// Note that the `token` keyword is not part of the pattern, but it is used to identify the
 /// pattern.
 impl syn::parse::Parse for Pattern {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let pattern: syn::LitStr = input.parse()?;
+        let pattern: syn::LitStr = input
+            .parse()
+            .map_err(|e| syn::Error::new(e.span(), "expected a string literal for the pattern"))?;
         let pattern = pattern.value();
         input.parse::<syn::Token![=>]>()?;
         let token_type: syn::LitInt = input.parse()?;
@@ -194,8 +217,9 @@ impl syn::parse::Parse for Pattern {
         let mut pattern = Pattern::new(pattern, token_type);
         // Check if there is a lookahead and parse it.
         if input.peek(syn::Ident) {
-            // The parse implementation of the Lookahead struct will check if the ident is `with`.
-            // If it is not, it will return an error.
+            // The parse implementation of the Lookahead struct will check if the ident is
+            // `followed` or `not`.
+            // If it is neither, it will return an error.
             let lookahead: Lookahead = input.parse()?;
             pattern = pattern.with_lookahead(lookahead);
         }
@@ -217,7 +241,7 @@ mod tests {
     #[case::without_lookahead(
         // input
         quote::quote! {
-            token r"Hello" => 0;
+            r"Hello" => 0;
         },
         // expected_pattern
         "Hello",
@@ -228,7 +252,7 @@ mod tests {
     #[case::with_positive_lookahead(
         // input
         quote::quote! {
-            token r"Hello" => 1 with lookahead positive r"!";
+            r"Hello" => 1 followed by r"!";
         },
         // expected_pattern
         "Hello",
@@ -239,7 +263,7 @@ mod tests {
     #[case::with_negative_lookahead(
         // input
         quote::quote! {
-            token r#"""# => 8 with lookahead negative r#"\\[\"\\bfnt]"#;
+            r#"""# => 8 not followed by r#"\\[\"\\bfnt]"#;
         },
         // expected_pattern
         r#"""#,
