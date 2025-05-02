@@ -13,7 +13,7 @@
 //!
 //! # Example with a simple pattern list
 //! ```rust
-//! use scnr::ScannerBuilder;
+//! use scnr::{ScannerBuilder, ScannerTrait};
 //!
 //! static PATTERNS: &[&str] = &[
 //!     r";",                    // Semicolon
@@ -68,7 +68,7 @@
 //! ```rust
 //! use std::sync::LazyLock;
 //!
-//! use scnr::{MatchExtIterator, ScannerBuilder, ScannerMode};
+//! use scnr::{MatchExtIterator, ScannerBuilder, ScannerMode, ScannerTrait};
 //! use scnr_generate::Pattern;
 //!
 //! static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
@@ -143,7 +143,7 @@ pub use find_matches::FindMatches;
 
 /// The module with the scanner.
 mod scanner;
-pub use scanner::Scanner;
+pub use scanner::{Scanner, ScannerTrait};
 
 /// The module with the scanner builder.
 mod scanner_builder;

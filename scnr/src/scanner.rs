@@ -11,6 +11,14 @@ use crate::{FindMatches, ScannerMode};
 
 use scnr_generate::{Result, ScannerModeSwitcher};
 
+/// A trait that must be implemented by all scanner types.
+/// It provides the basic functionality to create a FIndMatches iterator.
+pub trait ScannerTrait {
+    /// Returns an iterator over all non-overlapping matches.
+    /// The iterator yields a [`crate::Match`] value until no more matches could be found.
+    fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>;
+}
+
 /// A Scanner.
 /// It consists of multiple DFAs that are used to search for matches.
 ///
@@ -29,12 +37,6 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    /// Returns an iterator over all non-overlapping matches.
-    /// The iterator yields a [`crate::Match`] value until no more matches could be found.
-    pub fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
-        FindMatches::new(self.inner.clone(), input)
-    }
-
     /// Logs the compiled FSMs as a Graphviz DOT file with the help of the `log` crate.
     /// To enable debug output compiled FSMs as dot file set the environment variable `RUST_LOG` to
     /// `scnr::scanner_impl=debug`.
@@ -64,14 +66,24 @@ impl Scanner {
     /// The code is written to the target file.
     /// The code is generated in Rust and can be used to create a scanner that is able to match the
     /// input string.
+    // TODO: Remove if derive functionality is implemented.
     pub fn generate_match_function_code<T: AsRef<Path>>(&self, target_file: T) -> Result<()> {
         self.inner
             .generate_match_function_code(target_file.as_ref())
     }
 
     /// Sets the match function for the scanner.
+    // TODO: Remove if derive functionality is implemented.
     pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
         self.inner.set_match_function(match_function)
+    }
+}
+
+impl ScannerTrait for Scanner {
+    /// Returns an iterator over all non-overlapping matches.
+    /// The iterator yields a [`crate::Match`] value until no more matches could be found.
+    fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h> {
+        FindMatches::new(self.inner.clone(), input)
     }
 }
 

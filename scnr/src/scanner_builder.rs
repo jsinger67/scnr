@@ -98,7 +98,7 @@ impl SimpleScannerBuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::ScannerModeSwitcher;
+    use crate::{ScannerModeSwitcher, ScannerTrait};
 
     use super::*;
 

@@ -4,7 +4,7 @@
 /// Some tests are based on the https://github.com/kkos/oniguruma/blob/master/test/test_utf8.c file
 /// from the Oniguruma project.
 /// Copyright (c) 2002-2019 K.Kosako kkosako0@gmail.com All rights reserved.
-use scnr::ScannerBuilder;
+use scnr::{ScannerBuilder, ScannerTrait};
 
 /// Test data for the match tests.
 /// The test data consists of a pattern, an input string, the expected matches, and an optional error

@@ -6,7 +6,7 @@ use std::fs;
 use std::path::Path;
 
 use regex::Regex;
-use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
+use scnr::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode, ScannerTrait};
 
 #[test]
 fn e2e_test() {

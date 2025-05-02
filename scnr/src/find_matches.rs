@@ -146,7 +146,7 @@ mod tests {
     use scnr_generate::Pattern;
 
     use super::*;
-    use crate::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode};
+    use crate::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode, ScannerTrait};
 
     static MODES: std::sync::LazyLock<[ScannerMode; 2]> = std::sync::LazyLock::new(|| {
         [
