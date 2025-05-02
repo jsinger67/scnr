@@ -4,16 +4,15 @@ use std::path::Path;
 use std::fmt::Debug;
 
 use log::trace;
+use scnr_generate::FindMatches;
 
-use crate::ScannerImpl;
-
-use crate::{FindMatches, ScannerMode};
+use crate::{ScannerImpl, ScannerMode};
 
 use scnr_generate::{Result, ScannerModeSwitcher};
 
 /// A trait that must be implemented by all scanner types.
 /// It provides the basic functionality to create a FIndMatches iterator.
-pub trait ScannerTrait {
+pub trait ScannerTrait: ScannerModeSwitcher {
     /// Returns an iterator over all non-overlapping matches.
     /// The iterator yields a [`crate::Match`] value until no more matches could be found.
     fn find_iter<'h>(&self, input: &'h str) -> FindMatches<'h>;

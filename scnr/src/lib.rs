@@ -13,7 +13,7 @@
 //!
 //! # Example with a simple pattern list
 //! ```rust
-//! use scnr::{ScannerBuilder, ScannerTrait};
+//! use scnr::{ScannerBuilder, ScannerModeSwitcher, ScannerTrait};
 //!
 //! static PATTERNS: &[&str] = &[
 //!     r";",                    // Semicolon
@@ -68,7 +68,7 @@
 //! ```rust
 //! use std::sync::LazyLock;
 //!
-//! use scnr::{MatchExtIterator, ScannerBuilder, ScannerMode, ScannerTrait};
+//! use scnr::{MatchExtIterator, ScannerBuilder, ScannerMode, ScannerTrait, ScannerModeSwitcher};
 //! use scnr_generate::Pattern;
 //!
 //! static SCANNER_MODES: LazyLock<Vec<ScannerMode>> = LazyLock::new(|| {
@@ -137,10 +137,6 @@
 //! slower at compiling the regexes. This depends on the size of your scanner modes, i.e. the number
 //! of regexes you use.
 
-/// Module that provides a FindMatches type
-mod find_matches;
-pub use find_matches::FindMatches;
-
 /// The module with the scanner.
 mod scanner;
 pub use scanner::{Scanner, ScannerTrait};
@@ -159,8 +155,8 @@ pub(crate) use scnr_generate::ScannerImpl;
 /// The result type for the `scrn` crate.
 pub type Result<T> = std::result::Result<T, scnr_generate::ScnrError>;
 
-/// Re-imports from the `scnr_generate` crate.
+/// Re-exports from the `scnr_generate` crate.
 pub use scnr_generate::{
-    Match, MatchExt, MatchExtIterator, Position, PositionProvider, ScannerMode,
-    ScannerModeSwitcher, Span,
+    FindMatches, Lookahead, Match, MatchExt, MatchExtIterator, Pattern, Position, PositionProvider,
+    ScannerMode, ScannerModeSwitcher, ScnrError, ScnrErrorKind, Span, WithPositions,
 };

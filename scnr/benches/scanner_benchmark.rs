@@ -3,7 +3,7 @@ mod veryl_match_fn;
 use std::{fs, sync::LazyLock, time::Duration};
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion, Throughput};
-use scnr::{Scanner, ScannerBuilder, ScannerMode};
+use scnr::{Scanner, ScannerBuilder, ScannerMode, ScannerTrait};
 
 const PAR_SCANNER_INPUT: &str = include_str!("./input_1.par");
 const VERYL_SCANNER_INPUT: &str = include_str!("./veryl_input.veryl");

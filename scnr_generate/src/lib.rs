@@ -34,9 +34,12 @@ pub(crate) use hir_with_pattern::HirWithPattern;
 #[cfg(feature = "dot_writer")]
 pub(crate) mod dot;
 
+/// Module that provides a FindMatches type
+mod find_matches;
+pub use find_matches::FindMatches;
+
 /// Module that provides functions and types related to the `find_matches` function.
 pub(crate) mod find_matches_impl;
-pub use find_matches_impl::FindMatchesImpl;
 
 /// Module for several ID types.
 mod ids;

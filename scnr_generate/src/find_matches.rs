@@ -1,7 +1,8 @@
+use crate::{
+    find_matches_impl::FindMatchesImpl, Match, PeekResult, Position, PositionProvider, ScannerImpl,
+    ScannerModeSwitcher,
+};
 use log::trace;
-use scnr_generate::{FindMatchesImpl, PeekResult};
-
-use crate::{Match, Position, PositionProvider, ScannerImpl, ScannerModeSwitcher};
 
 /// An iterator over all non-overlapping matches.
 ///
@@ -17,7 +18,7 @@ pub struct FindMatches<'h> {
 
 impl<'h> FindMatches<'h> {
     /// Creates a new `FindMatches` iterator.
-    pub(crate) fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
+    pub fn new(scanner_impl: ScannerImpl, input: &'h str) -> Self {
         Self {
             inner: FindMatchesImpl::new(scanner_impl, input),
         }
@@ -143,10 +144,9 @@ impl ScannerModeSwitcher for FindMatches<'_> {
 
 #[cfg(test)]
 mod tests {
-    use scnr_generate::Pattern;
 
     use super::*;
-    use crate::{MatchExt, MatchExtIterator, ScannerBuilder, ScannerMode, ScannerTrait};
+    use crate::{MatchExt, MatchExtIterator, Pattern, ScannerMode};
 
     static MODES: std::sync::LazyLock<[ScannerMode; 2]> = std::sync::LazyLock::new(|| {
         [
@@ -209,20 +209,15 @@ Id2
     #[cfg(feature = "serde")]
     #[test]
     fn test_find_matches_impl() {
-        use crate::ScannerBuilder;
-
         init();
         println!("{}", serde_json::to_string(&*MODES).unwrap());
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&*MODES)
-            .build()
-            .unwrap();
+        let scanner: ScannerImpl = (*MODES).as_ref().try_into().unwrap();
 
         scanner
             .generate_compiled_automata_as_dot("String", std::path::Path::new(TARGET_FOLDER))
             .expect("Failed to generate compiled automata as dot");
 
-        let find_matches = scanner.find_iter(INPUT);
+        let find_matches = FindMatches::new(scanner, INPUT);
         let matches: Vec<Match> = find_matches.collect();
         trace!("Matches:");
         matches.iter().for_each(|m| {
@@ -268,12 +263,9 @@ Id2
     #[test]
     fn test_peek_n() {
         init();
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&*MODES)
-            .build()
-            .unwrap();
-        let mut find_iter = scanner.find_iter(INPUT);
-        let peeked = find_iter.peek_n(2);
+        let scanner: ScannerImpl = (*MODES).as_ref().try_into().unwrap();
+        let mut find_matches = FindMatches::new(scanner, INPUT);
+        let peeked = find_matches.peek_n(2);
         assert_eq!(
             peeked,
             PeekResult::Matches(vec![
@@ -281,7 +273,7 @@ Id2
                 Match::new(4, (1usize..4).into())
             ])
         );
-        let peeked = find_iter.peek_n(4);
+        let peeked = find_matches.peek_n(4);
         assert_eq!(
             peeked,
             PeekResult::MatchesReachedModeSwitch((
@@ -294,7 +286,7 @@ Id2
                 1,
             ))
         );
-        let peeked = find_iter.peek_n(5);
+        let peeked = find_matches.peek_n(5);
         assert_eq!(
             peeked,
             PeekResult::MatchesReachedModeSwitch((
@@ -307,8 +299,8 @@ Id2
                 1,
             ))
         );
-        let _ = find_iter.by_ref().take(7).collect::<Vec<_>>();
-        let peeked = find_iter.peek_n(4);
+        let _ = find_matches.by_ref().take(7).collect::<Vec<_>>();
+        let peeked = find_matches.peek_n(4);
         assert_eq!(
             peeked,
             PeekResult::MatchesReachedEnd(vec![
@@ -321,12 +313,9 @@ Id2
     #[test]
     fn test_peek_does_not_effect_the_iterator() {
         init();
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&*MODES)
-            .build()
-            .unwrap();
-        let mut find_iter = scanner.find_iter(INPUT);
-        let peeked = find_iter.peek_n(2);
+        let scanner: ScannerImpl = (*MODES).as_ref().try_into().unwrap();
+        let mut find_matches = FindMatches::new(scanner, INPUT);
+        let peeked = find_matches.peek_n(2);
         assert_eq!(
             peeked,
             PeekResult::Matches(vec![
@@ -334,7 +323,7 @@ Id2
                 Match::new(4, (1usize..4).into())
             ])
         );
-        let peeked = find_iter.peek_n(2);
+        let peeked = find_matches.peek_n(2);
         assert_eq!(
             peeked,
             PeekResult::Matches(vec![
@@ -347,12 +336,9 @@ Id2
     #[test]
     fn test_advance_to() {
         init();
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&*MODES)
-            .build()
-            .unwrap();
-        let mut find_iter = scanner.find_iter(INPUT);
-        let peeked = find_iter.peek_n(2);
+        let scanner: ScannerImpl = (*MODES).as_ref().try_into().unwrap();
+        let mut find_matches = FindMatches::new(scanner, INPUT);
+        let peeked = find_matches.peek_n(2);
         assert_eq!(
             peeked,
             PeekResult::Matches(vec![
@@ -360,9 +346,9 @@ Id2
                 Match::new(4, (1usize..4).into())
             ])
         );
-        let new_position = find_iter.advance_to(4);
+        let new_position = find_matches.advance_to(4);
         assert_eq!(new_position, 3);
-        let peeked = find_iter.peek_n(3);
+        let peeked = find_matches.peek_n(3);
         assert_eq!(
             peeked,
             PeekResult::MatchesReachedModeSwitch((
@@ -379,12 +365,9 @@ Id2
     #[test]
     fn test_with_positions() {
         init();
-        let scanner = ScannerBuilder::new()
-            .add_scanner_modes(&*MODES)
-            .build()
-            .unwrap();
-        let find_iter = scanner.find_iter(INPUT).with_positions();
-        let matches: Vec<MatchExt> = find_iter.collect();
+        let scanner: ScannerImpl = (*MODES).as_ref().try_into().unwrap();
+        let find_matches = FindMatches::new(scanner, INPUT).with_positions();
+        let matches: Vec<MatchExt> = find_matches.collect();
         assert_eq!(matches.len(), 9);
         assert_eq!(
             matches,
