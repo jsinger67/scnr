@@ -113,15 +113,11 @@ pub(crate) struct ScannerData {
 /// This is used to create a scanner from a part of a macro input.
 /// The macro input looks like this:
 /// ```text
-/// scanner HelloWorld {
+/// HelloWorld {
 ///     // One or more scanner modes
 /// }
 impl syn::parse::Parse for ScannerData {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let scanner: syn::Ident = parse_ident!(input, scanner);
-        if scanner != "scanner" {
-            return Err(input.error("expected 'scanner'"));
-        }
         let name: syn::Ident = parse_ident!(input, scanner_name);
         let name = name.to_string();
         if name.is_empty() {
@@ -148,7 +144,7 @@ mod tests {
     #[test]
     fn test_parse_scanner_data() {
         let input = quote::quote! {
-            scanner HelloWorld {
+            HelloWorld {
                 mode INITIAL {
                     token r"\r\n|\r|\n" => 1;
                     token r"[\s--\r\n]+" => 2;
