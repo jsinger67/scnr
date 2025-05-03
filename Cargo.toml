@@ -1,5 +1,5 @@
 [workspace]
-members = ["scnr", "scnr_derive", "scnr_generate"]
+members = ["scnr", "scnr_macro", "scnr_generate"]
 resolver = "2"
 
 [workspace.package]

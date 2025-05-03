@@ -1,5 +1,5 @@
 [package]
-name = "scnr_derive"
+name = "scnr_macro"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
