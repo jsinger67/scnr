@@ -23,6 +23,7 @@ thiserror = "2"
 # criterion = "0.5.1"
 env_logger = "0.11.6"
 rstest = "0.25.0"
+tempfile = "3.19.1"
 # regex = "1.11.1"
 
 [features]

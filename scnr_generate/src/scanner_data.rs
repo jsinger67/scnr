@@ -1,6 +1,6 @@
 use syn::braced;
 
-use crate::{Pattern, TerminalID, TerminalIDBase};
+use crate::{Pattern, ScannerMode, TerminalID, TerminalIDBase};
 
 macro_rules! parse_ident {
     ($input:ident, $name:ident) => {
@@ -27,6 +27,23 @@ pub(crate) struct ScannerModeWithNamedTransitions {
     /// The entries are tuples of the token type numbers and the new scanner mode name and are
     /// sorted by token type number.
     pub(crate) transitions: Vec<(TerminalID, String)>,
+}
+
+impl ScannerModeWithNamedTransitions {
+    /// Converts the scanner mode with named transitions to a scanner mode with numeric transitions.
+    /// Returns a vector of tuples of the token type numbers and the new scanner mode ID.
+    pub(crate) fn convert_transitions(&self, scanner_names: &[&str]) -> Vec<(usize, usize)> {
+        let mut transitions = Vec::new();
+        for (token_type, new_mode) in &self.transitions {
+            let new_mode_id = scanner_names
+                .iter()
+                .position(|name| name == new_mode)
+                .expect("Scanner mode not found");
+            transitions.push((token_type.as_usize(), new_mode_id));
+        }
+        transitions.sort_by_key(|(token_type, _)| *token_type);
+        transitions
+    }
 }
 
 /// This is used to create a scanner mode from a part of a macro input.
@@ -108,6 +125,23 @@ pub(crate) struct ScannerData {
     pub name: String,
     /// The scanner modes.
     pub modes: Vec<ScannerModeWithNamedTransitions>,
+}
+impl ScannerData {
+    pub(crate) fn build_scanner_modes(&self) -> syn::Result<Vec<ScannerMode>> {
+        let mut scanner_modes = Vec::new();
+        let mut scanner_names = self
+            .modes
+            .iter()
+            .map(|mode| mode.name.as_str())
+            .collect::<Vec<_>>();
+        for mode in &self.modes {
+            let transitions = mode.convert_transitions(&scanner_names);
+            let scanner_mode = ScannerMode::new(&mode.name, mode.patterns.clone(), transitions);
+            scanner_modes.push(scanner_mode);
+            scanner_names.push(&mode.name);
+        }
+        Ok(scanner_modes)
+    }
 }
 
 /// This is used to create a scanner from a part of a macro input.
