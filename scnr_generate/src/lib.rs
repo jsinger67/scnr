@@ -41,6 +41,10 @@ pub use find_matches::FindMatches;
 /// Module that provides functions and types related to the `find_matches` function.
 pub(crate) mod find_matches_impl;
 
+/// Module that provides code generation for scanners.
+mod generate;
+pub use generate::generate;
+
 /// Module for several ID types.
 mod ids;
 pub(crate) use ids::{ScannerModeID, TerminalID, TerminalIDBase};
