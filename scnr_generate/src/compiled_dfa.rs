@@ -79,11 +79,17 @@ impl CompiledDfa {
         char_indices: std::str::CharIndices,
         match_char_class: &(dyn Fn(usize, char) -> bool + 'static),
     ) -> Option<Match> {
-        let mut current_states = Vec::with_capacity(self.states.len());
-        let mut next_states = Vec::with_capacity(self.states.len());
+        // The scan is the separator between the current and next states.
+        // The current states are at the front of the deque and before the SCAN marker.
+        // The next states are at the back of the deque and after the SCAN marker.
+        const SCAN: StateSetID = StateSetID::new(StateIDBase::MAX);
+        // The deque is used to store the current and next states.
+        let mut deque = VecDeque::with_capacity(2 * self.states.len() + 1);
 
+        //
+        deque.push_front(SCAN);
         // Push the start state to the current states.
-        current_states.push(StateSetID::new(0));
+        deque.push_front(StateSetID::new(0));
 
         // Initialize the match variables.
         let mut match_start = None;
@@ -97,15 +103,33 @@ impl CompiledDfa {
                 match_start = Some(index);
             }
 
-            for state in current_states.iter() {
-                let state_data = &self.states[*state];
+            while let Some(state) = deque.pop_front() {
+                if state == SCAN {
+                    if deque.is_empty() {
+                        // No next states are left.
+                        break;
+                    } else {
+                        // We are done with the current character.
+                        // We need to push the SCAN marker to the back of the deque to mark the end of
+                        // the current states.
+                        deque.push_back(SCAN);
+                        break;
+                    }
+                }
+                let state_data = &self.states[state];
                 if match_end.is_none() && state_data.terminal_id.is_some() {
                     match_end = Some(index);
                 }
                 for (cc, next) in &state_data.transitions {
                     if match_char_class(cc.as_usize(), c) {
-                        if !next_states.contains(next) {
-                            next_states.push(*next);
+                        // Check if the next state is already in the deque below the SCAN marker.
+                        if !deque
+                            .iter()
+                            .rev()
+                            .take_while(|s| **s != SCAN)
+                            .any(|s| *s == *next)
+                        {
+                            deque.push_back(*next);
                         }
                         let next_state = &self.states[*next];
                         if let Some(accepted_terminal) = next_state.terminal_id {
@@ -166,9 +190,7 @@ impl CompiledDfa {
                     }
                 }
             }
-            current_states.clear();
-            std::mem::swap(&mut current_states, &mut next_states);
-            if current_states.is_empty() {
+            if deque.is_empty() {
                 break;
             }
         }
