@@ -80,7 +80,7 @@ fn render_compiled_dfa(
                 .set_color(dot_writer::Color::Blue)
                 .set_pen_width(3.0);
             source_node.set_label(&id.to_string());
-        } else if let Some(terminal_id) = compiled_dfa.states[id].terminal_id {
+        } else if let Some((terminal_id, _)) = compiled_dfa.states[id].accept_data {
             source_node
                 .set_shape(dot_writer::Shape::Circle)
                 .set_color(dot_writer::Color::Red)
@@ -136,7 +136,16 @@ pub(crate) fn compiled_dfa_render<W: Write>(
     render_compiled_dfa(compiled_dfa, "", character_class_registry, &mut digraph);
 
     // Render the lookaheads of the DFA each into a separate cluster
-    for (terminal_id, lookahead) in compiled_dfa.lookaheads.iter() {
+    // Therefore filter the states of the DFA for those that have a lookahead
+    for (terminal_id, lookahead) in compiled_dfa.states.iter().filter_map(|state| {
+        if let Some((terminal_id, lookahead)) = state.accept_data.as_ref() {
+            lookahead
+                .as_ref()
+                .map(|_| (*terminal_id, lookahead.as_ref().unwrap()))
+        } else {
+            None
+        }
+    }) {
         let mut cluster = digraph.cluster();
         cluster.set_label(&format!(
             "LA for T{}({})",

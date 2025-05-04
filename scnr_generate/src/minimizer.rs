@@ -93,7 +93,7 @@ impl Minimizer {
         let mut accepted_terminals = dfa
             .states
             .iter()
-            .filter_map(|state| state.terminal_id)
+            .filter_map(|state| state.accept_data.as_ref().map(|t| t.0))
             .collect::<Vec<_>>();
         accepted_terminals.sort();
         accepted_terminals.dedup();
@@ -102,7 +102,7 @@ impl Minimizer {
 
         for state in 0..dfa.states.len() {
             let state: StateID = (state as u32).into();
-            if let Some(terminal_id) = &dfa.states[state].terminal_id {
+            if let Some((terminal_id, _)) = &dfa.states[state].accept_data {
                 let index = accepted_terminals
                     .iter()
                     .position(|id| id == terminal_id)
@@ -214,20 +214,18 @@ impl Minimizer {
             patterns,
             terminal_ids,
             states,
-            lookaheads,
             ..
         } = dfa;
         let mut dfa = CompiledDfa::new(
             patterns,
             terminal_ids,
             vec![StateData::new(); partition.len()],
-            lookaheads,
         );
         // Calculate the end states of the DFA.
         let end_states = states
             .iter()
             .map(|state| {
-                if let Some(terminal_id) = state.terminal_id {
+                if let Some((terminal_id, _)) = state.accept_data {
                     (true, terminal_id)
                 } else {
                     (false, 0.into())
@@ -437,7 +435,6 @@ impl Minimizer {
 
 #[cfg(test)]
 mod tests {
-    use rustc_hash::FxHashMap;
 
     use super::*;
     use crate::compiled_dfa::StateData;
@@ -448,7 +445,6 @@ mod tests {
             vec![],
             vec![0.into(), 1.into(), 2.into()],
             vec![StateData::new(); 5],
-            FxHashMap::default(),
         );
         [(0, 0), (1, 1), (4, 2)].iter().for_each(|(i, t)| {
             dfa.states[*i].set_terminal_id((*t).into());
@@ -468,7 +464,6 @@ mod tests {
             vec![],
             vec![0.into(), 1.into(), 2.into()],
             vec![StateData::new(); 5],
-            FxHashMap::default(),
         );
         [(0, 0), (1, 1), (4, 2)].iter().for_each(|(i, t)| {
             dfa.states[*i].set_terminal_id((*t).into());

@@ -30,8 +30,6 @@ pub(crate) struct CompiledDfa {
     pub(crate) terminal_ids: Vec<TerminalID>,
     /// The states of the DFA.
     pub(crate) states: Vec<StateData>,
-    /// An optional lookahead that is used to check if the DFA should match the input.
-    pub(crate) lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
 }
 
 impl CompiledDfa {
@@ -40,13 +38,11 @@ impl CompiledDfa {
         patterns: Vec<String>,
         terminal_ids: Vec<TerminalID>,
         states: Vec<StateData>,
-        lookaheads: FxHashMap<TerminalID, CompiledLookahead>,
     ) -> Self {
         Self {
             patterns,
             terminal_ids,
             states,
-            lookaheads,
         }
     }
 
@@ -117,7 +113,7 @@ impl CompiledDfa {
                     }
                 }
                 let state_data = &self.states[state];
-                if match_end.is_none() && state_data.terminal_id.is_some() {
+                if match_end.is_none() && state_data.accept_data.is_some() {
                     match_end = Some(index);
                 }
                 for (cc, next) in &state_data.transitions {
@@ -132,10 +128,12 @@ impl CompiledDfa {
                             deque.push_back(*next);
                         }
                         let next_state = &self.states[*next];
-                        if let Some(accepted_terminal) = next_state.terminal_id {
+                        if let Some((accepted_terminal, lookahead)) =
+                            next_state.accept_data.as_ref()
+                        {
                             let mut lookahead_len = 0;
                             // Check if a lookahead is present and if it is satisfied.
-                            if let Some(lookahead) = self.lookaheads.get(&accepted_terminal) {
+                            if let Some(lookahead) = lookahead {
                                 // Create a CharIndices iterator starting from the current position.
                                 if let Some((_, next_slice)) =
                                     input.split_at_checked(index + c.len_utf8())
@@ -171,9 +169,9 @@ impl CompiledDfa {
                                     }
                                     std::cmp::Ordering::Equal => {
                                         let terminal_id_priority =
-                                            self.priority_of(accepted_terminal);
+                                            self.priority_of(*accepted_terminal);
                                         if terminal_id_priority
-                                            < self.priority_of(match_terminal_id.unwrap())
+                                            < self.priority_of(*match_terminal_id.unwrap())
                                         {
                                             match_terminal_id = Some(accepted_terminal);
                                         }
@@ -238,7 +236,15 @@ impl CompiledDfa {
     /// Add a lookahead for a given terminal_id to the compiled NFA.
     #[inline(always)]
     pub(crate) fn add_lookahead(&mut self, terminal_id: TerminalID, lookahead: CompiledLookahead) {
-        self.lookaheads.insert(terminal_id, lookahead);
+        // Find the state data for the given terminal id.
+        if let Some(state_data) = &mut self
+            .states
+            .iter_mut()
+            .find(|s| matches!(s.accept_data, Some((id, _)) if id == terminal_id))
+        {
+            // Add the lookahead to the state data.
+            state_data.accept_data = Some((terminal_id, Some(lookahead)));
+        }
     }
 
     /// Returns the pattern for the given terminal id.
@@ -357,7 +363,6 @@ impl From<Nfa> for CompiledDfa {
             patterns: vec![nfa.pattern.pattern().to_string()],
             terminal_ids: vec![(nfa.pattern.terminal_id() as TerminalIDBase).into()],
             states,
-            lookaheads: FxHashMap::default(),
         })
     }
 }
@@ -428,7 +433,6 @@ impl From<MultiPatternNfa> for CompiledDfa {
                 .map(|p| (p.terminal_id() as TerminalIDBase).into())
                 .collect(),
             states,
-            lookaheads: FxHashMap::default(),
         })
     }
 }
@@ -440,23 +444,19 @@ impl std::fmt::Display for CompiledDfa {
         for (i, state) in self.states.iter().enumerate() {
             writeln!(f, "State {}: {}", i, state)?;
         }
-        writeln!(f, "Lookaheads:")?;
-        for (terminal_id, lookahead) in &self.lookaheads {
-            writeln!(f, "Lookahead: {} -> {}", terminal_id, lookahead)?;
-        }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default)]
 pub(crate) struct StateData {
     /// A list of transitions from this state.
     /// The state ids are numbers of sets of states.
     pub(crate) transitions: Vec<(CharClassID, StateSetID)>,
 
-    /// A possible terminal id of the state.
+    /// A possible terminal id of the state combined with an optional lookahead.
     /// It is set only if the state is an accepting state.
-    pub(crate) terminal_id: Option<TerminalID>,
+    pub(crate) accept_data: Option<(TerminalID, Option<CompiledLookahead>)>,
 }
 
 impl StateData {
@@ -465,14 +465,23 @@ impl StateData {
             // Most states have only one or two transitions.
             // Only the start state has many transitions.
             transitions: Vec::with_capacity(2),
-            terminal_id: None,
+            accept_data: None,
         }
     }
 
     /// Sets the terminal id of the state.
     /// This is used to mark the state as an accepting state.
     pub(crate) fn set_terminal_id(&mut self, terminal_id: TerminalID) {
-        self.terminal_id = Some(terminal_id);
+        self.accept_data = self.accept_data.take().map_or_else(
+            || Some((terminal_id, None)),
+            |(old_terminal_id, old_lookahead)| {
+                if old_terminal_id == terminal_id {
+                    Some((old_terminal_id, old_lookahead))
+                } else {
+                    Some((terminal_id, old_lookahead))
+                }
+            },
+        );
     }
 }
 
@@ -480,8 +489,11 @@ impl std::fmt::Display for StateData {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for (cc, next) in &self.transitions {
             writeln!(f, "Transition: {:?} -> {}", cc, next)?;
-            if let Some(terminal_id) = self.terminal_id {
+            if let Some((terminal_id, lookahead)) = self.accept_data.as_ref() {
                 writeln!(f, "  Terminal id: {}", terminal_id)?;
+                if let Some(lookahead) = lookahead {
+                    writeln!(f, "  Lookahead: {}", lookahead)?;
+                }
             }
         }
         Ok(())
@@ -647,7 +659,11 @@ mod tests {
                 .states
                 .iter()
                 .enumerate()
-                .filter_map(|(i, s)| s.terminal_id.map(|terminal_id| (i, terminal_id)))
+                .filter_map(|(i, s)| {
+                    s.accept_data
+                        .as_ref()
+                        .map(|(terminal_id, _)| (i, *terminal_id))
+                })
                 .collect::<Vec<_>>();
             assert_eq!(
                 end_states, test.end_states,
@@ -698,9 +714,20 @@ mod tests {
             .unwrap();
             if scanner_mode.name == "INITIAL" {
                 assert_eq!(compiled_dfa.patterns.len(), 1);
-                assert_eq!(compiled_dfa.lookaheads.len(), 1);
+                assert_eq!(
+                    compiled_dfa
+                        .states
+                        .iter()
+                        .filter(|s| s.accept_data.as_ref().is_some_and(|a| a.1.is_some()))
+                        .count(),
+                    1
+                );
                 println!("{}", compiled_dfa);
-                assert!(compiled_dfa.lookaheads.contains_key(&20.into()));
+                assert!(compiled_dfa
+                    .states
+                    .iter()
+                    .filter_map(|s| s.accept_data.as_ref().map(|a| a.0))
+                    .any(|a| a == 20.into()));
             }
             compiled_dfa_render_to!(
                 &compiled_dfa,
@@ -728,7 +755,14 @@ mod tests {
         )
         .unwrap();
         assert_eq!(compiled_dfa.patterns.len(), 1);
-        assert_eq!(compiled_dfa.lookaheads.len(), 0);
+        assert_eq!(
+            compiled_dfa
+                .states
+                .iter()
+                .filter(|s| s.accept_data.as_ref().is_some_and(|a| a.1.is_some()))
+                .count(),
+            0
+        );
         println!("{}", compiled_dfa);
         compiled_dfa_render_to!(&compiled_dfa, "Parol", &character_class_registry);
     }
