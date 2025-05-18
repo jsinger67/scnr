@@ -103,9 +103,8 @@ impl CharacterClassRegistry {
                 // Check if char_class is within bounds
                 if let Some(ranges) = CHAR_CLASS_TABLE.get(char_class) {
                     for r in ranges.iter() {
-                        if *r.start() <= c {
-                            // Since the ranges are sorted, we can stop checking further.
-                            return *r.end() >= c;
+                        if *r.start() <= c && c <= *r.end() {
+                            return true;
                         }
                     }
                 }

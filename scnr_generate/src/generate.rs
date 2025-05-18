@@ -994,8 +994,8 @@ impl HelloWorld {
         ];
         if let Some(ranges) = CHAR_CLASS_TABLE.get(char_class) {
             for r in ranges.iter() {
-                if *r.start() <= c {
-                    return *r.end() >= c;
+                if *r.start() <= c && c <= *r.end() {
+                    return true;
                 }
             }
         }
