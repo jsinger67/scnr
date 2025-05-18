@@ -146,6 +146,7 @@ impl HelloWorld {
     }
     #[allow(clippy::manual_is_ascii_check, dead_code)]
     pub(crate) fn match_function(char_class: usize, c: char) -> bool {
+        use std::cmp::Ordering;
         static CHAR_CLASS_TABLE: &[&[std::ops::RangeInclusive<char>]] = &[
             &['\r'..='\r'],
             &['\n'..='\n'],
@@ -993,13 +994,20 @@ impl HelloWorld {
             { &['\0'..='!', '#'..='[', ']'..='\u{10ffff}'] },
         ];
         if let Some(ranges) = CHAR_CLASS_TABLE.get(char_class) {
-            for r in ranges.iter() {
-                if *r.start() <= c && c <= *r.end() {
-                    return true;
-                }
-            }
+            ranges
+                .binary_search_by(|range| {
+                    if c < *range.start() {
+                        Ordering::Greater
+                    } else if c > *range.end() {
+                        Ordering::Less
+                    } else {
+                        Ordering::Equal
+                    }
+                })
+                .is_ok()
+        } else {
+            false
         }
-        false
     }
 }
 "#;
