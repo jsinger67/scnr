@@ -94,18 +94,22 @@ impl CharacterClassRegistry {
             #[allow(clippy::manual_is_ascii_check, dead_code)]
             pub(crate) fn #name(char_class: usize, c: char) -> bool {
                 // Define a table of closures for each char_class
-                static CHAR_CLASS_TABLE: &[fn(char) -> bool] = &[
+                static CHAR_CLASS_TABLE: &[&[std::ops::RangeInclusive<char>]] = &[
                                 #(
                                     #match_functions,
                                 )*
                 ];
 
                 // Check if char_class is within bounds
-                if let Some(func) = CHAR_CLASS_TABLE.get(char_class) {
-                    func(c)
-                } else {
-                    false
+                if let Some(ranges) = CHAR_CLASS_TABLE.get(char_class) {
+                    for r in ranges.iter() {
+                        if *r.start() <= c {
+                            // Since the ranges are sorted, we can stop checking further.
+                            return *r.end() >= c;
+                        }
+                    }
                 }
+                false
             }
         }
     }

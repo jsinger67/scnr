@@ -44,7 +44,7 @@ impl CharacterClass {
                     .fold(0, |acc, &b| (acc << 8) | b as u32);
                 let c = char::from_u32(lit).unwrap_or('\0');
                 quote::quote! {
-                     |c| c == #c
+                     &[#c..=#c]
                 }
             }
             regex_syntax::hir::HirKind::Class(class) => match class {
@@ -54,14 +54,14 @@ impl CharacterClass {
                         |mut acc, r| {
                             if !acc.is_empty() {
                                 acc.extend(quote::quote! {
-                                    |
+                                    ,
                                 });
                             }
                             let start: char = r.start();
                             let end: char = r.end();
                             if start == end {
                                 acc.extend(quote::quote! {
-                                    #start
+                                    #start..=#start
                                 });
                             } else {
                                 acc.extend(quote::quote! {
@@ -72,10 +72,10 @@ impl CharacterClass {
                         },
                     );
                     quote::quote! {
-                        |c| {
-                            matches!(c,
+                        {
+                            &[
                                 #ranges
-                            )
+                            ]
                         }
                     }
                 }
@@ -85,14 +85,14 @@ impl CharacterClass {
                         |mut acc, r| {
                             if !acc.is_empty() {
                                 acc.extend(quote::quote! {
-                                    |
+                                    ,
                                 });
                             }
                             let start: char = r.start().into();
                             let end: char = r.end().into();
                             if start == end {
                                 acc.extend(quote::quote! {
-                                    #start
+                                    #start..=#start
                                 });
                             } else {
                                 acc.extend(quote::quote! {
@@ -104,9 +104,9 @@ impl CharacterClass {
                     );
                     quote::quote! {
                         |c| {
-                            matches!(c,
+                            &[
                                 #ranges
-                            )
+                            ]
                         }
                     }
                 }
@@ -130,7 +130,7 @@ impl std::fmt::Debug for CharacterClass {
 
 impl std::fmt::Display for CharacterClass {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.hir)
+        write!(f, "{}", self.hir.pattern.escape_default())
     }
 }
 
@@ -158,9 +158,9 @@ mod tests {
             let mut buffer = [0; 4];
             let utf8_bytes = $c.encode_utf8(&mut buffer);
 
-            $crate::hir_with_pattern::HirWithPattern::new(
-                regex_syntax::hir::Hir::literal(utf8_bytes.as_bytes().to_vec()),
-            )
+            $crate::hir_with_pattern::HirWithPattern::new(regex_syntax::hir::Hir::literal(
+                utf8_bytes.as_bytes().to_vec(),
+            ))
         }};
     }
 

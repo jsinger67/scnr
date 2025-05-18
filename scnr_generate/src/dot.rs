@@ -104,7 +104,14 @@ fn render_compiled_dfa(
                     "{} (C#{})",
                     character_class_registry.get_character_class(*cc).map_or(
                         "-".to_string(),
-                        |cc| cc.to_string().escape_debug().to_string()
+                        |cc| {
+                            let mut s = cc.hir.to_string();
+                            if s.len() > 20 {
+                                s.truncate(20);
+                                s.push_str("...");
+                            }
+                            s
+                        }
                     ),
                     cc.id()
                 ));
@@ -123,14 +130,7 @@ pub(crate) fn compiled_dfa_render<W: Write>(
     writer.set_pretty_print(true);
     let mut digraph = writer.digraph();
     digraph
-        .set_label(
-            format!(
-                "{}: {}...",
-                label,
-                compiled_dfa.pattern(0.into()).escape_default()
-            )
-            .as_str(),
-        )
+        .set_label(label)
         .set_rank_direction(RankDirection::LeftRight);
 
     render_compiled_dfa(compiled_dfa, "", character_class_registry, &mut digraph);

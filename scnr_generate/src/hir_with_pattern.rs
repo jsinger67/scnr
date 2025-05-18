@@ -29,7 +29,7 @@ impl std::hash::Hash for HirWithPattern {
 
 impl std::fmt::Display for HirWithPattern {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.hir)
+        write!(f, "{}", self.pattern.escape_default())
     }
 }
 
