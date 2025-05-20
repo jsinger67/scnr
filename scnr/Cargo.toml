@@ -24,7 +24,7 @@ seshat-unicode = { version = "0.3.1", optional = true }
 thiserror = "2"
 
 [dev-dependencies]
-criterion = "0.5.1"
+criterion = "0.6.0"
 env_logger = "0.11.6"
 regex = "1.11.1"
 
