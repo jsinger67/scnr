@@ -242,7 +242,7 @@ impl MultiPatternNfa {
             }
         }
         // Sort and dedup the target states by target state.
-        // Constraint is neseccary be able to hold the priority of the patterns.
+        // Constraint is necessary be able to hold the priority of the patterns.
         target_states.sort_by_key(|t| t.1);
         target_states.dedup();
         target_states
