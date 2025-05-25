@@ -99,6 +99,11 @@ impl_id!(StateSetID, StateIDBase);
 pub(crate) type CharClassIDBase = u32;
 impl_id!(CharClassID, CharClassIDBase);
 
+// The ID type for disjoint character classes. This is the id type for disjoint character classes
+// used in the scanner. It is used to represent character classes that are disjoint from each
+// other, meaning that they do not overlap in the characters they match.
+impl_id!(DisjointCharClassID, CharClassIDBase);
+
 /// The ID type for patterns. Actually the index of the pattern in the pattern vector of a scanner
 /// mode. It determines the priority of the pattern, i.e. lower indices have higher priority.
 pub(crate) type PatternIDBase = usize;

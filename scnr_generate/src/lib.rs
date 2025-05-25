@@ -26,10 +26,6 @@ pub(crate) mod compiled_dfa;
 /// Module that provides functions and types related to compiled ScannerModes.
 pub(crate) mod compiled_scanner_mode;
 
-/// Module with the type HirWithPattern.
-pub(crate) mod hir_with_pattern;
-pub(crate) use hir_with_pattern::HirWithPattern;
-
 /// Module with conversion to graphviz dot format
 #[cfg(feature = "dot_writer")]
 pub(crate) mod dot;
@@ -44,6 +40,10 @@ pub(crate) mod find_matches_impl;
 /// Module that provides code generation for scanners.
 mod generate;
 pub use generate::generate;
+
+/// Module with the type HirWithPattern.
+pub(crate) mod hir_with_pattern;
+pub(crate) use hir_with_pattern::HirWithPattern;
 
 /// Module for several ID types.
 mod ids;
