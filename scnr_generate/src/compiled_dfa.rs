@@ -1,7 +1,4 @@
-use std::{
-    char,
-    collections::{BTreeSet, VecDeque},
-};
+use std::collections::{BTreeSet, VecDeque};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
@@ -51,46 +48,18 @@ impl CompiledDfa {
     /// The caller must do that.
     ///
     /// If no match is found, None is returned.
-    ///
-    /// We use a non-recursive implementation of the DFA simulation.
-    /// The algorithm uses a queue to store the states that are currently active.
-    /// The algorithm is as follows:
-    /// 1. Add the start state to the queue.
-    /// 2. Take the next character from the input.
-    /// 3. If the queue is empty, stop and return the current match, if any.
-    /// 4. For each state in the queue, check if it is an end state.
-    ///    If it is, remember the current match if it is longer than the previous match found and
-    ///    its terminal id is not higher at the same length.
-    /// 5. For each state in the queue, check if there is a transition that matches the current
-    ///    character.
-    ///    If there is, add the target state to a second queue that will be used for the next
-    ///    character.
-    /// 6. Replace the queue with the second queue.
-    /// 7. If there are more characters in the input, go to step 2.
-    ///
     #[inline(always)]
     pub(crate) fn find_from(
         &self,
         input: &str,
         char_indices: std::str::CharIndices,
-        match_char_class: &(dyn Fn(usize, char) -> bool + 'static),
+        character_classes: &CharacterClassRegistry,
     ) -> Option<Match> {
-        // The scan is the separator between the current and next states.
-        // The current states are at the front of the deque and before the SCAN marker.
-        // The next states are at the back of the deque and after the SCAN marker.
-        const SCAN: StateSetID = StateSetID::new(StateIDBase::MAX);
-        // The deque is used to store the current and next states.
-        let mut deque = VecDeque::with_capacity(2 * self.states.len() + 1);
-
-        //
-        deque.push_front(SCAN);
-        // Push the start state to the current states.
-        deque.push_front(StateSetID::new(0));
-
         // Initialize the match variables.
         let mut match_start = None;
         let mut match_end = None;
         let mut match_terminal_id = None;
+        let mut state = StateSetID::new(0);
 
         for (index, c) in char_indices {
             if match_start.is_none() {
@@ -99,97 +68,71 @@ impl CompiledDfa {
                 match_start = Some(index);
             }
 
-            while let Some(state) = deque.pop_front() {
-                if state == SCAN {
-                    if deque.is_empty() {
-                        // No next states are left.
-                        break;
-                    } else {
-                        // We are done with the current character.
-                        // We need to push the SCAN marker to the back of the deque to mark the end of
-                        // the current states.
-                        deque.push_back(SCAN);
-                        break;
-                    }
+            let state_data = &self.states[state];
+            if match_end.is_none() && state_data.accept_data.is_some() {
+                match_end = Some(index);
+            }
+            let cc_ids = character_classes.get_matching_character_classes(c);
+            for (cc, next) in &state_data.transitions {
+                // Check if the character class of the transition matches the character.
+                if !cc_ids.contains(cc) {
+                    continue;
                 }
-                let state_data = &self.states[state];
-                if match_end.is_none() && state_data.accept_data.is_some() {
-                    match_end = Some(index);
-                }
-                for (cc, next) in &state_data.transitions {
-                    if match_char_class(cc.as_usize(), c) {
-                        // Check if the next state is already in the deque below the SCAN marker.
-                        if !deque
-                            .iter()
-                            .rev()
-                            .take_while(|s| **s != SCAN)
-                            .any(|s| *s == *next)
+                // Go to the next state.
+                state = *next;
+                let next_state = &self.states[state];
+                if let Some((accepted_terminal, lookahead)) = next_state.accept_data.as_ref() {
+                    let mut lookahead_len = 0;
+                    // Check if a lookahead is present and if it is satisfied.
+                    if let Some(lookahead) = lookahead {
+                        // Create a CharIndices iterator starting from the current position.
+                        if let Some((_, next_slice)) = input.split_at_checked(index + c.len_utf8())
                         {
-                            deque.push_back(*next);
-                        }
-                        let next_state = &self.states[*next];
-                        if let Some((accepted_terminal, lookahead)) =
-                            next_state.accept_data.as_ref()
-                        {
-                            let mut lookahead_len = 0;
-                            // Check if a lookahead is present and if it is satisfied.
-                            if let Some(lookahead) = lookahead {
-                                // Create a CharIndices iterator starting from the current position.
-                                if let Some((_, next_slice)) =
-                                    input.split_at_checked(index + c.len_utf8())
-                                {
-                                    let char_indices = next_slice.char_indices();
-                                    let lookahead = lookahead.clone();
-                                    let (satisfied, len) = lookahead.satisfies_lookahead(
-                                        next_slice,
-                                        char_indices,
-                                        match_char_class,
-                                    );
-                                    if !satisfied {
-                                        continue;
-                                    }
-                                    lookahead_len = len;
-                                } else {
-                                    // We are at the end of the input.
-                                    // If the lookahead is positive it is not satisfied, otherwise
-                                    // we can accept the match.
-                                    if lookahead.is_positive {
-                                        continue;
-                                    }
-                                }
+                            let char_indices = next_slice.char_indices();
+                            let lookahead = lookahead.clone();
+                            let (satisfied, len) = lookahead.satisfies_lookahead(
+                                next_slice,
+                                char_indices,
+                                character_classes,
+                            );
+                            if !satisfied {
+                                continue;
                             }
-                            // Update the match end and terminal id if the match is longer or the
-                            // terminal id is lower.
-                            if let Some(match_end_index) = match_end.as_ref() {
-                                match (index + c.len_utf8()).cmp(&(match_end_index + lookahead_len))
-                                {
-                                    std::cmp::Ordering::Greater => {
-                                        match_end = Some(index + c.len_utf8());
-                                        match_terminal_id = Some(accepted_terminal);
-                                    }
-                                    std::cmp::Ordering::Equal => {
-                                        let terminal_id_priority =
-                                            self.priority_of(*accepted_terminal);
-                                        if terminal_id_priority
-                                            < self.priority_of(*match_terminal_id.unwrap())
-                                        {
-                                            match_terminal_id = Some(accepted_terminal);
-                                        }
-                                    }
-                                    std::cmp::Ordering::Less => {
-                                        match_terminal_id = Some(accepted_terminal);
-                                    }
-                                }
-                            } else {
+                            lookahead_len = len;
+                        } else {
+                            // We are at the end of the input.
+                            // If the lookahead is positive it is not satisfied, otherwise
+                            // we can accept the match.
+                            if lookahead.is_positive {
+                                continue;
+                            }
+                        }
+                    }
+                    // Update the match end and terminal id if the match is longer or the
+                    // terminal id is lower.
+                    if let Some(match_end_index) = match_end.as_ref() {
+                        match (index + c.len_utf8()).cmp(&(match_end_index + lookahead_len)) {
+                            std::cmp::Ordering::Greater => {
                                 match_end = Some(index + c.len_utf8());
                                 match_terminal_id = Some(accepted_terminal);
                             }
+                            std::cmp::Ordering::Equal => {
+                                let terminal_id_priority = self.priority_of(*accepted_terminal);
+                                if terminal_id_priority
+                                    < self.priority_of(*match_terminal_id.unwrap())
+                                {
+                                    match_terminal_id = Some(accepted_terminal);
+                                }
+                            }
+                            std::cmp::Ordering::Less => {
+                                match_terminal_id = Some(accepted_terminal);
+                            }
                         }
+                    } else {
+                        match_end = Some(index + c.len_utf8());
+                        match_terminal_id = Some(accepted_terminal);
                     }
                 }
-            }
-            if deque.is_empty() {
-                break;
             }
         }
         match_terminal_id.map(|match_terminal_id| {
@@ -201,7 +144,7 @@ impl CompiledDfa {
         })
     }
 
-    /// Create a compiled NFA from a pattern.
+    /// Create a compiled DFA from a pattern.
     /// Used for testing and debugging purposes.
     #[allow(dead_code)]
     pub(crate) fn try_from_pattern(
@@ -213,6 +156,7 @@ impl CompiledDfa {
         nfa.set_terminal_id(pattern.terminal_id());
         let mut compiled_dfa: CompiledDfa = nfa.into();
         Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
+        character_class_registry.create_disjoint_character_classes();
         Ok(compiled_dfa)
     }
 
@@ -222,18 +166,15 @@ impl CompiledDfa {
     ) -> Result<Self> {
         let mp_nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
         let mut compiled_dfa: CompiledDfa = mp_nfa.into();
-        // Add the lookaheads to the compiled NFA.
+        // Add the lookaheads to the compiled DFA.
         for pattern in patterns.iter() {
-            Self::add_lookahead_from_pattern_hir(
-                pattern,
-                character_class_registry,
-                &mut compiled_dfa,
-            )?;
+            Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
         }
+        character_class_registry.create_disjoint_character_classes();
         Ok(compiled_dfa)
     }
 
-    /// Add a lookahead for a given terminal_id to the compiled NFA.
+    /// Add a lookahead for a given terminal_id to the compiled DFA.
     #[inline(always)]
     pub(crate) fn add_lookahead(&mut self, terminal_id: TerminalID, lookahead: CompiledLookahead) {
         // Find the state data for the given terminal id.
@@ -274,24 +215,10 @@ impl CompiledDfa {
         };
         Ok(())
     }
-
-    #[inline(always)]
-    fn add_lookahead_from_pattern_hir(
-        pattern: &Pattern,
-        character_class_registry: &mut CharacterClassRegistry,
-        compiled_dfa: &mut CompiledDfa,
-    ) -> Result<()> {
-        if let Some(lookahead) = pattern.lookahead() {
-            let lookahead =
-                CompiledLookahead::try_from_lookahead_hir(lookahead, character_class_registry)?;
-            compiled_dfa.add_lookahead((pattern.terminal_id() as TerminalIDBase).into(), lookahead);
-        };
-        Ok(())
-    }
 }
 
 impl From<Nfa> for CompiledDfa {
-    /// Create a dense representation of the NFA in form of match transitions between states sets.
+    /// Create a dense representation of the DFA in form of match transitions between states sets.
     /// This is an equivalent algorithm to the subset construction for DFAs.
     ///
     /// Note that the lookahead is not set in the resulting CompiledDfa. This must be done
@@ -676,8 +603,8 @@ mod tests {
             for (id, (input, expected)) in test.match_data.iter().enumerate() {
                 let char_indices = input.char_indices();
                 trace!("Matching string: {}", input);
-                let match_char_class = character_class_registry.create_match_char_class().unwrap();
-                let matched = compiled_dfa.find_from(input, char_indices, &match_char_class);
+                let matched =
+                    compiled_dfa.find_from(input, char_indices, &character_class_registry);
                 assert_eq!(
                     matched,
                     expected.map(|(start, end)| crate::Match::new(0, crate::Span::new(start, end))),
@@ -821,13 +748,10 @@ mod tests {
             &mut character_class_registry,
         )
         .expect("Failed to create compiled DFA from patterns");
-        let match_char_class = character_class_registry
-            .create_match_char_class()
-            .expect("Failed to create match char class function");
         let input = "World!";
         let char_indices = input.char_indices();
         let matched = compiled_dfa
-            .find_from(input, char_indices, &match_char_class)
+            .find_from(input, char_indices, &character_class_registry)
             .expect("Failed to match input");
         assert_eq!(matched.token_type(), 7);
     }

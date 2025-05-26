@@ -32,24 +32,6 @@ impl CompiledLookahead {
         })
     }
 
-    /// Create a new compiled lookahead from a lookahead.
-    pub(crate) fn try_from_lookahead_hir(
-        lookahead: &Lookahead,
-        character_class_registry: &mut CharacterClassRegistry,
-    ) -> Result<Self> {
-        let Lookahead {
-            is_positive,
-            pattern,
-        } = lookahead;
-        let hir = parse_regex_syntax(pattern)?;
-        let nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
-        let nfa = Box::new(nfa.into());
-        Ok(Self {
-            nfa,
-            is_positive: *is_positive,
-        })
-    }
-
     /// Check if the lookahead constraints are met.
     ///
     /// The function returns a tuple of (bool, usize) where the bool indicates if the lookahead
@@ -63,9 +45,9 @@ impl CompiledLookahead {
         &self,
         input: &str,
         char_indices: std::str::CharIndices,
-        match_char_class: &(dyn Fn(usize, char) -> bool + 'static),
+        character_classes: &CharacterClassRegistry,
     ) -> (bool, usize) {
-        if let Some(ma) = self.nfa.find_from(input, char_indices, match_char_class) {
+        if let Some(ma) = self.nfa.find_from(input, char_indices, character_classes) {
             (self.is_positive, ma.len())
         } else {
             (!self.is_positive, 0)

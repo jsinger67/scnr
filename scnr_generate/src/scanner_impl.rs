@@ -13,7 +13,7 @@ pub struct ScannerImpl {
     pub(crate) character_classes: Arc<CharacterClassRegistry>,
     pub(crate) scanner_modes: Vec<CompiledScannerMode>,
     // The function used to match characters against character classes.
-    pub(crate) match_char_class: Arc<dyn (Fn(usize, char) -> bool) + 'static + Send + Sync>,
+    // pub(crate) match_char_class: Arc<dyn (Fn(usize, char) -> bool) + 'static + Send + Sync>,
     // The current mode is private and thereby makes the free creation of ScannerImpl instances
     // impossible.
     current_mode: usize,
@@ -78,7 +78,7 @@ impl ScannerImpl {
     ) -> Option<crate::Match> {
         let dfa = &self.scanner_modes[self.current_mode].dfa;
 
-        if let Some(matched) = dfa.find_from(input, char_indices, &*self.match_char_class) {
+        if let Some(matched) = dfa.find_from(input, char_indices, &self.character_classes) {
             debug_assert!(
                 !matched.is_empty(),
                 r#"
@@ -169,9 +169,9 @@ impl ScannerImpl {
         Ok(())
     }
 
-    pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
-        self.match_char_class = Arc::new(match_function);
-    }
+    // pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
+    //     self.match_char_class = Arc::new(match_function);
+    // }
 }
 
 impl ScannerModeSwitcher for ScannerImpl {
@@ -211,11 +211,9 @@ impl TryFrom<Vec<ScannerMode>> for ScannerImpl {
             )?;
             compiled_scanner_modes.push(compiled_scanner_mode);
         }
-        let match_char_class = Arc::new(character_class_registry.create_match_char_class()?);
         Ok(Self {
             character_classes: Arc::new(character_class_registry),
             scanner_modes: compiled_scanner_modes,
-            match_char_class,
             current_mode: 0,
         })
     }
@@ -233,11 +231,9 @@ impl TryFrom<&[ScannerMode]> for ScannerImpl {
             )?;
             compiled_scanner_modes.push(compiled_scanner_mode);
         }
-        let match_char_class = Arc::new(character_class_registry.create_match_char_class()?);
         Ok(Self {
             character_classes: Arc::new(character_class_registry),
             scanner_modes: compiled_scanner_modes,
-            match_char_class,
             current_mode: 0,
         })
     }

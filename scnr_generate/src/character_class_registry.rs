@@ -1,5 +1,5 @@
 use super::{ids::CharClassIDBase, CharClassID, CharacterClass, HirWithPattern};
-use crate::{ids::DisjointCharClassID, MatchFunction, Result, ScnrError};
+use crate::{MatchFunction, Result, ScnrError};
 
 /// CharacterClassRegistry is a registry of character classes.
 #[derive(Debug, Clone, Default)]

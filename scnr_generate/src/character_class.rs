@@ -1,7 +1,5 @@
 use log::trace;
 
-use crate::ids::DisjointCharClassID;
-
 use super::{CharClassID, HirWithPattern};
 
 /// A character class that can match a character.

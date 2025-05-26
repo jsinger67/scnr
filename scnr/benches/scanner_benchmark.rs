@@ -34,14 +34,14 @@ static VERYL_SCANNER: LazyLock<Scanner> = LazyLock::new(|| {
         .unwrap()
 });
 
-static CUSTOMIZED_VERLY_SCANNER: LazyLock<Scanner> = LazyLock::new(|| {
-    let mut scanner = ScannerBuilder::new()
-        .add_scanner_modes(&VERLY_SCANNER_MODES)
-        .build()
-        .unwrap();
-    scanner.set_match_function(veryl_match_fn::match_function);
-    scanner
-});
+// static CUSTOMIZED_VERLY_SCANNER: LazyLock<Scanner> = LazyLock::new(|| {
+//     let mut scanner = ScannerBuilder::new()
+//         .add_scanner_modes(&VERLY_SCANNER_MODES)
+//         .build()
+//         .unwrap();
+//     scanner.set_match_function(veryl_match_fn::match_function);
+//     scanner
+// });
 
 fn build_parol_scanner(c: &mut Criterion) {
     c.bench_function("build_par_scanner", |b| {
@@ -99,25 +99,25 @@ fn run_veryl_scanner(c: &mut Criterion) {
     });
 }
 
-fn run_customized_veryl_scanner(c: &mut Criterion) {
-    let mut group = c.benchmark_group("throughput");
-    group.throughput(Throughput::Bytes(VERYL_SCANNER_INPUT.len() as u64));
-    group.bench_function("customized_scan_veryl", |b| {
-        b.iter(|| {
-            // Create a matches iterator
-            let find_iter = CUSTOMIZED_VERLY_SCANNER.find_iter(VERYL_SCANNER_INPUT);
-            // Collect all matches
-            for t in find_iter {
-                black_box(t);
-            }
-        });
-    });
-}
+// fn run_customized_veryl_scanner(c: &mut Criterion) {
+//     let mut group = c.benchmark_group("throughput");
+//     group.throughput(Throughput::Bytes(VERYL_SCANNER_INPUT.len() as u64));
+//     group.bench_function("customized_scan_veryl", |b| {
+//         b.iter(|| {
+//             // Create a matches iterator
+//             let find_iter = CUSTOMIZED_VERLY_SCANNER.find_iter(VERYL_SCANNER_INPUT);
+//             // Collect all matches
+//             for t in find_iter {
+//                 black_box(t);
+//             }
+//         });
+//     });
+// }
 
 criterion_group! {
     name = throughput;
     config = Criterion::default().measurement_time(Duration::from_secs(15)).sample_size(50);
-    targets = run_parol_scanner, run_veryl_scanner, run_customized_veryl_scanner
+    targets = run_parol_scanner, run_veryl_scanner
 }
 
 criterion_group! {

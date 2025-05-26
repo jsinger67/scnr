@@ -70,12 +70,6 @@ impl Scanner {
         self.inner
             .generate_match_function_code(target_file.as_ref())
     }
-
-    /// Sets the match function for the scanner.
-    // TODO: Remove if derive functionality is implemented.
-    pub fn set_match_function(&mut self, match_function: fn(usize, char) -> bool) {
-        self.inner.set_match_function(match_function)
-    }
 }
 
 impl ScannerTrait for Scanner {
@@ -293,7 +287,10 @@ mod tests {
             let match1 = find_iter.next();
             assert_eq!(
                 test.expected_match,
-                match1.map(|m| test.input.get(m.start()..m.end()).unwrap())
+                match1.map(|m| test.input.get(m.start()..m.end()).unwrap()),
+                "Test {} failed for pattern: {}",
+                index,
+                test.pattern
             );
         }
     }
