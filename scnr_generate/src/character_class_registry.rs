@@ -5,7 +5,7 @@ use crate::{ids::DisjointCharClassID, MatchFunction, Result, ScnrError};
 #[derive(Debug, Clone, Default)]
 pub(crate) struct CharacterClassRegistry {
     character_classes: Vec<CharacterClass>,
-    elementary_intervals: Vec<std::ops::RangeInclusive<char>>,
+    elementary_intervals: Vec<(std::ops::RangeInclusive<char>, Vec<CharClassID>)>,
 }
 
 impl CharacterClassRegistry {
@@ -198,7 +198,7 @@ impl CharacterClassRegistry {
                         .any(|cc| cc.contains(&(start..=end)))
                     {
                         // We use inclusive ranges to represent the intervals.
-                        self.elementary_intervals.push(start..=end);
+                        self.elementary_intervals.push((start..=end, Vec::new()));
                     }
                 }
             } else {
@@ -212,20 +212,43 @@ impl CharacterClassRegistry {
                     .any(|cc| cc.contains(&(start..=start)))
                 {
                     // We use inclusive ranges to represent the intervals.
-                    self.elementary_intervals.push(start..=start);
+                    self.elementary_intervals.push((start..=start, Vec::new()));
                 }
             }
         }
 
         // Step 4: Add disjoint intervals to each character class
-        for cc in self.character_classes.iter_mut() {
-            for (idx, interval) in self.elementary_intervals.iter().enumerate() {
+        for cc in &self.character_classes {
+            for (interval, cc_ids) in self.elementary_intervals.iter_mut() {
                 // Check if the character class matches the interval
                 if cc.contains(interval) {
-                    // If it matches, add the interval to the disjoint intervals
-                    cc.add_disjoint_interval(DisjointCharClassID::new(idx as u32));
+                    // Ensure that the disjoint interval is not already present.
+                    debug_assert!(!cc_ids.contains(&cc.id));
+                    cc_ids.push(cc.id);
                 }
             }
+        }
+    }
+
+    /// Calculates the list of character classes that match the given character by searching over
+    /// the elementary intervals.
+    /// This is efficient because the elementary intervals are sorted.
+    /// It returns a slice of character class IDs that match the character.
+    /// If no character class matches, it returns an empty slice.
+    pub(crate) fn get_matching_character_classes(&self, c: char) -> &[CharClassID] {
+        // Use binary search to find the interval that contains the character.
+        // This is efficient because the elementary intervals are sorted.
+        match self.elementary_intervals.binary_search_by(|(interval, _)| {
+            if c < *interval.start() {
+                std::cmp::Ordering::Greater
+            } else if c > *interval.end() {
+                std::cmp::Ordering::Less
+            } else {
+                std::cmp::Ordering::Equal
+            }
+        }) {
+            Ok(index) => &self.elementary_intervals[index].1,
+            Err(_) => &[], // If not found, return an empty slice
         }
     }
 }
@@ -234,8 +257,15 @@ impl std::fmt::Display for CharacterClassRegistry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if !self.character_classes.is_empty() {
             write!(f, "\nElementary Intervals:")?;
-            for (idx, interval) in self.elementary_intervals.iter().enumerate() {
-                write!(f, "\n{}  {}..={}", idx, interval.start(), interval.end())?;
+            for (idx, (interval, cc_ids)) in self.elementary_intervals.iter().enumerate() {
+                write!(
+                    f,
+                    "\n{}  {}..={} => {:?}",
+                    idx,
+                    interval.start(),
+                    interval.end(),
+                    cc_ids
+                )?;
             }
         } else {
             write!(f, " (no elementary intervals)")?;
@@ -268,92 +298,67 @@ mod tests {
         // regex
         r"[a-f][0-9a-f]",
         // elementary_intervals
-        &['0'..='9', 'a'..='f'],
-        // disjoint_intervals
         &[
-            vec![DisjointCharClassID::new(1)],
-            vec![DisjointCharClassID::new(0), DisjointCharClassID::new(1)]
+            ('0'..='9', vec![CharClassID::new(1)]),
+            ('a'..='f', vec![CharClassID::new(0), CharClassID::new(1)]),
         ])]
     #[case::c2(
         // regex
         r"[a-f]",
         // elementary_intervals
-        &['a'..='f'],
-        // disjoint_intervals
-        &[vec![DisjointCharClassID::new(0)]])]
+        &[
+            ('a'..='f', vec![CharClassID::new(0)])
+        ])]
     #[case::c3(
         // regex
         r"[0-9]+(_[0-9]+)*\.[0-9]+(_[0-9]+)*[eE][+-]?[0-9]+(_[0-9]+)*",
         // elementary_intervals
-        &['+'..='+', '-'..='-', '.'..='.', '0'..='9', 'E'..='E',  '_'..='_',  'e'..='e'],
-        // disjoint_intervals
         &[
-            // '0'..='9'
-            vec![DisjointCharClassID::new(3)],
-            // '_'
-            vec![DisjointCharClassID::new(5)],
-            // '.'
-            vec![DisjointCharClassID::new(2)],
-            // 'E'..='E', 'e'..='e'
-            vec![DisjointCharClassID::new(4), DisjointCharClassID::new(6)],
-            // '+'..='+', '-'..='-'
-            vec![DisjointCharClassID::new(0), DisjointCharClassID::new(1)],
+            ('+'..='+', vec![CharClassID::new(4)]),
+            ('-'..='-', vec![CharClassID::new(4)]),
+            ('.'..='.', vec![CharClassID::new(2)]),
+            ('0'..='9', vec![CharClassID::new(0)]),
+            ('E'..='E', vec![CharClassID::new(3)]),
+            ('_'..='_', vec![CharClassID::new(1)]),
+            ('e'..='e', vec![CharClassID::new(3)])
         ])]
     #[case::c4(
         // regex
         r"[\s--\r\n]+",
         // elementary_intervals
-        &['\t'..='\t', '\u{b}'..='\u{c}', ' '..=' ', '\u{85}'..='\u{85}', '\u{a0}'..='\u{a0}',
-          '\u{1680}'..='\u{1680}', '\u{2000}'..='\u{200a}', '\u{2028}'..='\u{2029}',
-          '\u{202f}'..='\u{202f}', '\u{205f}'..='\u{205f}', '\u{3000}'..='\u{3000}'],
-        // disjoint_intervals
         &[
-            vec![DisjointCharClassID::new(0),
-                DisjointCharClassID::new(1),
-                DisjointCharClassID::new(2),
-                DisjointCharClassID::new(3),
-                DisjointCharClassID::new(4),
-                DisjointCharClassID::new(5),
-                DisjointCharClassID::new(6),
-                DisjointCharClassID::new(7),
-                DisjointCharClassID::new(8),
-                DisjointCharClassID::new(9),
-                DisjointCharClassID::new(10)],
+            ('\t'..='\t', vec![CharClassID::new(0)]),
+            ('\u{b}'..='\u{c}', vec![CharClassID::new(0)]),
+            (' '..=' ', vec![CharClassID::new(0)]),
+            ('\u{85}'..='\u{85}', vec![CharClassID::new(0)]),
+            ('\u{a0}'..='\u{a0}', vec![CharClassID::new(0)]),
+            ('\u{1680}'..='\u{1680}', vec![CharClassID::new(0)]),
+            ('\u{2000}'..='\u{200a}', vec![CharClassID::new(0)]),
+            ('\u{2028}'..='\u{2029}', vec![CharClassID::new(0)]),
+            ('\u{202f}'..='\u{202f}', vec![CharClassID::new(0)]),
+            ('\u{205f}'..='\u{205f}', vec![CharClassID::new(0)]),
+            ('\u{3000}'..='\u{3000}', vec![CharClassID::new(0)])
         ])]
     #[case::c5(
         // regex
         r"\+=|-=|\*=|/=|%=|&=|\\|=|\^=|<<=|>>=|<<<=|>>>=",
         // elementary_intervals
-        &['%'..='%', '&'..='&', '*'..='*', '+'..='+', '-'..='-', '/'..='/', '<'..='<', '='..='=', '>'..='>', '\\'..='\\', '^'..='^'],
-        // disjoint_intervals
         &[
-            // '+'..='+'
-            vec![DisjointCharClassID::new(3)],
-            // '='..='='
-            vec![DisjointCharClassID::new(7)],
-            // '-'..='-'
-            vec![DisjointCharClassID::new(4)],
-            // '*'..='*'
-            vec![DisjointCharClassID::new(2)],
-            // '/'..='/'
-            vec![DisjointCharClassID::new(5)],
-            // '%'..='%'
-            vec![DisjointCharClassID::new(0)],
-            // '&'..='&'
-            vec![DisjointCharClassID::new(1)],
-            // '\\'..='\\'
-            vec![DisjointCharClassID::new(9)],
-            // '^'..='^'
-            vec![DisjointCharClassID::new(10)],
-            // '<'..='<'
-            vec![DisjointCharClassID::new(6)],
-            // '>'..='>'
-            vec![DisjointCharClassID::new(8)],
+            ('%'..='%', vec![CharClassID::new(5)]),
+            ('&'..='&', vec![CharClassID::new(6)]),
+            ('*'..='*', vec![CharClassID::new(3)]),
+            ('+'..='+', vec![CharClassID::new(0)]),
+            ('-'..='-', vec![CharClassID::new(2)]),
+            ('/'..='/', vec![CharClassID::new(4)]),
+            ('<'..='<', vec![CharClassID::new(9)]),
+            ('='..='=', vec![CharClassID::new(1)]),
+            ('>'..='>', vec![CharClassID::new(10)]),
+            ('\\'..='\\', vec![CharClassID::new(7)]),
+            ('^'..='^', vec![CharClassID::new(8)])
         ])]
     fn test_create_disjoint_character_classes(
         #[case] regex: &'static str,
-        #[case] elementary_intervals: &'static [std::ops::RangeInclusive<char>],
-        #[case] disjoint_intervals: &[Vec<DisjointCharClassID>],
+        #[case] elementary_intervals: &[(std::ops::RangeInclusive<char>, Vec<CharClassID>)],
     ) {
         init();
 
@@ -374,14 +379,17 @@ mod tests {
             elementary_intervals.len()
         );
 
-        for (idx, cc) in character_class_registry
-            .character_classes
-            .iter()
-            .enumerate()
-        {
-            assert_eq!(cc.disjoint_intervals.len(), disjoint_intervals[idx].len());
-            for (di_idx, disjoint_interval) in cc.disjoint_intervals.iter().enumerate() {
-                assert_eq!(*disjoint_interval, disjoint_intervals[idx][di_idx]);
+        // Check that the `get_matching_character_classes` method works correctly
+        for (interval, cc_ids) in &character_class_registry.elementary_intervals {
+            for c in interval.clone() {
+                let matching_ccs = character_class_registry.get_matching_character_classes(c);
+                assert_eq!(
+                    matching_ccs,
+                    cc_ids.as_slice(),
+                    "Character '{}' should match {:?}",
+                    c,
+                    cc_ids
+                );
             }
         }
     }
