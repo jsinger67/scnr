@@ -5,13 +5,9 @@ use std::{
 
 use log::trace;
 
+use super::{compiled_dfa::CompiledDfa, StateIDBase, TerminalID};
 use crate::compiled_dfa::StateData;
-
-use super::{
-    compiled_dfa::CompiledDfa,
-    ids::{StateGroupID, StateGroupIDBase, StateID},
-    CharClassID, StateIDBase, TerminalID,
-};
+use crate::{DisjointCharClassID, StateGroupID, StateGroupIDBase, StateID};
 
 // The type definitions for the subset construction algorithm.
 
@@ -21,12 +17,12 @@ type StateGroup = BTreeSet<StateID>;
 type Partition = Vec<StateGroup>;
 
 // A transition map is a map of state ids to a map of character class ids to state set ids.
-type TransitionMap = BTreeMap<StateID, BTreeMap<CharClassID, Vec<StateID>>>;
+type TransitionMap = BTreeMap<StateID, BTreeMap<DisjointCharClassID, Vec<StateID>>>;
 
 // A data type that is calculated from the transitions of a DFA state so that for each character
 // class the target state is mapped to the partition group it belongs to.
 #[derive(Debug, Default, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct TransitionsToPartitionGroups(pub(crate) Vec<(CharClassID, StateGroupID)>);
+pub(crate) struct TransitionsToPartitionGroups(pub(crate) Vec<(DisjointCharClassID, StateGroupID)>);
 
 impl TransitionsToPartitionGroups {
     pub(crate) fn new() -> Self {
@@ -37,7 +33,11 @@ impl TransitionsToPartitionGroups {
         TransitionsToPartitionGroups(Vec::with_capacity(capacity))
     }
 
-    pub(crate) fn insert(&mut self, char_class: CharClassID, partition_group: StateGroupID) {
+    pub(crate) fn insert(
+        &mut self,
+        char_class: DisjointCharClassID,
+        partition_group: StateGroupID,
+    ) {
         self.0.push((char_class, partition_group));
     }
 }
@@ -342,7 +342,7 @@ impl Minimizer {
 
     fn merge_transitions(
         partition: &[StateGroup],
-        transitions: &mut Vec<(StateID, BTreeMap<CharClassID, Vec<StateID>>)>,
+        transitions: &mut Vec<(StateID, BTreeMap<DisjointCharClassID, Vec<StateID>>)>,
     ) {
         // Remove all transitions that do not belong to the representative states of a group.
         // The representative states are the first states in the groups.
@@ -361,7 +361,7 @@ impl Minimizer {
     fn merge_transitions_of_state(
         state_id: StateID,
         representative_state_id: StateID,
-        transitions: &mut Vec<(StateID, BTreeMap<CharClassID, Vec<StateID>>)>,
+        transitions: &mut Vec<(StateID, BTreeMap<DisjointCharClassID, Vec<StateID>>)>,
     ) {
         if let Some(rep_pos) = transitions
             .iter()
@@ -391,7 +391,7 @@ impl Minimizer {
 
     fn renumber_states_in_transitions(
         partition: &[StateGroup],
-        transitions: &mut [(StateID, BTreeMap<CharClassID, Vec<StateID>>)],
+        transitions: &mut [(StateID, BTreeMap<DisjointCharClassID, Vec<StateID>>)],
     ) {
         let find_group_of_state = |state_id: StateID| -> StateID {
             for (group_id, group) in partition.iter().enumerate() {

@@ -49,7 +49,9 @@ pub(crate) use hir_with_pattern::HirWithPattern;
 mod ids;
 pub(crate) use ids::{ScannerModeID, TerminalID, TerminalIDBase};
 
-pub(crate) use ids::{CharClassID, StateID, StateIDBase};
+pub(crate) use ids::{
+    CharClassID, DisjointCharClassID, StateGroupID, StateGroupIDBase, StateID, StateIDBase,
+};
 
 /// Module that provides functions and types related to match functions.
 pub(crate) mod match_function;

@@ -2,10 +2,10 @@ use std::collections::{BTreeSet, VecDeque};
 
 use rustc_hash::{FxHashMap, FxHashSet};
 
-use crate::{Match, Pattern, Result, Span};
+use crate::{ids::DisjointCharClassID, CharClassID, Match, Pattern, Result, Span};
 
 use super::{
-    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, CharClassID, CharacterClassRegistry,
+    ids::StateSetID, minimizer::Minimizer, parse_regex_syntax, CharacterClassRegistry,
     CompiledLookahead, MultiPatternNfa, Nfa, StateID, StateIDBase, TerminalID, TerminalIDBase,
 };
 
@@ -48,7 +48,7 @@ impl CompiledDfa {
     /// The caller must do that.
     ///
     /// If no match is found, None is returned.
-    #[inline(always)]
+    // #[inline(always)]
     pub(crate) fn find_from(
         &self,
         input: &str,
@@ -72,12 +72,14 @@ impl CompiledDfa {
             if match_end.is_none() && state_data.accept_data.is_some() {
                 match_end = Some(index);
             }
-            let cc_ids = character_classes.get_matching_character_classes(c);
+            // let cc_ids = character_classes.get_matching_character_classes(c);
+            let mut any_match = false;
             for (cc, next) in &state_data.transitions {
                 // Check if the character class of the transition matches the character.
-                if !cc_ids.contains(cc) {
+                if !character_classes.matches(*cc, c) {
                     continue;
                 }
+                any_match = true;
                 // Go to the next state.
                 state = *next;
                 let next_state = &self.states[state];
@@ -134,6 +136,10 @@ impl CompiledDfa {
                     }
                 }
             }
+            if !any_match {
+                // No transition matched, so we reset the match variables.
+                return None;
+            }
         }
         match_terminal_id.map(|match_terminal_id| {
             // If the terminal id is set, match_start and match_end must always be set as well.
@@ -154,9 +160,8 @@ impl CompiledDfa {
         let hir = parse_regex_syntax(pattern.pattern())?;
         let mut nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
         nfa.set_terminal_id(pattern.terminal_id());
-        let mut compiled_dfa: CompiledDfa = nfa.into();
+        let mut compiled_dfa: CompiledDfa = Self::try_from_nfa(&nfa, character_class_registry)?;
         Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
-        character_class_registry.create_disjoint_character_classes();
         Ok(compiled_dfa)
     }
 
@@ -165,13 +170,271 @@ impl CompiledDfa {
         character_class_registry: &mut CharacterClassRegistry,
     ) -> Result<Self> {
         let mp_nfa = MultiPatternNfa::try_from_patterns(patterns, character_class_registry)?;
-        let mut compiled_dfa: CompiledDfa = mp_nfa.into();
+        let mut compiled_dfa: CompiledDfa =
+            Self::try_from_multi_pattern_nfa(&mp_nfa, character_class_registry)?;
         // Add the lookaheads to the compiled DFA.
         for pattern in patterns.iter() {
             Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
         }
-        character_class_registry.create_disjoint_character_classes();
         Ok(compiled_dfa)
+    }
+
+    /// Create a compiled DFA from an NFA.
+    /// This is a private method that is used by the public methods
+    /// [`try_from_nfa`] and [`try_from_multi_pattern_nfa`].
+    /// It is used to convert an NFA into a CompiledDfa.
+    /// We use a subset construction algorithm to convert the NFA into a DFA.
+    /// To make the transitions deterministic, we convert all transitions via `CharClassID`
+    /// to possibly multiple transitions via `DisjointCharClassID`.
+    fn create_from_nfa(
+        nfa: &Nfa,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        // A temporary map to store the state ids of the sets of states.
+        let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
+        // A temporary set to store the transitions of the CompiledDfa.
+        // The state ids are numbers of sets of states.
+        let mut transitions: FxHashSet<(StateSetID, DisjointCharClassID, StateSetID)> =
+            FxHashSet::default();
+        // The end states of the CompiledDfa are a vector of state ids and terminal ids.
+        let mut accepting_states: Vec<(StateSetID, TerminalID)> = Vec::new();
+        // Calculate the epsilon closure of the start state.
+        let epsilon_closure: BTreeSet<StateID> =
+            BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
+        // The current state id is always 0.
+        let current_state = StateSetID::new(0);
+        // Add the start state to the state map.
+        state_map.insert(epsilon_closure.clone(), current_state);
+        // The list of target states not yet processed.
+        let mut queue: VecDeque<StateSetID> = VecDeque::new();
+        queue.push_back(current_state);
+        while let Some(current_state) = queue.pop_front() {
+            let epsilon_closure = state_map
+                .iter()
+                .find(|(_, v)| **v == current_state)
+                .unwrap()
+                .0
+                .clone();
+            let target_states = nfa.get_match_transitions(epsilon_closure.iter().cloned());
+            let old_state_id = current_state;
+            // Group target states by character class
+            let mut cc_to_targets: FxHashMap<CharClassID, FxHashSet<StateID>> =
+                FxHashMap::default();
+            for (cc, target_state) in target_states {
+                cc_to_targets.entry(cc).or_default().insert(target_state);
+            }
+
+            // Process each character class once
+            for (cc, targets) in cc_to_targets {
+                let mut new_state_id_candidate = state_map.len() as StateIDBase;
+                // Calculate epsilon closure of all targets
+                let mut combined_epsilon_closure = BTreeSet::new();
+                for target in targets {
+                    combined_epsilon_closure.extend(nfa.epsilon_closure(target));
+                }
+
+                // Create a new DFA state for this combined set
+                let new_state_id = *state_map
+                    .entry(combined_epsilon_closure.clone())
+                    .or_insert_with(|| {
+                        let new_state_id = StateSetID::new(new_state_id_candidate);
+                        queue.push_back(new_state_id);
+                        new_state_id_candidate += 1;
+                        new_state_id
+                    });
+                // Update accepting states if the epsilon closure contains the end state
+                if combined_epsilon_closure.contains(&nfa.end_state)
+                    && !accepting_states.contains(&(
+                        new_state_id,
+                        (nfa.pattern.terminal_id() as TerminalIDBase).into(),
+                    ))
+                {
+                    accepting_states.push((
+                        new_state_id,
+                        (nfa.pattern.terminal_id() as TerminalIDBase).into(),
+                    ));
+                }
+                // Add transitions
+                for disjoint_cc in character_class_registry.get_disjoint_character_classes(cc) {
+                    transitions.insert((old_state_id, *disjoint_cc, new_state_id));
+                }
+            }
+        }
+        // The transitions of the CompiledDfa.
+        let mut states: Vec<StateData> = Vec::with_capacity(state_map.len());
+        for _ in 0..state_map.len() {
+            states.push(StateData::new());
+        }
+        for (from, cc, to) in transitions {
+            states[from].transitions.push((cc, to));
+        }
+        for (state, term) in accepting_states {
+            states[state].set_terminal_id(term);
+        }
+        // Create the CompiledDfa from the states and patterns.
+        let mut compiled_dfa = CompiledDfa {
+            patterns: vec![nfa.pattern.pattern().to_string()],
+            terminal_ids: vec![(nfa.pattern.terminal_id() as TerminalIDBase).into()],
+            states,
+        };
+        // Minimize the CompiledDfa.
+        compiled_dfa = Minimizer::minimize(compiled_dfa);
+
+        // Add the lookaheads to the compiled DFA.
+        Self::add_lookahead_from_pattern(
+            &nfa.pattern,
+            character_class_registry,
+            &mut compiled_dfa,
+        )?;
+        Ok(compiled_dfa)
+    }
+
+    /// Create a compiled DFA from an Multi pattern NFA.
+    /// This is a private method that is used by the public methods
+    /// [`from_nfa`] and [`from_multi_pattern_nfa`].
+    /// It is used to convert an NFA into a CompiledDfa.
+    /// We use the same subset construction algorithm as in `create_from_nfa`, add all
+    /// lookaheads from the Nfas and set the patterns vector to the patterns of the
+    /// MultiPatternNfa.
+    fn create_from_multi_pattern_nfa(
+        mp_nfa: &MultiPatternNfa,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        // A temporary map to store the state ids of the sets of states.
+        let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
+        // A temporary set to store the transitions of the CompiledDfa.
+        // The state ids are numbers of sets of states.
+        let mut transitions: FxHashSet<(StateSetID, DisjointCharClassID, StateSetID)> =
+            FxHashSet::default();
+        // The end states of the CompiledDfa are a vector of state ids and terminal ids.
+        let mut accepting_states: Vec<(StateSetID, TerminalID)> = Vec::new();
+        // Calculate the epsilon closure of the start state of the multi-pattern NFA.
+        let epsilon_closure: BTreeSet<StateID> =
+            BTreeSet::from_iter(mp_nfa.epsilon_closure(0.into()));
+        // The current state id is always 0.
+        let current_state = StateSetID::new(0);
+        // Add the start state to the state map.
+        state_map.insert(epsilon_closure.clone(), current_state);
+        // The list of target states not yet processed.
+        let mut queue: VecDeque<StateSetID> = VecDeque::new();
+        queue.push_back(current_state);
+        while let Some(current_state) = queue.pop_front() {
+            let epsilon_closure = state_map
+                .iter()
+                .find(|(_, v)| **v == current_state)
+                .unwrap()
+                .0
+                .clone();
+            let target_states = mp_nfa.get_match_transitions(epsilon_closure.iter().cloned());
+            let old_state_id = current_state;
+            // Group target states by character class
+            let mut cc_to_targets: FxHashMap<CharClassID, FxHashSet<StateID>> =
+                FxHashMap::default();
+            for (cc, target_state) in target_states {
+                cc_to_targets.entry(cc).or_default().insert(target_state);
+            }
+
+            // Process each character class once
+            for (cc, targets) in cc_to_targets {
+                let mut new_state_id_candidate = state_map.len() as StateIDBase;
+                // Calculate epsilon closure of all targets
+                let mut combined_epsilon_closure = BTreeSet::new();
+                for target in targets {
+                    combined_epsilon_closure.extend(mp_nfa.epsilon_closure(target));
+                }
+
+                // Create a new DFA state for this combined set
+                let new_state_id = *state_map
+                    .entry(combined_epsilon_closure.clone())
+                    .or_insert_with(|| {
+                        let new_state_id = StateSetID::new(new_state_id_candidate);
+                        queue.push_back(new_state_id);
+                        new_state_id_candidate += 1;
+                        new_state_id
+                    });
+                // Update accepting states if the epsilon closure contains an end state
+                if let Some(accepting_state) = combined_epsilon_closure
+                    .iter()
+                    .find(|s| mp_nfa.is_accepting_state(**s))
+                {
+                    let terminal_id: TerminalID =
+                        (mp_nfa.find_nfa(*accepting_state).unwrap().terminal_id()
+                            as TerminalIDBase)
+                            .into();
+                    if !accepting_states.contains(&(new_state_id, terminal_id)) {
+                        accepting_states.push((new_state_id, terminal_id));
+                    }
+                }
+
+                // Add transitions
+                for disjoint_cc in character_class_registry.get_disjoint_character_classes(cc) {
+                    transitions.insert((old_state_id, *disjoint_cc, new_state_id));
+                }
+            }
+        }
+        // The transitions of the CompiledDfa.
+        let mut states: Vec<StateData> = Vec::with_capacity(state_map.len());
+        for _ in 0..state_map.len() {
+            states.push(StateData::new());
+        }
+        for (from, cc, to) in transitions {
+            states[from].transitions.push((cc, to));
+        }
+        for (state, term) in accepting_states {
+            states[state].set_terminal_id(term);
+        }
+        // Create the CompiledDfa from the states and patterns.
+        let mut compiled_dfa = CompiledDfa {
+            patterns: mp_nfa
+                .patterns
+                .iter()
+                .map(|p| p.pattern().to_string())
+                .collect(),
+            terminal_ids: mp_nfa
+                .patterns
+                .iter()
+                .map(|p| (p.terminal_id() as TerminalIDBase).into())
+                .collect(),
+            states,
+        };
+
+        // Add the lookaheads to the compiled DFA.
+        for pattern in mp_nfa.patterns.iter() {
+            Self::add_lookahead_from_pattern(pattern, character_class_registry, &mut compiled_dfa)?;
+        }
+        Ok(Minimizer::minimize(compiled_dfa))
+    }
+
+    /// Create a compiled DFA from an NFA.
+    /// Calls [`create_disjoint_character_classes`] on the character class registry first
+    pub(crate) fn try_from_nfa(
+        nfa: &Nfa,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        character_class_registry.create_disjoint_character_classes();
+
+        // Convert the NFA into a CompiledDfa.
+        // All transitions via character classes should be converted to possibly multiple
+        // transitions via DisjointCharClassID.
+        let mut compiled_dfa: CompiledDfa = Self::create_from_nfa(nfa, character_class_registry)?;
+
+        // Add the lookaheads to the compiled DFA.
+        Self::add_lookahead_from_pattern(
+            &nfa.pattern,
+            character_class_registry,
+            &mut compiled_dfa,
+        )?;
+        Ok(compiled_dfa)
+    }
+
+    /// Create a compiled DFA from a MultiPatternNfa.
+    /// Calls [`create_disjoint_character_classes`] on the character class registry first.
+    pub(crate) fn try_from_multi_pattern_nfa(
+        mp_nfa: &MultiPatternNfa,
+        character_class_registry: &mut CharacterClassRegistry,
+    ) -> Result<Self> {
+        character_class_registry.create_disjoint_character_classes();
+        Self::create_from_multi_pattern_nfa(mp_nfa, character_class_registry)
     }
 
     /// Add a lookahead for a given terminal_id to the compiled DFA.
@@ -217,153 +480,6 @@ impl CompiledDfa {
     }
 }
 
-impl From<Nfa> for CompiledDfa {
-    /// Create a dense representation of the DFA in form of match transitions between states sets.
-    /// This is an equivalent algorithm to the subset construction for DFAs.
-    ///
-    /// Note that the lookahead is not set in the resulting CompiledDfa. This must be done
-    /// separately because a character class registry is needed to create the lookaheads.
-    /// See [CompiledDfa::try_from_pattern].
-    fn from(nfa: Nfa) -> Self {
-        // A temporary map to store the state ids of the sets of states.
-        let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
-        // A temporary set to store the transitions of the CompiledDfa.
-        // The state ids are numbers of sets of states.
-        let mut transitions: FxHashSet<(StateSetID, CharClassID, StateSetID)> =
-            FxHashSet::default();
-        // The end states of the CompiledDfa are a vector of state ids and terminal ids.
-        let mut accepting_states: Vec<(StateSetID, usize)> = Vec::new();
-        // Calculate the epsilon closure of the start state.
-        let epsilon_closure: BTreeSet<StateID> =
-            BTreeSet::from_iter(nfa.epsilon_closure(nfa.start_state));
-        // The current state id is always 0.
-        let current_state = StateSetID::new(0);
-        // Add the start state to the state map.
-        state_map.insert(epsilon_closure.clone(), current_state);
-
-        // The list of target states not yet processed.
-        let mut queue: VecDeque<StateSetID> = VecDeque::new();
-        queue.push_back(current_state);
-
-        while let Some(current_state) = queue.pop_front() {
-            let epsilon_closure = state_map
-                .iter()
-                .find(|(_, v)| **v == current_state)
-                .unwrap()
-                .0
-                .clone();
-            let target_states = nfa.get_match_transitions(epsilon_closure.iter().cloned());
-            let old_state_id = current_state;
-            // Transform the target states to a set of state ids by calculating their epsilon closure.
-            for (cc, target_state) in target_states {
-                let epsilon_closure = BTreeSet::from_iter(nfa.epsilon_closure(target_state));
-                let new_state_id_candidate = state_map.len() as StateIDBase;
-                let new_state_id = *state_map.entry(epsilon_closure.clone()).or_insert_with(|| {
-                    let new_state_id = StateSetID::new(new_state_id_candidate);
-                    // Add the new state to the queue.
-                    queue.push_back(new_state_id);
-                    new_state_id
-                });
-                if epsilon_closure.contains(&nfa.end_state)
-                    && !accepting_states.contains(&(new_state_id, nfa.pattern.terminal_id()))
-                {
-                    accepting_states.push((new_state_id, nfa.pattern.terminal_id()));
-                }
-                transitions.insert((old_state_id, cc, new_state_id));
-            }
-        }
-
-        // The transitions of the CompiledDfa.
-        let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
-        for _ in 0..state_map.len() {
-            states.push(StateData::new());
-        }
-        for (from, cc, to) in transitions {
-            states[from].transitions.push((cc, to));
-        }
-
-        for (state, term) in accepting_states {
-            states[state].set_terminal_id(TerminalID::new(term as TerminalIDBase));
-        }
-
-        Minimizer::minimize(Self {
-            patterns: vec![nfa.pattern.pattern().to_string()],
-            terminal_ids: vec![(nfa.pattern.terminal_id() as TerminalIDBase).into()],
-            states,
-        })
-    }
-}
-
-impl From<MultiPatternNfa> for CompiledDfa {
-    /// Note that the lookahead is not set in the resulting CompiledDfa. This must be done
-    /// separately because a character class registry is needed to create the lookaheads.
-    /// See [CompiledDfa::try_from_patterns].
-    fn from(mp_nfa: MultiPatternNfa) -> Self {
-        let mut state_map: FxHashMap<BTreeSet<StateID>, StateSetID> = FxHashMap::default();
-        let mut transitions: FxHashSet<(StateSetID, CharClassID, StateSetID)> =
-            FxHashSet::default();
-        let mut accepting_states: Vec<(StateSetID, usize)> = Vec::new();
-        let mut queue: VecDeque<StateSetID> = VecDeque::new();
-
-        // Calculate the epsilon closures of the start state of the multi-pattern NFA.
-        let epsilon_closure: BTreeSet<StateID> =
-            BTreeSet::from_iter(mp_nfa.epsilon_closure(0.into()));
-        state_map.insert(epsilon_closure.clone(), 0.into());
-        queue.push_back(StateSetID::new(0));
-
-        while let Some(current_state) = queue.pop_front() {
-            let epsilon_closure = state_map
-                .iter()
-                .find(|(_, v)| **v == current_state)
-                .unwrap()
-                .0
-                .clone();
-            let target_states = mp_nfa.get_match_transitions(epsilon_closure.iter().cloned());
-            let old_state_id = current_state;
-            for (cc, target_state) in target_states {
-                let epsilon_closure = BTreeSet::from_iter(mp_nfa.epsilon_closure(target_state));
-                let new_state_id_candidate = state_map.len() as StateIDBase;
-                let new_state_id = *state_map.entry(epsilon_closure.clone()).or_insert_with(|| {
-                    let new_state_id = StateSetID::new(new_state_id_candidate);
-                    queue.push_back(new_state_id);
-                    new_state_id
-                });
-                let target_nfa = mp_nfa.find_nfa(target_state).expect("NFA not found");
-                if epsilon_closure
-                    .iter()
-                    .any(|s| mp_nfa.is_accepting_state(*s))
-                    && !accepting_states.contains(&(new_state_id, target_nfa.terminal_id()))
-                {
-                    accepting_states.push((new_state_id, target_nfa.terminal_id()));
-                }
-                transitions.insert((old_state_id, cc, new_state_id));
-            }
-        }
-        // The transitions of the CompiledDfa.
-        let mut states: Vec<StateData> = Vec::with_capacity(transitions.len());
-        for _ in 0..state_map.len() {
-            states.push(StateData::new());
-        }
-        for (from, cc, to) in transitions {
-            states[from].transitions.push((cc, to));
-        }
-
-        for (state, term) in accepting_states {
-            states[state].set_terminal_id(TerminalID::new(term as TerminalIDBase));
-        }
-
-        Minimizer::minimize(Self {
-            patterns: vec![mp_nfa.patterns.iter().map(|p| p.pattern()).collect()],
-            terminal_ids: mp_nfa
-                .patterns
-                .iter()
-                .map(|p| (p.terminal_id() as TerminalIDBase).into())
-                .collect(),
-            states,
-        })
-    }
-}
-
 impl std::fmt::Display for CompiledDfa {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Pattern: {}", self.patterns.join("|"))?;
@@ -379,7 +495,7 @@ impl std::fmt::Display for CompiledDfa {
 pub(crate) struct StateData {
     /// A list of transitions from this state.
     /// The state ids are numbers of sets of states.
-    pub(crate) transitions: Vec<(CharClassID, StateSetID)>,
+    pub(crate) transitions: Vec<(DisjointCharClassID, StateSetID)>,
 
     /// A possible terminal id of the state combined with an optional lookahead.
     /// It is set only if the state is an accepting state.
@@ -581,7 +697,10 @@ mod tests {
             let nfa: crate::Nfa =
                 crate::Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
             nfa_render_to!(&nfa, test.name);
-            let compiled_dfa = crate::compiled_dfa::CompiledDfa::from(nfa);
+            let compiled_dfa =
+                crate::compiled_dfa::CompiledDfa::try_from_nfa(&nfa, &mut character_class_registry)
+                    .unwrap();
+
             let end_states = compiled_dfa
                 .states
                 .iter()
@@ -592,12 +711,12 @@ mod tests {
                         .map(|(terminal_id, _)| (i, *terminal_id))
                 })
                 .collect::<Vec<_>>();
+            compiled_dfa_render_to!(&compiled_dfa, test.name, &character_class_registry);
             assert_eq!(
                 end_states, test.end_states,
                 "Test '{}', End states",
                 test.name
             );
-            compiled_dfa_render_to!(&compiled_dfa, test.name, &character_class_registry);
             eprintln!("{}", compiled_dfa);
 
             for (id, (input, expected)) in test.match_data.iter().enumerate() {
@@ -615,6 +734,32 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn test_create_from_nfa() {
+        use log::trace;
+
+        init();
+        let pattern = crate::Pattern::new("ab|ac".to_string(), 0);
+        let mut character_class_registry = crate::CharacterClassRegistry::new();
+        let hir = crate::parse_regex_syntax(pattern.pattern()).unwrap();
+        let nfa: crate::Nfa = crate::Nfa::try_from_hir(hir, &mut character_class_registry).unwrap();
+        nfa_render_to!(&nfa, "CreateFromNfa");
+        let compiled_dfa =
+            crate::compiled_dfa::CompiledDfa::try_from_nfa(&nfa, &mut character_class_registry)
+                .unwrap();
+        compiled_dfa_render_to!(&compiled_dfa, "CreateFromNfa", &character_class_registry);
+        trace!("{}", compiled_dfa);
+        assert_eq!(compiled_dfa.patterns.len(), 1);
+        assert_eq!(compiled_dfa.pattern(0.into()), "(?:(?:ab)|(?:ac))");
+        assert_eq!(compiled_dfa.terminal_ids.len(), 1);
+        assert_eq!(compiled_dfa.terminal_ids[0], 0.into());
+        assert_eq!(compiled_dfa.states.len(), 3);
+        assert!(compiled_dfa.states[2]
+            .accept_data
+            .as_ref()
+            .is_some_and(|(id, _)| *id == 0.into()));
     }
 
     /// A test that creates a CompiledDfa from a multi-pattern NFA and writes the dot files
@@ -640,7 +785,7 @@ mod tests {
             )
             .unwrap();
             if scanner_mode.name == "INITIAL" {
-                assert_eq!(compiled_dfa.patterns.len(), 1);
+                assert_eq!(compiled_dfa.patterns.len(), 115);
                 assert_eq!(
                     compiled_dfa
                         .states

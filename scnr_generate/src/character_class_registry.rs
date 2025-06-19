@@ -1,5 +1,5 @@
 use super::{ids::CharClassIDBase, CharClassID, CharacterClass, HirWithPattern};
-use crate::{MatchFunction, Result, ScnrError};
+use crate::{DisjointCharClassID, MatchFunction, Result, ScnrError};
 
 /// CharacterClassRegistry is a registry of character classes.
 #[derive(Debug, Clone, Default)]
@@ -22,7 +22,7 @@ impl CharacterClassRegistry {
     }
 
     /// Adds a character class to the registry if it is not already present and returns its ID.
-    pub(crate) fn add_character_class_hir(&mut self, hir: &regex_syntax::hir::Hir) -> CharClassID {
+    pub(crate) fn add_character_class(&mut self, hir: &regex_syntax::hir::Hir) -> CharClassID {
         let hir_with_pattern = HirWithPattern::new(hir.clone());
         if let Some(id) = self
             .character_classes
@@ -34,6 +34,7 @@ impl CharacterClassRegistry {
             let id = CharClassID::new(self.character_classes.len() as CharClassIDBase);
             self.character_classes
                 .push(CharacterClass::new(id, hir_with_pattern));
+            self.elementary_intervals.clear(); // Clear elementary intervals to regenerate them
             id
         }
     }
@@ -43,6 +44,26 @@ impl CharacterClassRegistry {
     #[allow(unused)]
     pub(crate) fn get_character_class(&self, id: CharClassID) -> Option<&CharacterClass> {
         self.character_classes.get(id.as_usize())
+    }
+
+    /// Returns the character class with the given ID.
+    /// It is used for debugging purposes mostly in the [crate::dot] module.
+    #[allow(unused)]
+    pub(crate) fn get_elementary_interval(
+        &self,
+        id: DisjointCharClassID,
+    ) -> Option<&std::ops::RangeInclusive<char>> {
+        debug_assert!(
+            !self.elementary_intervals.is_empty(),
+            "Elementary intervals should not be empty"
+        );
+        debug_assert!(
+            id.as_usize() < self.elementary_intervals.len(),
+            "Disjoint character class ID out of bounds"
+        );
+        self.elementary_intervals
+            .get(id.as_usize())
+            .map(|(interval, _)| interval)
     }
 
     /// Returns the number of character classes in the registry.
@@ -119,7 +140,18 @@ impl CharacterClassRegistry {
         }
     }
 
+    /// Creates disjoint character classes from the elementary intervals.
+    /// This function generates elementary intervals from the character classes and
+    /// associates them with the character classes that match them.
+    /// It is called after all character classes are added to the registry.
+    /// This means that the all patterns must be fully parsed and all character classes must be
+    /// added to the registry before this function is called. The same applies to all
+    /// possibly existing lookahead patterns.
     pub(crate) fn create_disjoint_character_classes(&mut self) {
+        if !self.elementary_intervals.is_empty() {
+            // If elementary intervals are already created, we should not recreate them.
+            return;
+        }
         // Step 1: Collect all boundary points
         // The boundaries are collected in a BTreeSet to ensure they are unique and sorted.
         let mut boundaries = std::collections::BTreeSet::new();
@@ -218,38 +250,36 @@ impl CharacterClassRegistry {
         }
 
         // Step 4: Add disjoint intervals to each character class
-        for cc in &self.character_classes {
-            for (interval, cc_ids) in self.elementary_intervals.iter_mut() {
+        for cc in self.character_classes.iter_mut() {
+            for (idx, (interval, cc_ids)) in self.elementary_intervals.iter_mut().enumerate() {
                 // Check if the character class matches the interval
                 if cc.contains(interval) {
                     // Ensure that the disjoint interval is not already present.
                     debug_assert!(!cc_ids.contains(&cc.id));
                     cc_ids.push(cc.id);
+                    cc.add_disjoint_interval(DisjointCharClassID::new(idx as CharClassIDBase));
                 }
             }
         }
     }
 
-    /// Calculates the list of character classes that match the given character by searching over
-    /// the elementary intervals.
-    /// This is efficient because the elementary intervals are sorted.
-    /// It returns a slice of character class IDs that match the character.
-    /// If no character class matches, it returns an empty slice.
-    pub(crate) fn get_matching_character_classes(&self, c: char) -> &[CharClassID] {
-        // Use binary search to find the interval that contains the character.
-        // This is efficient because the elementary intervals are sorted.
-        match self.elementary_intervals.binary_search_by(|(interval, _)| {
-            if c < *interval.start() {
-                std::cmp::Ordering::Greater
-            } else if c > *interval.end() {
-                std::cmp::Ordering::Less
-            } else {
-                std::cmp::Ordering::Equal
-            }
-        }) {
-            Ok(index) => &self.elementary_intervals[index].1,
-            Err(_) => &[], // If not found, return an empty slice
-        }
+    /// Returns the disjoint character classes for the given character class ID.
+    pub(crate) fn get_disjoint_character_classes(&self, cc: CharClassID) -> &[DisjointCharClassID] {
+        debug_assert!(
+            cc.as_usize() < self.character_classes.len(),
+            "Character class ID out of bounds"
+        );
+        // Get the character class by ID
+        let character_class = &self.character_classes[cc.as_usize()];
+        // Return the disjoint intervals of the character class
+        &character_class.disjoint_intervals
+    }
+
+    /// Checks if the given character class ID matches the character.
+    pub(crate) fn matches(&self, cc: DisjointCharClassID, c: char) -> bool {
+        self.elementary_intervals
+            .get(cc.as_usize())
+            .is_some_and(|(interval, _)| interval.contains(&c))
     }
 }
 
@@ -378,19 +408,5 @@ mod tests {
             character_class_registry.elementary_intervals.len(),
             elementary_intervals.len()
         );
-
-        // Check that the `get_matching_character_classes` method works correctly
-        for (interval, cc_ids) in &character_class_registry.elementary_intervals {
-            for c in interval.clone() {
-                let matching_ccs = character_class_registry.get_matching_character_classes(c);
-                assert_eq!(
-                    matching_ccs,
-                    cc_ids.as_slice(),
-                    "Character '{}' should match {:?}",
-                    c,
-                    cc_ids
-                );
-            }
-        }
     }
 }

@@ -102,17 +102,20 @@ fn render_compiled_dfa(
                 .attributes()
                 .set_label(&format!(
                     "{} (C#{})",
-                    character_class_registry.get_character_class(*cc).map_or(
-                        "-".to_string(),
-                        |cc| {
-                            let mut s = cc.hir.to_string();
+                    character_class_registry
+                        .get_elementary_interval(*cc)
+                        .map_or("-".to_string(), |cc| {
+                            let mut s = format!(
+                                "'{}'..='{}'",
+                                cc.start().escape_default(),
+                                cc.end().escape_default()
+                            );
                             if s.len() > 20 {
                                 s.truncate(20);
                                 s.push_str("...");
                             }
                             s
-                        }
-                    ),
+                        }),
                     cc.id()
                 ));
         }
@@ -154,7 +157,7 @@ pub(crate) fn compiled_dfa_render<W: Write>(
         ));
         let node_prefix = format!("{}_", terminal_id);
         render_compiled_dfa(
-            &lookahead.nfa,
+            &lookahead.dfa,
             &node_prefix,
             character_class_registry,
             &mut cluster,
@@ -249,10 +252,14 @@ pub(crate) fn multi_pattern_nfa_render<W: Write>(
                 "{}:{}",
                 character_class_registry
                     .get_character_class(char_class_id)
-                    .map_or("-".to_string(), |cc| cc
-                        .to_string()
-                        .escape_default()
-                        .to_string()),
+                    .map_or("-".to_string(), |cc| {
+                        let mut s = cc.hir.to_string();
+                        if s.len() > 20 {
+                            s.truncate(20);
+                            s.push_str("...");
+                        }
+                        s
+                    }),
                 char_class_id.id()
             ));
     }

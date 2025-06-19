@@ -1,5 +1,7 @@
 use log::trace;
 
+use crate::DisjointCharClassID;
+
 use super::{CharClassID, HirWithPattern};
 
 /// A character class that can match a character.
@@ -7,11 +9,16 @@ use super::{CharClassID, HirWithPattern};
 pub(crate) struct CharacterClass {
     pub(crate) id: CharClassID,
     pub(crate) hir: HirWithPattern,
+    pub(crate) disjoint_intervals: Vec<DisjointCharClassID>,
 }
 
 impl CharacterClass {
     pub(crate) fn new(id: CharClassID, hir: HirWithPattern) -> Self {
-        CharacterClass { id, hir }
+        CharacterClass {
+            id,
+            hir,
+            disjoint_intervals: Vec::new(),
+        }
     }
 
     // #[inline]
@@ -23,6 +30,12 @@ impl CharacterClass {
     // pub(crate) fn pattern(&self) -> &str {
     //     self.hir.pattern()
     // }
+
+    pub(crate) fn add_disjoint_interval(&mut self, disjoint_interval_id: DisjointCharClassID) {
+        // Ensure that the disjoint interval is not already present.
+        debug_assert!(!self.disjoint_intervals.contains(&disjoint_interval_id));
+        self.disjoint_intervals.push(disjoint_interval_id);
+    }
 
     /// Check if a character ranges matches the character class.
     pub(crate) fn contains(&self, interval: &std::ops::RangeInclusive<char>) -> bool {
@@ -157,6 +170,13 @@ impl std::fmt::Display for CharacterClass {
             self.id,
             self.hir.pattern.escape_default()
         )?;
+        // Display the disjoint intervals if any.
+        if !self.disjoint_intervals.is_empty() {
+            write!(f, "\n   Included elementary Intervals: ")?;
+            self.disjoint_intervals
+                .iter()
+                .try_for_each(|disjoint_id| write!(f, "{}, ", disjoint_id))?;
+        }
         Ok(())
     }
 }

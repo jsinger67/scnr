@@ -95,7 +95,7 @@ impl Nfa {
         target_state: StateID,
         char_class_registry: &mut CharacterClassRegistry,
     ) {
-        let char_class = char_class_registry.add_character_class_hir(&chars);
+        let char_class = char_class_registry.add_character_class(&chars);
         self.states[from].transitions.push(NfaTransition {
             hir: HirWithPattern::new(chars),
             char_class,

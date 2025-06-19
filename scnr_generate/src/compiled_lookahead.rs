@@ -8,7 +8,7 @@ use super::{compiled_dfa::CompiledDfa, parse_regex_syntax, CharacterClassRegistr
 pub(crate) struct CompiledLookahead {
     /// The compiled DFA for the lookahead.
     /// We need a box to break the cycle between CompiledDfa and CompiledLookahead.
-    pub(crate) nfa: Box<CompiledDfa>,
+    pub(crate) dfa: Box<CompiledDfa>,
     /// If the lookahead is positive or negative.
     pub(crate) is_positive: bool,
 }
@@ -25,9 +25,9 @@ impl CompiledLookahead {
         } = lookahead;
         let hir = parse_regex_syntax(pattern)?;
         let nfa: Nfa = Nfa::try_from_hir(hir, character_class_registry)?;
-        let nfa = Box::new(nfa.into());
+        let dfa = Box::new(CompiledDfa::try_from_nfa(&nfa, character_class_registry)?);
         Ok(Self {
-            nfa,
+            dfa,
             is_positive: *is_positive,
         })
     }
@@ -47,7 +47,7 @@ impl CompiledLookahead {
         char_indices: std::str::CharIndices,
         character_classes: &CharacterClassRegistry,
     ) -> (bool, usize) {
-        if let Some(ma) = self.nfa.find_from(input, char_indices, character_classes) {
+        if let Some(ma) = self.dfa.find_from(input, char_indices, character_classes) {
             (self.is_positive, ma.len())
         } else {
             (!self.is_positive, 0)
@@ -65,7 +65,7 @@ impl std::fmt::Display for CompiledLookahead {
             } else {
                 "Negative"
             },
-            self.nfa
+            self.dfa
         )
     }
 }
