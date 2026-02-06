@@ -6,15 +6,21 @@
 
 <!-- markdownlint-enable first-line-h1 -->
 
+# Please consider using [scnr2](https://github.com/jsinger67/scnr2)
+
+This crate is in early development and not yet production-ready. Development has ceased in favor of
+[scnr2](https://github.com/jsinger67/scnr2), the actively maintained successor. `scnr2` offers
+significant improvements and is recommended for new projects.
+
+---
+---
+
 # About `scnr`
 
 This crate provides a scanner/lexer with sufficient regex support and minimal compile time.
 The scanners support multiple scanner modes out of the box.
 Scanner modes are known from Lex/Flex as
 [Start conditions](https://www.cs.princeton.edu/~appel/modern/c/software/flex/flex.html#SEC11).
-
-The crate is still in an early phase and not ready for production yet. Early adopters can quite
-safely use it. In case you find a bug, please report it.
 
 ## How to use it
 
